@@ -1,7 +1,8 @@
 # Architecture
 
 How `cca` 0.1.0 is built from `SPEC.md`. Drafted 2026-09-30 and revised the same day
-after three review rounds with the spec and build plan. The spec says what the
+after three review rounds with the spec and build plan, and revised 2026-09-30 after the
+audit feedback round. The spec says what the
 plugin does; this file says which Claude Code parts do it, what each file holds, and
 how state moves between stages. Where the two disagree, the spec wins and this file is
 fixed.
@@ -31,7 +32,7 @@ builder, live under `tests/` and are never loaded by the plugin.
 ```
 
 The orchestrator is the only component that talks to the user, calls Codex, runs
-`git fetch`, exports pinned trees, and writes `stages.json`, `ledger.md`, and
+`git fetch`, exports pinned trees, and writes `stages.json`, the ledger files, and
 `report.md`. Agents read the run directory and the audited trees and write only their
 own output file.
 
@@ -77,6 +78,13 @@ skills/cca/report.md        report template
 skills/cca/codex-request.md Codex request template
 ```
 
+After a compaction, or whenever the orchestrator cannot account for its state, the
+preamble has it re-read the invocation block, `audit-brief.md`, `common.md`,
+`stages.json`, and the current stage file before any action. In the same session, a
+stage marked `running` waits for its agents' notifications and relaunches nothing. Under
+`/cca:resume`, `running` counts as incomplete and is rerun. Approvals recorded in
+`stages.json` are not asked again.
+
 ### Agent definitions
 
 Plugin agents under `agents/`, launched with the Agent tool as `cca:<name>`, in the
@@ -88,16 +96,21 @@ definition's body holds the role's standing instructions.
 |---|---|---|---|
 | `digester` | opus | Read, Grep, Glob, Bash, Write | `guidelines/digest-N.md` |
 | `mapper` | opus | Read, Grep, Glob, Bash, Write | `domain/<source>-map.md` |
-| `auditor` | opus | Read, Grep, Glob, Bash, Write | `pass1/<group>.md` |
+| `auditor` | opus | Read, Grep, Glob, Bash, Write | `pass1/<group>.md`, or `pass2/<group>-topup.md` for a map-correction top-up |
 | `adversary` | opus | Read, Grep, Glob, Bash, Write | `pass2/<group>.md`, late and fallback outputs |
-| `merger` | sonnet | Read, Write | `converged.md` |
+| `merger` | sonnet | Read, Write | `converged/<group>.md` or `converged.md` |
 
 The files are `agents/digester.md` and so on, and the plugin namespace supplies the
 prefix, so the Agent tool type is `cca:digester`. M0 confirms the exact form.
 
 The model in each definition is the default. `--models` and the manifest override it
 through the Agent tool's `model` parameter. Bash is given only where a role may need
-`git show`, `git grep`, or a read-only check run; the body lists the allowed commands.
+`git show`, `git grep`, or a check run logged under `runs:`; the body lists the allowed
+commands. An agent lists each run under a `runs:` heading in its output file, with the
+command, the directory, and the exit status. In a directly read tree, searches use
+`git grep` at the pinned sha or `rg` over `git ls-files`, a symlink is not followed
+outside the repo, and a citation to an untracked, ignored, or outside path is invalid
+evidence.
 
 Every agent ends by writing its file with a last line `status: complete`, then returns
 the path and one line. The orchestrator treats a returned agent without that line in
@@ -105,7 +118,7 @@ its file as failed.
 
 ## Run directory and state
 
-Layout is in the spec. Three files carry state.
+Layout is in the spec. These files carry state.
 
 ### `runs.json`
 
@@ -117,14 +130,18 @@ In the plugin data directory (`${CLAUDE_PLUGIN_DATA}`). One entry per run:
   "state": "reported" }
 ```
 
+The file is written to a temporary file beside it and renamed.
+
 ### `stages.json`
 
 In the run directory. Written only by the orchestrator, entry by entry, and each entry
-last within its stage:
+last within its stage. Each write goes to a temporary file beside it and is renamed:
 
 ```json
 {
   "plugin_version": "0.1.0",
+  "approvals": [ { "kind": "fetch", "target": "origin", "decision": "approved",
+                   "time": "2026-09-30T14:15:00Z" } ],
   "stages": {
     "4": {
       "status": "complete",
@@ -143,14 +160,18 @@ last within its stage:
 
 Hashes are `git hash-object --no-filters <file>`, which needs no other tool. Source and
 bundle inputs are recorded as shas. A stage's status is one of `running`, `complete`,
-`failed`, `not_applicable`, or `superseded`.
+`failed`, `not_applicable`, or `superseded`. `approvals` records each user approval as
+`kind` (`fetch`, `live`, or `export-over-1gb`), `target`, `decision`, and `time`. The
+stage 6 entry records the Codex model and timeout passed, so a case can check them.
 
-### `ledger.md`
+### Ledger files
 
-Written by the orchestrator after stage 5 and appended after stages 6 and 7. One
-section per finding id, holding the original finding text, then each verdict in order
-with its reviewer and evidence, then its current gate and disposition. The merger
-reads it and never edits it.
+`ledger/5.md`, `ledger/6.md`, and `ledger/7.md`, each written once by the orchestrator
+after its stage. `5.md` holds one section per finding id: the original finding text,
+then each pass-two verdict in order with its reviewer and evidence. `6.md` holds the
+second opinion's dispositions and `7.md` the late adversary's verdicts. The gate and
+disposition live in `converged.md`, not the ledger. The merger reads the files and never
+edits them.
 
 ## Control flow
 
@@ -164,7 +185,8 @@ orient ─┬─> digest ────┐
 
 Stages 2, 3, and 4 launch together. Pass two starts per group once that group clears
 the barrier, so early groups do not wait for late ones. Stage 6 starts when every group
-has finished pass two. The late adversary and merger run in stage 7.
+has finished pass two. Top-ups from map corrections run before stage 6 starts. The late
+adversary and merger run in stage 7.
 
 **Queue.** The orchestrator keeps one queue of agent jobs across stages and never has
 more than `--max-agents` running. Launch order is pass one first, then digests, then
@@ -186,19 +208,21 @@ stage counts as satisfied for waiting stages and makes the run `partial`.
 
 **Fault injection.** When the manifest has a `_test` key, the orchestrator treats the
 named scope's first `n` completions as failures, drops a named Codex acknowledgment,
-holds a named stage until another completes, or expires the budget when a named stage
-completes, so each path can be checked without waiting for a real failure or for
-time to pass. The key is recorded in the report.
+holds a named stage until another completes, expires the budget when a named stage
+completes, plants one wrong answer in a named map, or sets the ledger split threshold
+or the inline cap to a named byte count, so each path can be checked without waiting
+for a real failure or for time to pass. The key is recorded in the report.
 
-**Budget.** The orchestrator checks elapsed time at every notification. Past the
-budget, it launches nothing from stages 2 to 7, waits for running agents, and goes to
-stage 8.
+**Budget.** When a budget is set, the orchestrator checks elapsed time at every
+notification. Past the budget, it launches nothing from stages 2 to 7, waits for
+running agents, and goes to stage 8.
 
 **Export.** For a repo not checked out at its pinned sha, the orchestrator lists the
 tree with `git -C <repo> ls-tree -r -z --full-tree <sha>` and writes every entry under
 `<run dir>/trees/<name>/` from `git -C <repo> cat-file --batch`: a regular blob as a
-file, with the executable bit for mode `100755`; mode `120000` as a symlink whose
-target is the blob's content; mode `160000` (a submodule) listed in the brief and not
+file, with the executable bit for mode `100755`; mode `120000` (a symlink) as a
+regular file holding the blob's content, which is the link target, listed in the brief
+and never dereferenced; mode `160000` (a submodule) listed in the brief and not
 exported. `cat-file` reads objects only, so no filter, smudge or process driver, or
 attribute runs. Git LFS files are exported as their pointer files, and the brief says
 so. `git archive` and `git checkout-index` are not used, for the reasons the spec gives.
@@ -208,9 +232,20 @@ audited repo under `baseline/`. After each stage, the orchestrator reruns the sn
 commands (including the content hashes of modified and untracked files and the
 ignored-file inventory), diffs them against `baseline/`, and runs
 `find <repo> -newer baseline/marker -type f -not -path '<repo>/.git/*'`, excluding the
-run directory when it is inside that repo. A difference or any listed file ends the
-run `blocked`. `git config --list --local` is used instead of reading a config file,
-so the check works the same when a repo's `.git` is a file.
+run directory when it is inside that repo and filtering the list through
+`git check-ignore --stdin`. A difference in tracked files, untracked non-ignored files,
+refs, index, stash, or config ends the run `blocked`. Each check writes
+`baseline/<stage>-check.md`, listing the ignored-file differences it accepted, or none.
+A difference among ignored files is accepted provisionally when any agent with Bash,
+in any stage, is running or has finished since the previous check; the orchestrator
+keeps that list from `stages.json`. The next check after those agents finish reconciles
+each provisional difference against their `runs:` headings, and a difference no logged
+run accounts for ends the run `blocked` then. With no such agent running or finished,
+it ends the run `blocked` at once.
+After a check passes, the accepted ignored-file inventory becomes the baseline for the
+next check; the tracked and untracked baseline never moves. `git config --list --local`
+is used instead of reading a config file, so the check works the same when a repo's
+`.git` is a file.
 
 ## Codex interface
 
@@ -218,14 +253,17 @@ One call, at most one follow-up, both through the Skill tool:
 
 ```
 Skill codex-lite:ask
-  --model gpt-6.1-sol --timeout 1200 Read cca/<run-id>/codex/request.md in <scratch> and answer as it asks.
+  --model gpt-6.1-sol --timeout <tier timeout> Read cca/<run-id>/codex/request.md in <scratch> and answer as it asks.
 ```
 
 When the run directory is not inside the session's repo, the request is built in
 inline form: every input's full content under a header with its path and sentinel,
 diffs included, so it names no file Codex must open. The same form is used for the
-retry after a missing acknowledgment. The follow-up passes `--resume <thread id>` with the id from
-the first answer's `thread` line, plus the same `--model` and `--timeout`.
+retry after a missing acknowledgment. The inline request is capped at 450,000 bytes; a
+larger one is not sent, and stage 6 is swapped to the fallback, which reads inputs by
+path. The tier timeout is 1,200 seconds at low, 2,400 at medium, and 3,600 at high, or
+the value of `--codex-timeout`. The follow-up passes `--resume <thread id>` with the id
+from the first answer's `thread` line, plus the same `--model` and `--timeout`.
 
 The orchestrator parses codex-lite's last lines for `status:` and `thread`. Status
 handling and the fallback are in the spec. The fallback is `cca:adversary` launched
@@ -234,10 +272,10 @@ swap.
 
 ## Report and verdict
 
-The orchestrator fills `skills/cca/report.md` from `converged.md`, the ledger, `claims`
-lists from pass one, `stages.json`, and `usage.md`. The verdict rules are applied by
-the orchestrator from counts it writes into the report first, so a reader can check
-them.
+The orchestrator fills `skills/cca/report.md` from `converged.md`, the ledger files,
+the `pass2/` files, `claims` lists from pass one, `stages.json`, and `usage.md`. The
+verdict rules are applied by the orchestrator from counts it writes into the report
+first, so a reader can check them.
 
 ## Act
 
