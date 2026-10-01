@@ -45,6 +45,12 @@ session to the audit, with a return trip back. No full multi-agent audit has run
   prints quoted are not supported and stop the check with exit 2.
 - Agents run no test or lint command in an exported tree, in `skills/cca/common.md` as
   well as in the agent definition.
+- Codex requests: the request names every input by absolute path, whatever the run
+  directory, and Codex acknowledges each input with its sentinel. Only an input it could not
+  open goes inline, in the one follow-up, under the 450,000-byte cap, over which stage 6
+  fails. The inline first request, its diff dropping, and `inline_reduced` are gone. A probe
+  showed Codex reads a file outside every repository by absolute path in codex-lite's
+  read-only sandbox on Windows; Linux and macOS rely on Codex's documented policy.
 - Stage 8 writes three outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`.
 - The README no longer says "Tested on"; it says what ran and what has not.
 

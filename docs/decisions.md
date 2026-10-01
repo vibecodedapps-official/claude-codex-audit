@@ -110,15 +110,12 @@ Choices made while building 0.1.0 where the design left room.
   orchestrator improvised a free-text status for stages 4 to 7, outside the skill's
   status set, so the skill now records a never-started stage as `failed` with the reason
   "not run: budget expired"; whether later runs follow it is not yet observed.
-- **Inline Codex requests (known limitation, 2026-10-01).** The inline request form
-  travels as the Skill tool argument, and codex-lite rewrites it into its request file,
-  so a request near the 450,000-byte cap is slow and may be altered in transit. A
-  request over the cap is first reduced by dropping the diffs of session-repository
-  bundles (Codex can regenerate them from the shas in the brief; other repos' diffs are
-  never dropped) and re-measured before the swap to the fallback.
+- **Inline Codex requests (resolved 2026-10-01, in 0.2.0).** The first request no
+  longer has an inline form, so the cap and the diff dropping left it. See "Absolute-path
+  Codex requests" under the 0.2.0 decisions. The follow-up still carries an input Codex
+  could not open inline, under the 450,000-byte cap.
   Stage 6 also checks that the answer gives a position for every mandatory finding id
-  (every blocker or high finding and every pass-two downgrade or drop). Keeping the run
-  directory inside the session's repository avoids the inline form.
+  (every blocker or high finding and every pass-two downgrade or drop).
 
 ## Round 4 review fixes (2026-09-30)
 
@@ -188,7 +185,8 @@ Choices made while building 0.1.0 where the design left room.
 - C3: an over-cap Codex request is reduced by dropping the diffs of bundles whose repo
   is the session repository (others are never dropped, since Codex cannot reach them)
   before the swap, recorded as `inline_reduced`; still over the cap, or with none
-  droppable, it swaps with the reason "request too large for inline form".
+  droppable, it swaps with the reason "request too large for inline form". (Removed in
+  0.2.0; see "Absolute-path Codex requests".)
 
 ## 0.2.0 decisions (2026-10-01)
 
@@ -200,9 +198,20 @@ agent-driven case `not run` until one runs.
 
 - **Manifest `scratch` key (F1).** A repo may keep its scratch directory under any
   ignored name. The key must name a path inside the primary repo that the repo ignores,
-  or the run stops before stage 1. The run directory then lands in the repo, so Codex
-  gets the path form of the request instead of the inline form. A resumed run keeps its
+  or the run stops before stage 1. The run directory then lands in the repo, under the
+  name the repo already uses for scratch. A resumed run keeps its
   recorded directory, since moving it would orphan the run's state.
+- **Absolute-path Codex requests (2026-10-01).** A probe ran Codex in codex-lite's
+  read-only sandbox on Windows with the elevated sandbox. It read a token file outside
+  every repository by absolute path and quoted it exactly. So the request now names every
+  input by absolute path, for any run directory, and the inline first request, its cap,
+  the diff dropping, and `inline_reduced` are gone. Only an input Codex did not acknowledge
+  with its sentinel goes inline, in the one follow-up, under the 450,000-byte cap; over
+  it, stage 6 fails. No codex-lite change was needed, so the `--cwd` item (F6) is dropped
+  from the deferred list. Limits: Linux and macOS rely on Codex's documented read-only
+  policy, not a run here. The sentinel check catches a read that fails, so a platform
+  where it fails is detected, not trusted. Audited sources were never sentinel-checked
+  and stay named by read path and sha.
 - **Release wording (F2).** The README says what ran and what has not, matching the
   acceptance record. The first medium-tier run on a real bundle is the acceptance run.
 - **The read-only check is a script (F3).** The check is the step most likely to be
@@ -331,10 +340,6 @@ Review findings on the second plan draft:
 
 ## Deferred past 0.2
 
-- `--cwd` for codex-lite `ask` (F6). It is a codex-lite change; codex-lite 0.9.0 has
-  `--cwd` on `review` and `implement` only. With it, cca could drop the inline request
-  form, the cap, the diff dropping, and the acknowledgment retry. The `scratch` key makes
-  the path form reachable for more runs in the meantime.
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
   changes. `skills/cca/handoff.md` is the format ccl can adopt, and `/cca:handoff` can run
   in any session, including one that ran ccl.

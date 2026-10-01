@@ -2,8 +2,9 @@
 
 The orchestrator's procedure for stage 6. The preamble in `${CLAUDE_PLUGIN_ROOT}/skills/cca/SKILL.md` and the
 run's `common.md` apply throughout. The request's content, order, answer cap, sentinel
-form, inline form, and acknowledgment rule are in `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`; this
-file says how to build, send, and handle it.
+form, the follow-up's inline layout, and acknowledgment rule are in
+`${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`; this file says how to build, send,
+and handle it.
 
 Stage 6 starts when stage 5 is `complete` or `failed` (every scope has finished pass
 two and every map-correction top-up has finished).
@@ -13,9 +14,8 @@ lists (`audit-brief.md`, `common.md`, `claims.md`, the diffs and stats, the `pas
 files).
 
 Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md`,
-`codex/request-inline.md` when the inline form is built, and, when the fallback answers
-several batches, `codex/request-<k>.md` and `codex/response-<k>.md` for each batch `<k>`
-it answers, numbered from 2 (step 9).
+and, when the fallback answers several batches, `codex/request-<k>.md` and
+`codex/response-<k>.md` for each batch `<k>` it answers, numbered from 2 (step 9).
 
 ## Steps
 
@@ -48,16 +48,15 @@ it answers, numbered from 2 (step 9).
       changed. Audited source files never get a sentinel, are never copied, and are
       named by their read path and sha from the brief. Keep every path and token for the
       stage entry's `sentinels` map.
-   2. Write `codex/request.md` in path form, filling the template: the inputs, then the
+   2. Write `codex/request.md`, filling the template: the inputs, then the
       acknowledgment section, then the asks in the template's order (every blocker and
       high, every pass-two downgrade or drop, dropped findings to restore including
       dismissed ones, up to ten new findings, severity recalibration, a non-binding
       merge verdict per bundle), within the 3,000-word answer cap and two quoted lines
       per citation. Asks 1 and 2 each end with the template's id slot: when step 4.3
       splits the mandatory set, `for these ids: <the batch's ids>` (the first batch
-      here); otherwise `for every such finding`. When the run directory is inside the
-      session's repository root (step 5), it names each copy by its path relative to
-      that root; otherwise by its absolute path, which only the fallback uses.
+      here); otherwise `for every such finding`. It names each input copy by its absolute
+      path, and each audited source by its absolute read path and sha from the brief.
    3. **Mandatory id set and batches.** From `ledger/5.md`, collect every finding id at
       severity blocker or high, and every finding id that pass two downgraded or
       dropped. Asks 1 and 2 require a position for each, and no mandatory id may be
@@ -87,47 +86,23 @@ it answers, numbered from 2 (step 9).
         (a Codex follow-up carried the second, or the fallback was launched for a
         further batch), else false.
 
-5. **Choose the form.** Find the session's repository root with
-   `git rev-parse --show-toplevel` in the session's directory. codex-lite runs Codex
-   from that root, and the orchestrator cannot move it.
-   - Run directory inside that root: send the path form.
-   - Run directory outside it: build the inline form, `codex/request-inline.md`, which
-     carries the full content of every `codex/inputs/` file under a header with its
-     run-directory path and its sentinel, diffs included unless the inline cap below
-     drops them, so it names no file Codex must open. Audited source files are not
-     inlined. The inline request travels as the Skill tool argument, which codex-lite
-     rewrites to its own request file, so a large inline request is slow and may be
-     altered in transit.
-   - Session directory not in a git repository: send the path form anyway; codex-lite
-     refuses, and step 7 swaps.
-
-   **Inline cap.** Measure the inline request's size in bytes (`wc -c`). The cap is
-   450,000 bytes, or `_test.inline_cap_bytes` when set. Over the cap, first reduce the
-   request by dropping the diffs (`codex/inputs/diffs/*.diff`) of the bundles whose repo
-   is the session's repository, the one codex-lite runs Codex from, which can regenerate
-   them from the shas in the brief with the three-dot form the brief gives. The diff of
-   a bundle in any other repo is never dropped, since Codex cannot reach that repo.
-   Re-write `codex/request-inline.md` without the dropped diffs and measure again;
-   record `inline_reduced: true` in the stage entry. A dropped diff is removed from the
-   request's input list, from its acknowledgment section, and from the set the step 8
-   check expects; in its place the request gives, per bundle whose diff was dropped, the
-   command to regenerate it, `git -C <repo> diff <base>...<head>` with the shas from
-   the brief (the form `1-orient.md` uses for `diffs/<bundle>.diff`). Still over the cap
-   after that, or with no diff droppable, the request is not sent: swap to the fallback
-   (step 11), which reads inputs by path, with the reason "request too large for inline
-   form". The brief already notes that a run directory inside the session's repo avoids
-   the inline form.
+5. **Check the session's repository.** codex-lite runs Codex from the top of the git
+   repository that contains the session's directory, and the orchestrator cannot move
+   it. Run `git rev-parse --show-toplevel` in the session's directory. If the session's
+   directory is not in a git repository, send the request anyway; codex-lite refuses,
+   and step 7 swaps. The request has one form, so the run directory's location and the
+   request's size change nothing here: Codex reads the inputs and sources by the
+   absolute paths the request names.
 
 6. **Call Codex** with the Skill tool, skill `codex-lite:ask`, options first:
 
    ```
-   --model <model> --timeout <timeout> Read <path of codex/request.md relative to the repo root> and answer as it asks.
+   --model <model> --timeout <timeout> Read "<absolute path of codex/request.md>" and answer as it asks.
    ```
 
-   In inline form, the argument after the options is the full text of
-   `codex/request-inline.md`. Record the model and timeout passed for this call. The
-   call can take longer than a foreground command allows and move to the background:
-   wait for its completion notification, do not poll, and use no other tool meanwhile.
+   Record the model and timeout passed for this call. The call can take longer than a
+   foreground command allows and move to the background: wait for its completion
+   notification, do not poll, and use no other tool meanwhile.
 
 7. **Parse the result.** codex-lite ends its output with a line `status: <value>`, where
    the value is `ok`, `failed`, `refused`, or `timeout`, and prints a line
@@ -163,27 +138,20 @@ it answers, numbered from 2 (step 9).
      true). Second-batch ids that do not fit are not asked here; step 4.3 sends them to
      the fallback: launch those fallback batches now, before this follow-up call
      (step 11, numbered as step 9 says), so they run while Codex answers and a budget
-     that expires during the call still lets them finish. Apply the inline cap to this
-     follow-up. Over it, first drop the diffs of
-     session-repository bundles from it and re-measure as in step 5 (record
-     `inline_reduced: true`; the diff of a bundle in another repo is never dropped); a
-     dropped diff no longer needs acknowledgment, and the follow-up gives its three-dot
-     regeneration command in its place, as in step 5. Still over the cap, the follow-up
-     is not sent and stage 6 fails as below. With no thread id, send it as a fresh call that
-     carries only the follow-up's asks (the unacknowledged inputs inline, the
-     missing positions, the second batch) plus `common.md`, `audit-brief.md`, and
-     `ledger/5.md` by path (in the inline form, the copies of `common.md` and the
-     brief inline, and, in place of the whole ledger, the `ledger/5.md` section of
-     every id the follow-up asks about, since Codex cannot open a path outside its
-     repository and needs the finding text, not only its id), not the whole request
-     again. Handle its status as in
-     step 7, except that a swap is replaced by stage 6 failing, since the first answer
-     already exists.
+     that expires during the call still lets them finish. Measure the follow-up in bytes
+     (`wc -c`). The cap is 450,000 bytes, or `_test.inline_cap_bytes` when set. Over the
+     cap, the follow-up is not sent and stage 6 fails as below; no diff is dropped. With
+     no thread id, send it as a fresh call that carries only the follow-up's asks (the
+     unacknowledged inputs inline, the missing positions, the second batch) plus
+     `common.md`, `audit-brief.md`, and `ledger/5.md`, each named by its absolute path
+     under `codex/inputs/`, not the whole request again. Handle its status as in step 7,
+     except that a swap is replaced by stage 6 failing, since the first answer already
+     exists.
    - Still unacknowledged after the follow-up: stage 6 fails. Keep the answer, list the
      unacknowledged inputs in `ledger/6.md` and the stage entry, naming as one possible
-     cause that the inline text was altered in transit through the Skill argument, and mark in
-     `ledger/6.md` that no finding passes the review gate on stage 6's account. The run
-     will end `partial`.
+     cause that the inline text was altered in transit through the Skill argument, or
+     that Codex could not open a path, and mark in `ledger/6.md` that no finding passes
+     the review gate on stage 6's account. The run will end `partial`.
 
    There is at most one follow-up per run of stage 6. A mandatory position the request
    or the follow-up asked for and still missing after the follow-up is handled in step
@@ -251,7 +219,7 @@ it answers, numbered from 2 (step 9).
     in the stage entry, with scope `second-opinion-<k>` for batch `<k>` (scope
     `second-opinion` when it fills the role with one batch). The prompt holds the paths
     of `audit-brief.md`, `common.md`, and that batch's request (`codex/request.md` or
-    `codex/request-<k>.md`, path form, which the fallback reads by path), with the
+    `codex/request-<k>.md`, which the fallback reads by path), with the
     instruction to answer the request as it asks, within its caps, and write the answer
     to `codex/response.md` (batch `<k>` from 2: `codex/response-<k>.md`) ending with
     `status: complete`. Record a swap (role second opinion, from Codex `<model>` to
@@ -305,13 +273,12 @@ it answers, numbered from 2 (step 9).
                "retried": false, "follow_up": false, "unacknowledged": [],
                "codex_version": "<text>", "codex_lite_version": "<text>" },
     "missing_positions": [],
-    "batched": false,
-    "inline_reduced": false
+    "batched": false
     ```
 
     `codex_model` and `codex_timeout` are the values passed on every call (the first
     call, a retry, and the follow-up all pass the same ones), or, when no call was made
-    (`--no-codex`, Codex unavailable, or the inline cap), the values settled in step 2,
+    (`--no-codex` or Codex unavailable), the values settled in step 2,
     with `"called": false`. In `usage.md`, each Codex call has its wall-clock and tokens
     "not reported".
 
@@ -320,6 +287,5 @@ it answers, numbered from 2 (step 9).
     follow-up, and those of any fallback batch that failed after the ladder;
     `batched` is true when more than one batch of asks 1 and 2 was requested, by a Codex
     follow-up or by a further fallback launch (one agent per batch, scope
-    `second-opinion-<k>`), else false;
-    `inline_reduced` is true when the inline request or the follow-up was reduced by
-    dropping diffs.
+    `second-opinion-<k>`), else false.
+    `codex.form` is always `path`.

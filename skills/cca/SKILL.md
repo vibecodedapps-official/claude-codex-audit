@@ -326,7 +326,8 @@ Coverage, and apply each field it has:
   `test_planted`.
 - `ledger_split_bytes`: replaces both 450,000-byte thresholds in stage 7, the
   split-mode choice (step 5) and the per-group slice part split (step 7.2).
-- `inline_cap_bytes`: replaces the 450,000-byte inline request cap in stage 6.
+- `inline_cap_bytes`: replaces the 450,000-byte cap on the stage 6 follow-up, the only
+  request that carries inline text.
 
 ### State files
 
@@ -402,8 +403,7 @@ with `mv -f`. Never edit either in place.
    `missing_positions` (the mandatory finding ids the Codex request or follow-up asked
    for and left without a position, plus the ids of any fallback batch that failed
    after the ladder), `batched` (true when more than one batch of mandatory ids
-   was requested, else false), and `inline_reduced` (diffs of session-repository
-   bundles dropped to fit the inline cap); stage 7 lists the `ledger/slices/` files
+   was requested, else false); stage 7 lists the `ledger/slices/` files
    among its outputs in split mode, marks a part `over threshold` when a single
    finding id alone exceeds the split threshold, and records `converged_check` (`pass`
    or `fail`, absent when no merge was attempted), which stage 8 reads.
@@ -450,7 +450,9 @@ and writes `ledger/5.md`.
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/6-second-opinion.md` when stage 5 is complete or failed. It
 builds the Codex request from `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`, calls
-`codex-lite:ask`, handles status and swaps, and writes `ledger/6.md`. Every mandatory
+`codex-lite:ask`, handles status and swaps, and writes `ledger/6.md`. The request names
+every input copy and audited source by absolute path, so Codex opens them wherever the
+run directory is; only the follow-up carries inline text. Every mandatory
 finding id is requested in a run where stage 6 completes: in batches of at most 60,
 the first in the Codex request, at most 60 positions in the one Codex follow-up
 (missing first-batch ids first, then second-batch ids), and every id neither carries

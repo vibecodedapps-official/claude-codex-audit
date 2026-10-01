@@ -546,7 +546,7 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
    notes (symlinks with targets, submodules, LFS pointers, skipped paths, declined
    exports); Forge (queried or not, per bundle; "not in export" keys); Questions; Stage
    applicability; Run directory (its path, and whether it is inside the session's
-   repository: a run directory inside it avoids the inline form of the Codex request);
+   repository);
    Test injection (the `_test` key, when present); Handoff (each handoff file with its
    hash and that it passed `handoff.sh check`, its claim counts by kind, the bundle and
    ticket mapping notes of section B, and the commit notes of step 8; "none" when no

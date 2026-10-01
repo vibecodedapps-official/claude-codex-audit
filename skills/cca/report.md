@@ -163,8 +163,7 @@ session.
   validated and why.
 - Stages: each stage 1 to 8 as `complete`, `not applicable`, `failed`, `swapped`, or
   `not run: budget expired`, with the reason.
-- Swaps: every swap, with role, scope, from, to, and reason (including Codex swaps and
-  "request too large for inline form").
+- Swaps: every swap, with role, scope, from, to, and reason (including Codex swaps).
 - Failed scopes and the files, rules, or questions they left unreviewed, naming the
   last byte offset of a digest that ended `status: failed at byte <offset>`.
 - Each bundle whose base refresh the user declined ("base: local ref, refresh

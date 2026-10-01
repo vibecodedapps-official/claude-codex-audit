@@ -29,8 +29,7 @@ have passed; no full multi-agent audit has run yet (see `docs/acceptance.md`).
   files); the report then says the forge was not queried.
 - Optional: the Codex CLI and the `codex-lite` plugin, 0.7.0 or later, for the second
   opinion. codex-lite runs Codex from the session's repository root, with no network
-  access. For Codex to read the run directory by path, start the session in the primary
-  repo.
+  access.
 
 ## Install
 
@@ -193,7 +192,7 @@ are relative to the manifest's directory.
   ccl run's `report.md`, or a handoff written by `/cca:handoff`. Claims are never a source
   of truth. `--claims` adds to these. See Handoff and claims.
 - **`scratch`.** An ignored directory inside the primary repo, under any name, where the
-  run directory goes. See Run directory.
+  run directory goes, to keep it in the repo. See Run directory.
 - **`forge_exports`.** The `command` used to export forge files and the date
   (`exported_at`). It is a record only; cca never runs it.
 - **`groups`.** Optional review groups, each with a `name`, a `repo`, and `files` globs
@@ -383,8 +382,7 @@ and uses for scratch (`scratch/`, `tmp/`, `.scratch/`), then `.cca/` if the prim
 ignores it, else `runs/` in cca's plugin data directory. The `scratch` key must name a
 path inside the primary repo that the repo ignores (`git check-ignore` succeeds); a
 missing directory is created. Otherwise the run stops before stage 1 with
-`scratch <path>: not an ignored path inside <primary repo>`. A run directory inside the
-session's repository also lets Codex read it by path. A resumed run keeps its recorded
+`scratch <path>: not an ignored path inside <primary repo>`. A resumed run keeps its recorded
 directory, even when the manifest's `scratch` has changed since. The run id is
 `<YYYY-MM-DD-HHMM>-<slug>`, with a numeric suffix on collision. Every run is recorded in
 `runs.json` in cca's plugin data directory, so `/cca:resume` and `/cca:act` find it from
@@ -462,15 +460,15 @@ check too.
 
 The second opinion (stage 6) goes to Codex through codex-lite when the Codex CLI and
 codex-lite are installed. Without them, with `--no-codex`, or when a Codex call is
-refused, times out, fails twice, or would need an inline request over 450,000 bytes,
-the role is swapped to a fresh `cca:adversary` agent on Fable, else Opus, given the same
+refused, times out, or fails twice, or when the follow-up would carry inline inputs over
+450,000 bytes, the role is swapped to a fresh `cca:adversary` agent on Fable, else Opus, given the same
 request (one launch per batch of at most 60 mandatory ids). The swap is named in the
 report. Stage 6 always runs.
 
 cca never runs the `codex` CLI itself, except `codex --version` to check it is there.
-Codex runs from the session's repository, so when the run directory is outside it, the
-request carries every input inline instead of naming files. Starting the session in the
-primary repo avoids that.
+The request names every input by absolute path, and Codex acknowledges each input with
+its sentinel. Only an input it could not open goes inline, in the one follow-up, under a
+450,000-byte cap. Over the cap, the follow-up is not sent and stage 6 fails.
 
 ## Live data and external text
 

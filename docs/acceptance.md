@@ -77,11 +77,11 @@ and on Ubuntu with dash, with identical commit ids on both.
 | M3-a | `codex/response.md` holds the verbatim answer, and every Codex disposition is in the ledger | not run | needs a live multi-agent audit run |
 | M3-b | `--no-codex`: the fallback fills the role and the report names the swap | not run | needs a live multi-agent audit run |
 | M3-c | Session started outside any git repo: codex-lite refuses, the run swaps and ends `reported` | not run | needs a live multi-agent audit run |
-| M3-d | Run directory outside the session's repo: the request is in inline form and names no run-directory file | not run | needs a live multi-agent audit run |
+| M3-d | Run directory outside the session's repo: the request is in inline form and names no run-directory file | superseded: every request now names absolute paths, and the first request has no inline form (see V2-n) | |
 | M3-e | `_test` drops one acknowledgment twice: stage 6 fails, and the run ends `partial` with `audit incomplete` | not run | needs a live multi-agent audit run |
 | M3-f | `_test` fails the fallback twice, with `--no-codex`: Fable fails, Opus fails, and stage 6 fails | not run | needs a live multi-agent audit run |
 | M3-g | `--codex-timeout 0` is rejected in one line; the stage 6 entry records timeout `1200` at low, and `3600` with `--codex-timeout 3600` | not run | needs a live multi-agent audit run |
-| M3-h | `_test` sets the inline cap to 1,000 bytes, run directory outside the session's repo: stage 6 first drops only the diffs of bundles whose repo is the session's repository and re-measures (the stage 6 entry records `inline_reduced: true`; a diff of any other repo is never dropped, and with none droppable it swaps directly), then, still over the cap, swaps with the reason "request too large for inline form", and the run ends `reported` | not run | needs a live multi-agent audit run |
+| M3-h | `_test` sets the inline cap to 1,000 bytes, run directory outside the session's repo: stage 6 first drops only the diffs of bundles whose repo is the session's repository and re-measures (the stage 6 entry records `inline_reduced: true`; a diff of any other repo is never dropped, and with none droppable it swaps directly), then, still over the cap, swaps with the reason "request too large for inline form", and the run ends `reported` | superseded: the first request has no inline form, so it has no cap and no diff dropping (see V2-p for the follow-up cap) | |
 | M3-i | A run with more than 60 mandatory ids: Codex gets the first batch in the request and at most 60 positions in its one follow-up (missing first-batch ids first), and every id neither carries goes to the fallback in batches of at most 60, one launch per batch (`second-opinion-<k>`), recorded as a partial swap with the reason "mandatory ids beyond the Codex request and follow-up"; with `--no-codex`, one fallback launch per batch (`second-opinion-<k>`); the stage 6 entry records `batched: true` and no mandatory id is left without a request | not run | needs a live multi-agent audit run |
 
 ## M4: sources and scale
@@ -151,7 +151,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 | Map corrections and top-ups | M4 | M4-k | not run |
 | Stage 6 and the call contract | M3 | M3-a to M3-f, M3-i | not run |
 | Codex request shape and timeout | M3 | M3-g | not run |
-| Merger size and inline cap | M3, M4 | M3-h, M4-l | not run |
+| Merger size and inline cap | M3, M4 | M3-h, M4-l | not run; M3-h is superseded, so the inline-cap half now rests on V2-p |
 | Stage 7, late adversary, review gate | M2, M4 | M2-c, M4-g, M4-h, M4-m | not run |
 | Stage 8, verdict, revision | M2 | M2-a, M2-f, M1-b | partly covered: M1-b passed; M2-a and M2-f not run |
 | Stage 9 | M6 | M6-a to M6-f | not run |
@@ -188,7 +188,7 @@ This section records the acceptance cases for cca 0.2.0. Results are `pass`, `fa
 release build (the lint, the three script tests, the fixture builds and verifies, and the
 CI matrix) are `not run` until the release checks run; the evidence cell is then filled
 in from that run. No case is recorded as passed without a run that shows it. The v0.1.0
-record above is unchanged.
+record above is unchanged except M3-d and M3-h, superseded in 0.2.0 when every Codex request began naming absolute paths.
 
 ## Release checks
 
@@ -215,3 +215,8 @@ only when the stage that judges it completes.
 | V2-k | `/cca:handoff` writes a handoff that passes `handoff.sh check` | not run: needs a live multi-agent audit run | |
 | V2-l | The manifest `scratch` key puts the run directory under `app/.test-output/cca/` | not run: needs a live multi-agent audit run | |
 | V2-m | `work-items.jsonl` passes `work-items.sh check` | not run: needs a live multi-agent audit run | |
+| V2-n | Run directory outside the session's repository: the request names absolute paths and every input is acknowledged | not run: needs a live multi-agent audit run | |
+| V2-o | `_test.drop_ack` on one input: the follow-up carries it inline and it is acknowledged | not run: needs a live multi-agent audit run | |
+| V2-p | `_test.inline_cap_bytes` of 1,000 with `_test.drop_ack` on `ledger/5.md`: the follow-up exceeds the cap (the copy of `ledger/5.md` is over 1,000 bytes), is not sent, and stage 6 fails | not run: needs a live multi-agent audit run | |
+| V2-q | A follow-up when the answer carried no thread id goes as a fresh call naming `common.md`, `audit-brief.md`, and `ledger/5.md` by absolute path | not run: needs a live multi-agent audit run | |
+| V2-r | An input copy made unreadable to Codex is reported `not read` and goes inline in the follow-up | not run: needs a live multi-agent audit run | |
