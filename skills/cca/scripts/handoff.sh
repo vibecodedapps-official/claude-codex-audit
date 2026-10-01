@@ -17,6 +17,7 @@
 # unreadable file exit 2.
 #
 # A UTF-8 byte order mark at the start of line 1 is ignored.
+# A claim text over 8000 bytes is a rule failure, since a claim is read as one line.
 #
 # POSIX sh plus awk; the awk program uses only features that mawk and gawk both accept.
 set -u
@@ -475,15 +476,19 @@ function process(s,   k, nm) {
 	err(ln, "unrecognized line")
 }
 
+# cl(...): add one claim to the output and check its text against the cap, so the checks
+# and the printed claims come from the same pass.
 function cl(kind, ref, b, t, l, text) {
-	printf "%s\t%s\t%s\t%s\t%s\t%s\n", kind, ref, b, t, l, text
+	if (length(text) > CLAIM_MAX)
+		err(l, "claim text is " length(text) " bytes, over the " CLAIM_MAX "-byte cap")
+	OUT[++nout] = sprintf("%s\t%s\t%s\t%s\t%s\t%s", kind, ref, b, t, l, text)
 }
 
 function ftext(s, i, id) {
 	return id ": type " P[s, i, "type"] "; state " P[s, i, "state"] "; iteration " P[s, i, "iteration"] "; owner " P[s, i, "owner"]
 }
 
-function print_claims(   i, j, id, b, h, nc, t, opts, db) {
+function build_claims(   i, j, id, b, h, nc, t, opts, db) {
 	for (i = 1; i <= cnt[2]; i++) {
 		id = ID[2, i]
 		b = FB[2, i]
@@ -528,6 +533,7 @@ function print_commits(   i, j, nc) {
 
 BEGIN {
 	file = ENVIRON["HANDOFF_FILE"]
+	CLAIM_MAX = 8000   # the most bytes a claim text may hold; a claim is read as one line
 	nsec[1] = "Bundles"
 	nsec[2] = "Tickets"
 	nsec[3] = "Decisions"
@@ -569,6 +575,7 @@ END {
 		if (!(t in TID) && !(t in RTK))
 			err(L[3, i, "ticket"], "ticket '" t "' is not in Tickets or Raised tickets")
 	}
+	build_claims()
 	if (nerr > 0) {
 		# Insertion sort by line, stable, so messages come out in file order.
 		for (i = 1; i <= nerr; i++) ord[i] = i
@@ -586,7 +593,7 @@ END {
 		exit 1
 	}
 	if (mode == "check") print "handoff: ok"
-	else if (mode == "claims") print_claims()
+	else if (mode == "claims") for (i = 1; i <= nout; i++) print OUT[i]
 	else print_commits()
 	exit 0
 }

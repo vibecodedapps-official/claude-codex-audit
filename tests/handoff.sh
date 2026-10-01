@@ -270,6 +270,30 @@ broken "same commit at two sha lengths" "handoff b.md:24: duplicate commit entry
 set_line "$v" "$tmp/b.md" 19 "- bundles: app, app"
 broken "bundle named twice" "handoff b.md:19: duplicate bundle 'app' in bundles"
 
+# A claim is read as one line, so its text is capped at 8000 bytes: an error, never a
+# truncation. The long values are fixed-length runs; the byte counts below are literals.
+pad() { head -c "$1" /dev/zero | tr '\000' a; }
+
+set_line "$v" "$tmp/b.md" 37 "  - rejected: keep the row and set a status; why: $(pad 8000)"
+cap_d1="handoff b.md:31: claim text is 8309 bytes, over the 8000-byte cap"
+broken "decision claim over the cap" "$cap_d1"
+run "claims decision claim over the cap" 1 "$cap_d1" claims b.md
+run "commits decision claim over the cap" 1 "$cap_d1" commits b.md
+
+set_line "$v" "$tmp/b.md" 20 "- problem: $(pad 8001)"
+cap_p="handoff b.md:14: claim text is 8001 bytes, over the 8000-byte cap"
+broken "problem over the cap" "$cap_p"
+run "claims problem over the cap" 1 "$cap_p" claims b.md
+run "commits problem over the cap" 1 "$cap_p" commits b.md
+
+set_line "$v" "$tmp/b.md" 20 "- problem: $(pad 8000)"
+run "check problem at the cap" 0 "handoff: ok" check b.md
+run "commits problem at the cap" 0 "$commits_exp" commits b.md
+if out=$(cd "$tmp" && sh "$hs" claims b.md 2>&1); then st=0; else st=$?; fi
+[ "$st" = 0 ] || fail "claims problem at the cap: exit $st"
+[ "$(printf '%s\n' "$out" | awk -F"$tab" 'NR == 2 { print length($6) }')" = 8000 ] ||
+	fail "claims problem at the cap: text is not 8000 bytes"
+
 # Two errors in one file, reported in line order.
 set_line "$v" "$tmp/b1.md" 23 "  - app 9c5f7: add the status column migration so every row has a status."
 del_line "$tmp/b1.md" "$tmp/b.md" 18
