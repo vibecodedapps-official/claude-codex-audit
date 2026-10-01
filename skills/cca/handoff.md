@@ -37,6 +37,9 @@ generated: <ISO 8601 time>
 - state: <state>
 - iteration: <iteration path, or none>
 - owner: <assigned person, or none>
+- parent: <ticket id>                         (optional)
+- links:                                      (optional; or `links: none`)
+  - <type>: <target>
 - bundles: <bundle name>[, <bundle name>...]
 - problem: <the problem or gap>
 - decision: <the solution that was decided>
@@ -66,6 +69,9 @@ generated: <ISO 8601 time>
 - state: <state>
 - iteration: <iteration path, or none>
 - owner: <assigned person, or none>
+- parent: <ticket id>                         (optional)
+- links:                                      (optional; or `links: none`)
+  - <type>: <target>
 - bundles: <bundle name>[, <bundle name>...] | none
 - summary: <one sentence>
 - rank: <whole number; 1 is the highest confidence it belongs in this bundle>
@@ -102,11 +108,12 @@ generated: <ISO 8601 time>
    none is an id in `## Tickets`. Every name in a `bundles:` value is a bundle from
    `## Bundles`, named once per value; a ticket in `## Tickets` lists at least one, and a
    raised ticket lists at least one or says `none`.
-5. Item keys are `- <key>: <value>` at column 0, each listed key exactly once, in the order
-   listed above, with no other key. Values are not empty. A list key (`commits`,
-   `verified`, `options`) has an empty value followed by at least one entry indented exactly
-   two spaces (`  - `), or the value `none` (`options` takes `none recorded` instead of
-   `none`).
+5. Item keys are `- <key>: <value>` at column 0, in the order listed above, with no other
+   key. A listed key appears exactly once, and an optional key (`parent` and `links`, in
+   tickets and raised tickets) at most once. Values are not empty. A list key (`commits`,
+   `verified`, `options`, `links`) has an empty value followed by at least one entry
+   indented exactly two spaces (`  - `), or the value `none` (`options` takes
+   `none recorded` instead of `none`).
 6. A commit entry is `  - <bundle name> <sha>: <text>`. The bundle is one of the ticket's
    `bundles`; the sha is 7 to 40 lowercase hex digits; the text is not empty. Within one
    ticket, two entries with the same bundle do not name the same commit: neither sha is a
@@ -136,6 +143,11 @@ generated: <ISO 8601 time>
     an error, never a truncation. The ids and bundle names in the other fields count, so a
     long id counts against the cap. A decision's claim joins its keys (decision, rationale,
     options, decided_by, recorded_at, status), so long options count too.
+14. A links entry is `  - <type>: <target>`, split at the first `: `, both parts not
+    empty, and no entry appears twice in one item. A parent is not the item's own ticket id
+    (for a raised ticket, its `ticket` value). `parent` and `links` give the ticket's
+    parent and linked work items, such as `closed by` a pull request, as the forge or
+    export records them; `links: none` says the record shows no links.
 
 ## Writing a handoff
 
@@ -163,14 +175,14 @@ are in file order, and within an item the claims are in this order:
 
 | Item | Kind | Ref | Bundle | Text |
 |---|---|---|---|---|
-| ticket `<id>` | `status` | `tickets/<id>/fields` | first of its `bundles` | `<id>: type <type>; state <state>; iteration <iteration>; owner <owner>` |
+| ticket `<id>` | `status` | `tickets/<id>/fields` | first of its `bundles` | `<id>: type <type>; state <state>; iteration <iteration>; owner <owner>`, then `; parent <parent>` and `; links <type> <target>, <type> <target>` (or `; links none`) when present |
 | | `code` | `tickets/<id>/problem` | first of its `bundles` | the `problem` value |
 | | `code` | `tickets/<id>/decision` | first of its `bundles` | the `decision` value |
 | each commit entry | `code` | `tickets/<id>/commit/<bundle>/<sha>` | that entry's bundle | `<bundle> <sha>: <text>` |
 | each verified entry, `<k>` from 1 | `verification` | `tickets/<id>/verified/<k>` | first of its `bundles` | the whole entry |
 | decision `D<n>` | `decision` | `decisions/D<n>` | first bundle of its ticket, or `none` | `<decision> \| rationale: <rationale> \| options: <entries joined with "; "> \| decided_by: <decided_by> \| recorded_at: <recorded_at> \| status: <status>` |
 | raised ticket `R<n>` | `scope` | `raised/R<n>` | its first bundle, or `none` | `<ticket>: <summary> \| rank <rank>, <in_bundle_confidence>: <reason>` |
-| | `status` | `raised/R<n>/fields` | its first bundle, or `none` | `<ticket>: type <type>; state <state>; iteration <iteration>; owner <owner>` |
+| | `status` | `raised/R<n>/fields` | its first bundle, or `none` | `<ticket>: type <type>; state <state>; iteration <iteration>; owner <owner>`, with the same optional `parent` and `links` parts |
 
 `<ticket>` is the ticket id (for a decision, its `ticket` value). `<line>` is the line of the
 item's `### ` heading, or of the entry for a commit or verified entry. When `options` is
@@ -200,6 +212,7 @@ generated: 2026-09-01T11:00:00Z
 - state: Active
 - iteration: none
 - owner: Developer
+- parent: FEAT-1
 - bundles: app
 - problem: Removing a user deletes the record, so its history is lost.
 - decision: Add a deactivate command that keeps the row and sets its status to inactive.

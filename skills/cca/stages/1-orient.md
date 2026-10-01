@@ -290,7 +290,9 @@ For each bundle, save under `forge/<bundle>/`:
   of a review or comment is its `author.login`). For an export, copy its content.
 - `<ticket>.md` for each ticket in the bundle, and each ticket the PR's
   `closingIssuesReferences` names: text, state, acceptance criteria, fields, links,
-  comments, rendered from the ticket's `.json` below. For an export, copy its content.
+  comments, rendered from the ticket's `.json` below (for a GitHub ticket, the pull
+  requests that close it, from `closed_by`, are listed under links). For an export, copy
+  its content.
 
 Every saved `.md` file starts with a provenance block: the source (`gh`, or the export's
 `source`, `exported_by`, and `exported_at`), and the time it was read. When no forge
@@ -315,7 +317,7 @@ commands and the same `jq` projection.
 - `forge/<bundle>/pr-threads.json`, the review threads:
   `gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {id, path, line, original_line, commit_id, body, user: .user.login, created_at, updated_at, in_reply_to_id}' > forge/<bundle>/pr-threads.json`
 - `forge/<bundle>/<ticket>.json`, one per GitHub ticket:
-  `gh issue view <n> -R <owner>/<repo> --json number,url,title,body,state,labels,comments --jq '{number,url,title,body,state,labels: [.labels[].name], comments: [.comments[] | {author: .author.login, body, createdAt}]}' > forge/<bundle>/<ticket>.json`
+  `gh issue view <n> -R <owner>/<repo> --json number,url,title,body,state,labels,comments,closedByPullRequestsReferences --jq '{number,url,title,body,state,labels: [.labels[].name], closed_by: [.closedByPullRequestsReferences[] | {number, url}], comments: [.comments[] | {author: .author.login, body, createdAt}]}' > forge/<bundle>/<ticket>.json`
 
 Hash `pr.hash.json`, `pr-threads.json`, and each `<ticket>.json` with
 `git hash-object --no-filters <file>`; the threads and ticket files are hashed as

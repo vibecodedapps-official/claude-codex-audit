@@ -50,7 +50,7 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
    | Role | Checklist |
    |---|---|
    | tests | coverage of new behavior; weakened, deleted, or skipped tests; CI config changes |
-   | hygiene | each ticket matches the change; each acceptance criterion met or not, with evidence; follow-ups recorded; every key the brief lists as "not in export" reported as a finding; the scope check for every `scope` claim (`## Scope` in `common.md`) |
+   | hygiene | each ticket matches the change; each acceptance criterion met or not, with evidence; follow-ups recorded; each `status` claim's parent and links checked against the forge data; every key the brief lists as "not in export" reported as a finding; the scope check for every `scope` claim (`## Scope` in `common.md`) |
    | tests-hygiene | both rows above |
    | interactions | contracts, schemas, and APIs changed in one bundle and used in another; stack order and the combined state the brief states |
    | combined | the group review of every changed file, plus the tests and hygiene rows above, in one report |

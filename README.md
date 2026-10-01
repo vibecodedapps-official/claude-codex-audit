@@ -23,8 +23,10 @@ have passed; no full multi-agent audit has run yet (see `docs/acceptance.md`).
 - Claude Code with plugin agents and the Agent tool's `model` option.
 - `git` 2.29 or later (the fetch commands use an empty `--refmap=`). Each audited repo
   is a local clone.
-- For GitHub bundles, `gh` authenticated and `jq`. `jq` is also what validates
-  `work-items.jsonl`; without it, the report's Coverage says the file was not validated.
+- For GitHub bundles, `gh` 2.73.0 or later, authenticated, and `jq`. An older `gh` stops
+  stage 1 with its "Unknown JSON field" message, because stage 1 asks for the pull
+  requests that close a ticket. `jq` is also what validates `work-items.jsonl`; without
+  it, the report's Coverage says the file was not validated.
   For any other forge, or without a forge CLI, supply ticket and thread text as exported files (see Exported forge
   files); the report then says the forge was not queried.
 - Optional: the Codex CLI and the `codex-lite` plugin, 0.7.0 or later, for the second
