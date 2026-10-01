@@ -16,6 +16,8 @@
 # <message>" in line order, print nothing else, and exit 1. Usage errors and an
 # unreadable file exit 2.
 #
+# A UTF-8 byte order mark at the start of line 1 is ignored.
+#
 # POSIX sh plus awk; the awk program uses only features that mawk and gawk both accept.
 set -u
 
@@ -45,6 +47,7 @@ if [ "$mode" = detect ]; then
 		BEGIN { st = 0; found = 0 }
 		{
 			l = $0
+			if (NR == 1 && substr(l, 1, 3) == "\357\273\277") l = substr(l, 4)
 			if (length(l) > 0 && substr(l, length(l), 1) == "\r") l = substr(l, 1, length(l) - 1)
 			if (NR == 1) {
 				if (l != "---") exit
@@ -260,6 +263,7 @@ function bundles_check(v, allownone,   n, a, i, b, set) {
 			continue
 		}
 		if (!(b in BN)) err(ln, "unknown bundle '" b "'")
+		else if (index(set, "," b ",") > 0) err(ln, "duplicate bundle '" b "' in bundles")
 		if (FB[sec, ci] == "") FB[sec, ci] = b
 		set = set b ","
 	}
@@ -295,7 +299,8 @@ function check_value(k, v,   ok) {
 		if (!(v == "include" || v == "lean include" || v == "lean defer" || v == "defer"))
 			err(ln, "invalid in_bundle_confidence '" v "'")
 	} else if (sec == 4 && k == "ticket") {
-		if (v in RTK) err(ln, "duplicate raised ticket '" v "'")
+		if (v in TID) err(ln, "raised ticket '" v "' is already a ticket id in Tickets")
+		else if (v in RTK) err(ln, "duplicate raised ticket '" v "'")
 		else RTK[v] = ci
 	}
 }
@@ -352,6 +357,13 @@ function commit_entry(e, kk,   i, b, r, j, sha, text) {
 	else if (((2, ci, "bundles") in P) && index(BS[2, ci], "," b ",") == 0)
 		err(ln, "commit bundle '" b "' is not one of the ticket bundles")
 	if ((ci SUBSEP b " " sha) in CK) err(ln, "duplicate commit entry '" b " " sha "'")
+	else if (valid_sha(sha)) {
+		for (i = 1; i < kk; i++)
+			if (CB[ci, i] == b && (index(CS[ci, i], sha) == 1 || index(sha, CS[ci, i]) == 1)) {
+				err(ln, "duplicate commit entry '" b " " sha "' (same commit as '" b " " CS[ci, i] "')")
+				break
+			}
+	}
 	CK[ci SUBSEP b " " sha] = 1
 	CB[ci, kk] = b
 	CS[ci, kk] = sha
@@ -437,7 +449,11 @@ function process(s,   k, nm) {
 		open_item(trim(substr(s, 4)))
 		return
 	}
-	if (s == "none" && sec >= 1 && sec <= 4 && !noneseen[sec] && cnt[sec] == 0) {
+	if (s == "none" && sec == 1) {
+		err(ln, "section '## Bundles' never holds none")
+		return
+	}
+	if (s == "none" && sec >= 2 && sec <= 4 && !noneseen[sec] && cnt[sec] == 0) {
 		noneseen[sec] = 1
 		return
 	}
@@ -530,6 +546,7 @@ BEGIN {
 
 {
 	line = $0
+	if (NR == 1 && substr(line, 1, 3) == "\357\273\277") line = substr(line, 4)
 	n = length(line)
 	if (n > 0 && substr(line, n, 1) == "\r") line = substr(line, 1, n - 1)
 	ln = NR

@@ -15,8 +15,8 @@ This file is the single home of the format. `commands/handoff.md`,
 ## Layout
 
 A handoff is a UTF-8 markdown file. LF or CRLF line endings are accepted: one CR before each
-LF is removed before parsing, and line numbers stay physical. Every value sits on one line
-and holds no tab.
+LF is removed before parsing, and line numbers stay physical. A UTF-8 byte order mark at
+the start of the first line is ignored. Every value sits on one line and holds no tab.
 
 ```
 ---
@@ -80,9 +80,9 @@ generated: <ISO 8601 time>
    than `1` is an error ("unsupported handoff version").
 2. The four `## ` sections appear once each, in this order: `## Bundles`, `## Tickets`,
    `## Decisions`, `## Raised tickets`. A section with no items holds the single line
-   `none`, except `## Bundles`, which needs at least one bundle, since every other item
-   refers to one. A `# ` title line is allowed once, after the frontmatter and before
-   `## Bundles`.
+   `none`, except `## Bundles`, which never holds `none` and needs at least one bundle,
+   since every other item refers to one. A `# ` title line is allowed once, after the
+   frontmatter and before `## Bundles`.
 3. A bundle name is the cca bundle name: the repo directory's base name, lowercased, with
    `-2`, `-3` added in list order when two bundles share it. It matches
    `^[a-z0-9][a-z0-9._-]*$`, so it holds no space, comma, or semicolon; a base name that
@@ -98,16 +98,19 @@ generated: <ISO 8601 time>
    tickets `### R<n>`, `<n>` a whole number from 1. Ids are unique within their section.
    Ticket ids are unique across the whole handoff: when two repos have a ticket with the
    same short id, both are written in their qualified form (such as
-   `github:owner/app#12`). The `ticket` values in `## Raised tickets` are unique too. Every
-   name in a `bundles:` value is a bundle from `## Bundles`; a ticket in `## Tickets` lists
-   at least one, and a raised ticket lists at least one or says `none`.
+   `github:owner/app#12`). The `ticket` values in `## Raised tickets` are unique too, and
+   none is an id in `## Tickets`. Every name in a `bundles:` value is a bundle from
+   `## Bundles`, named once per value; a ticket in `## Tickets` lists at least one, and a
+   raised ticket lists at least one or says `none`.
 5. Item keys are `- <key>: <value>` at column 0, each listed key exactly once, in the order
    listed above, with no other key. Values are not empty. A list key (`commits`,
    `verified`, `options`) has an empty value followed by at least one entry indented exactly
    two spaces (`  - `), or the value `none` (`options` takes `none recorded` instead of
    `none`).
 6. A commit entry is `  - <bundle name> <sha>: <text>`. The bundle is one of the ticket's
-   `bundles`; the sha is 7 to 40 lowercase hex digits; the text is not empty.
+   `bundles`; the sha is 7 to 40 lowercase hex digits; the text is not empty. Within one
+   ticket, two entries with the same bundle do not name the same commit: neither sha is a
+   prefix of the other. One commit may appear under two tickets.
 7. A verified entry is split at the first `; check: `; both parts are not empty. The check
    part says how the statement was checked, or `not recorded`.
 8. An options entry starts `chosen: ` or `rejected: `. A rejected entry is split at the

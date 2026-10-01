@@ -29,7 +29,9 @@ fail() {
 	fails=$((fails + 1))
 }
 
-if ! m=$(sh "$root/tests/fixture/build.sh" solo); then
+# The fixture builder makes its own temp directory; point it inside $tmp so the one trap
+# removes it.
+if ! m=$(TMPDIR=$tmp sh "$root/tests/fixture/build.sh" solo); then
 	echo "handoff test: the solo fixture did not build"
 	exit 1
 fi
@@ -98,6 +100,9 @@ set_line "$v" "$tmp/b.md" 2 "cca-handoff: 2"
 run "detect another version" 0 "" detect b.md
 awk 'BEGIN { ORS = "\r\n" } { print }' "$v" > "$tmp/crlf.md"
 run "detect crlf" 0 "" detect crlf.md
+printf '\357\273\277' > "$tmp/bom.md"
+cat "$v" >> "$tmp/bom.md"
+run "detect utf-8 bom" 0 "" detect bom.md
 run "detect unreadable" 2 "handoff: cannot read nope.md" detect nope.md
 
 # Usage errors.
@@ -110,6 +115,18 @@ run "check unreadable" 2 "handoff: cannot read nope.md" check nope.md
 # Positive variants of check.
 run "check crlf" 0 "handoff: ok" check crlf.md
 run "claims crlf" 0 "$claims_exp" claims crlf.md
+run "check utf-8 bom" 0 "handoff: ok" check bom.md
+run "claims utf-8 bom" 0 "$claims_exp" claims bom.md
+run "commits utf-8 bom" 0 "$commits_exp" commits bom.md
+
+# One commit under two tickets is allowed: it can address both.
+{
+	head -n 28 "$v"
+	sed -n 14,28p "$v" | sed 's/APP-1/APP-2/'
+	sed -n '29,$p' "$v"
+} > "$tmp/b.md"
+run "check the same commit under two tickets" 0 "handoff: ok" check b.md
+run "commits the same commit under two tickets" 0 "app${tab}9c5f77c${tab}APP-1${tab}23${nl}app${tab}0c23936${tab}APP-1${tab}24${nl}app${tab}9c5f77c${tab}APP-2${tab}38${nl}app${tab}0c23936${tab}APP-2${tab}39" commits b.md
 
 sed 's|APP-1|github:owner/app #12|g' "$v" > "$tmp/b.md"
 run "check ticket id with spaces and colons" 0 "handoff: ok" check b.md
@@ -237,6 +254,21 @@ broken "version 2" "handoff b.md:2: unsupported handoff version"
 
 sed '51,$d' "$v" > "$tmp/b.md"
 broken "missing section" "handoff b.md:50: missing section '## Raised tickets'"
+
+set_line "$v" "$tmp/b.md" 54 "- ticket: APP-1"
+broken "raised ticket equal to a ticket id" "handoff b.md:54: raised ticket 'APP-1' is already a ticket id in Tickets"
+
+ins_after "$v" "$tmp/b.md" 9 "none"
+broken "none before a bundle" "handoff b.md:10: section '## Bundles' never holds none"
+
+set_line "$v" "$tmp/b.md" 10 "none"
+broken "none and no bundle" "handoff b.md:8: section '## Bundles' needs at least one bundle${nl}handoff b.md:10: section '## Bundles' never holds none${nl}handoff b.md:19: unknown bundle 'app'${nl}handoff b.md:23: unknown bundle 'app'${nl}handoff b.md:24: unknown bundle 'app'${nl}handoff b.md:59: unknown bundle 'app'"
+
+set_line "$v" "$tmp/b.md" 24 "  - app 9c5f77c1: add the deactivate command, which keeps the row and sets its status to inactive."
+broken "same commit at two sha lengths" "handoff b.md:24: duplicate commit entry 'app 9c5f77c1' (same commit as 'app 9c5f77c')"
+
+set_line "$v" "$tmp/b.md" 19 "- bundles: app, app"
+broken "bundle named twice" "handoff b.md:19: duplicate bundle 'app' in bundles"
 
 # Two errors in one file, reported in line order.
 set_line "$v" "$tmp/b1.md" 23 "  - app 9c5f7: add the status column migration so every row has a status."
