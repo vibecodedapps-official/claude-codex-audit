@@ -51,8 +51,8 @@ You write one handoff file for the session's work, from the record only. Do the 
    - No credentials, tokens, or secrets anywhere in the file. Text that names a model, agent, or tool is rewritten without the name.
 
 6. Choose the output path, the first of:
-   - `--out`, which must lie outside every repo or be ignored by its repo (`git -C <repo> check-ignore -q <path>`);
-   - `<scratch>/cca/handoff-<YYYY-MM-DD-HHMM>.md` in the session's repository, local time, where `<scratch>` is chosen as stage 1 D2 chooses it: the manifest's `scratch` key (inside the repo and ignored), else `scratch/`, `tmp/`, or `.scratch/` when it exists and is ignored, else `.cca/` when it is ignored.
+   - `--out`, which must lie outside every repo or be ignored by its repo (`git -C <repo> check-ignore -q <path>`), and must not name an existing file: when it does, stop and say so, so an earlier handoff is never overwritten;
+   - `<scratch>/cca/handoff-<YYYY-MM-DD-HHMM>.md` in the session's repository, local time, where `<scratch>` is chosen as stage 1 D2 chooses it: the manifest's `scratch` key (inside the repo and ignored), else `scratch/`, `tmp/`, or `.scratch/` when it exists and is ignored, else `.cca/` when it is ignored. When that file exists, add `-2`, then `-3`, and so on before `.md`, as stage 1 does for run ids, so an earlier handoff is never overwritten.
 
    With neither, stop and ask for `--out`. Write that one file with the Write tool, and no other file.
 

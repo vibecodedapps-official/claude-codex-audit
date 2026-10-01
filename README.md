@@ -124,8 +124,9 @@ Run it in the build session, before the audit. It takes the same input forms as
 
 - `--out <path>`: where to write the handoff. It must be outside every repo or ignored by
   its repo. Without it, the file goes to `<scratch>/cca/handoff-<YYYY-MM-DD-HHMM>.md` in
-  the session's repository, with `<scratch>` chosen as in Run directory. With neither, the
-  command stops and asks for `--out`.
+  the session's repository, with `<scratch>` chosen as in Run directory, and `-2`, `-3`
+  added when that file exists. With neither, the command stops and asks for `--out`. An
+  existing file is never overwritten: an `--out` that names one stops the command.
 - `--verdicts <claims-verdicts.md>`: a return-trip file from an earlier audit. It is read
   first. A line whose file hash and claim text match the handoff source it names is
   applied; a mismatch is listed as reconciliation work and not applied.
