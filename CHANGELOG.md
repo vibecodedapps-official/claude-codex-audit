@@ -12,12 +12,15 @@ session to the audit, with a return trip back. No full multi-agent audit has run
   decisions, raised tickets) from the record, and with `--verdicts` applies a
   `claims-verdicts.md` from an earlier audit.
 - The handoff format (`skills/cca/handoff.md`) and `skills/cca/scripts/handoff.sh`, which
-  detects, validates, and turns a handoff into typed claims and a commit list.
+  detects, validates, and turns a handoff into typed claims and a commit list. A leading
+  UTF-8 byte order mark is ignored.
 - Typed claims, with kinds `code`, `decision`, `verification`, `scope`, and `status`.
   Prose claims files get a kind per sentence. A handoff's commit lists seed the review
   groups.
 - A decision ledger for `decision` claims: each is `stale deferral`, `needs <owner>`,
   `default taken`, or `evidenced`, with a reversibility class. Report section 8 lists them.
+  A missing ledger or scope entry is `not assessed`, and a missing challenge line `not
+  challenged`; neither fails a scope or changes the verdict counts.
 - A scope check for raised tickets: introduced by the bundle or not, fix inside the
   bundle's repos or not, cost, include or defer, and any disagreement with the handoff.
 - `claims-verdicts.md`, a stage 8 output that tells the build session which of its
@@ -42,9 +45,17 @@ session to the audit, with a return trip back. No full multi-agent audit has run
   adversary re-checks every verification claim marked `true`.
 - The read-only check runs a script. An ignored file is compared by size and sub-second
   modification time, and each audited repo has its own baseline marker. Paths that git
-  prints quoted are not supported and stop the check with exit 2.
-- Agents run no test or lint command in an exported tree, in `skills/cca/common.md` as
-  well as in the agent definition.
+  prints quoted are not supported and stop the check with exit 2. Nested repositories
+  (checked-out submodules and untracked repositories inside an audited repo) are checked
+  as part of it, and the files under a submodule that is not checked out are hashed. An
+  upstream's ahead and behind count is no longer compared, and the run directory is
+  matched without regard to case where the repo's `core.ignorecase` is true.
+- No git command cca or its agents issue rewrites an audited repo's index: the check
+  script sets `GIT_OPTIONAL_LOCKS=0`, the stages run `git status` with
+  `--no-optional-locks`, and agents diff only between two commits, since a working-tree
+  `git diff` writes the index even with that flag.
+- Agents run no test or lint command in an exported tree, in `skills/cca/common.md`,
+  stage 1, and the agent definitions.
 - Codex requests: the request names every input by absolute path, whatever the run
   directory, and Codex acknowledges each input with its sentinel. Only an input it could not
   open goes inline, in the one follow-up, under the 450,000-byte cap, over which stage 6
