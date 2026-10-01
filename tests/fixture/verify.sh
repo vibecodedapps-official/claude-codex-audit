@@ -114,6 +114,37 @@ full)
 	;;
 esac
 
+# Handoff files (solo and solo-dirty): the five files exist, the handoff's hash and each
+# verdicts file's heading hash are the literals in expected.md, and the claim count per
+# kind from handoff.sh equals the literals there.
+case $name in
+solo | solo-dirty)
+	hs=$(cd "$(dirname "$0")/../.." && pwd)/skills/cca/scripts/handoff.sh
+	for f in handoff.md manifest-handoff.json manifest-scratch.json claims-verdicts.md \
+		claims-verdicts-stale.md; do
+		[ -f "$F/$f" ] || fail "$f is missing"
+	done
+	same "handoff.md hash" 36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8 \
+		"$(git hash-object --no-filters "$F/handoff.md" 2>/dev/null)"
+	same "claims-verdicts.md heading hash" 36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8 \
+		"$(sed -n 's/^## .* (handoff), hash //p' "$F/claims-verdicts.md" 2>/dev/null)"
+	same "claims-verdicts-stale.md heading hash" 0000000000000000000000000000000000000000 \
+		"$(sed -n 's/^## .* (handoff), hash //p' "$F/claims-verdicts-stale.md" 2>/dev/null)"
+	same "claims-verdicts.md entries" 5 "$(grep -c '^- claim ' "$F/claims-verdicts.md" 2>/dev/null)"
+	grep -q '"claims": \["./handoff.md"\]' "$F/manifest-handoff.json" 2>/dev/null ||
+		fail "manifest-handoff.json does not list ./handoff.md as claims"
+	grep -q '"scratch": "./app/.test-output"' "$F/manifest-scratch.json" 2>/dev/null ||
+		fail "manifest-scratch.json has no scratch key ./app/.test-output"
+	if claims=$(sh "$hs" claims "$F/handoff.md" 2>&1); then
+		same "handoff claim counts" "code=4 verification=2 decision=2 scope=1 status=2" \
+			"$(printf '%s\n' "$claims" | awk -F'\t' '{ n[$1]++ } END { printf "code=%d verification=%d decision=%d scope=%d status=%d", n["code"], n["verification"], n["decision"], n["scope"], n["status"] }')"
+		same "handoff claim total" 11 "$(printf '%s\n' "$claims" | wc -l | tr -d ' ')"
+	else
+		fail "handoff.sh claims failed: $claims"
+	fi
+	;;
+esac
+
 if [ "$fails" -gt 0 ]; then
 	exit 1
 fi

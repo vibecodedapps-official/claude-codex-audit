@@ -1,8 +1,9 @@
 # Decisions
 
-This file records the design decisions behind cca 0.1.0: the questions the design
-settled, the five platform decisions confirmed against Claude Code before the build, the
-choices made while building, what is still open, and what is deferred past 0.1. It
+This file records the design decisions behind cca 0.1.0 and 0.2.0: the questions the
+design settled, the five platform decisions confirmed against Claude Code before the
+build, the choices made while building 0.1.0, the 0.2.0 decisions, what is still open, and
+what is deferred past 0.2. It
 replaces the pre-implementation spec, architecture, and build plan documents, in the
 repository history before this change; their user-facing content is in `README.md`.
 
@@ -109,15 +110,12 @@ Choices made while building 0.1.0 where the design left room.
   orchestrator improvised a free-text status for stages 4 to 7, outside the skill's
   status set, so the skill now records a never-started stage as `failed` with the reason
   "not run: budget expired"; whether later runs follow it is not yet observed.
-- **Inline Codex requests (known limitation, 2026-10-01).** The inline request form
-  travels as the Skill tool argument, and codex-lite rewrites it into its request file,
-  so a request near the 450,000-byte cap is slow and may be altered in transit. A
-  request over the cap is first reduced by dropping the diffs of session-repository
-  bundles (Codex can regenerate them from the shas in the brief; other repos' diffs are
-  never dropped) and re-measured before the swap to the fallback.
+- **Inline Codex requests (resolved 2026-10-01, in 0.2.0).** The first request no
+  longer has an inline form, so the cap and the diff dropping left it. See "Absolute-path
+  Codex requests" under the 0.2.0 decisions. The follow-up still carries an input Codex
+  could not open inline, under the 450,000-byte cap.
   Stage 6 also checks that the answer gives a position for every mandatory finding id
-  (every blocker or high finding and every pass-two downgrade or drop). Keeping the run
-  directory inside the session's repository avoids the inline form.
+  (every blocker or high finding and every pass-two downgrade or drop).
 
 ## Round 4 review fixes (2026-09-30)
 
@@ -187,18 +185,182 @@ Choices made while building 0.1.0 where the design left room.
 - C3: an over-cap Codex request is reduced by dropping the diffs of bundles whose repo
   is the session repository (others are never dropped, since Codex cannot reach them)
   before the swap, recorded as `inline_reduced`; still over the cap, or with none
-  droppable, it swaps with the reason "request too large for inline form".
+  droppable, it swaps with the reason "request too large for inline form". (Removed in
+  0.2.0; see "Absolute-path Codex requests".)
 
-## Deferred past 0.1
+## 0.2.0 decisions (2026-10-01)
 
-- Native Azure DevOps and other forge fetching. 0.1 accepts exported files.
-- Automatic trigger from ccl. In 0.1 a ccl run's report is passed as a claims file.
+0.2.0 closes five gaps that one real audit of 0.1.0 found (F1 to F5) and adds a typed
+handoff from the build session to the audit with a return trip (H1 to H5). The plan was
+reviewed twice by a second opinion before implementation; the settled findings are listed
+below. Nothing was run against a live audit; the acceptance record keeps every
+agent-driven case `not run` until one runs.
+
+- **Manifest `scratch` key (F1).** A repo may keep its scratch directory under any
+  ignored name. The key must name a path inside the primary repo that the repo ignores,
+  or the run stops before stage 1. The run directory then lands in the repo, under the
+  name the repo already uses for scratch. A resumed run keeps its
+  recorded directory, since moving it would orphan the run's state.
+- **Absolute-path Codex requests (2026-10-01).** A probe ran Codex in codex-lite's
+  read-only sandbox on Windows with the elevated sandbox. It read a token file outside
+  every repository by absolute path and quoted it exactly. So the request now names every
+  input by absolute path, for any run directory, and the inline first request, its cap,
+  the diff dropping, and `inline_reduced` are gone. Only an input Codex did not acknowledge
+  with its sentinel goes inline, in the one follow-up, under the 450,000-byte cap; over
+  it, stage 6 fails. No codex-lite change was needed, so the `--cwd` item (F6) is dropped
+  from the deferred list. Limits: Linux and macOS rely on Codex's documented read-only
+  policy, not a run here. The sentinel check catches a read that fails, so a platform
+  where it fails is detected, not trusted. Audited sources were never sentinel-checked
+  and stay named by read path and sha.
+- **Release wording (F2).** The README says what ran and what has not, matching the
+  acceptance record. The first medium-tier run on a real bundle is the acceptance run.
+- **The read-only check is a script (F3).** The check is the step most likely to be
+  skipped or botched on a long run, so `readonly.sh` takes a snapshot and compares it, and
+  the orchestrator keeps only the judgment the script cannot make. Exit 2 (the check could
+  not complete) ends the run `blocked`, since the boundary could not be checked.
+- **Sub-second mtime replaces the second channel.** 0.1 caught a same-size rewrite within
+  one second with a second "newer than the marker" channel. The inventory now records
+  modification time at sub-second precision, so the channel is not needed, and a write
+  made while a snapshot ran is not reported again once it is in an accepted inventory.
+  Each audited repo has its own marker. The ignored base for the next check is the last
+  check that passed. Pending ignored differences are reconciled after every check that
+  did not exit 1 or 2, so a pending write never escapes attribution.
+- **Quoted paths are unsupported.** A path git prints quoted (one holding a double quote,
+  backslash, tab, newline, or control character) fails the check with exit 2 naming it,
+  instead of risking a wrong comparison. Failing closed fits the boundary.
+- **Sizing note (F4).** The README tells a user to size sources before a first run, since
+  an export copies every tracked blob at the pinned sha, and agents run no test or lint
+  command in an exported tree. `skills/cca/common.md` now states that as broadly as the
+  auditor's boundary does.
+- **Work-item operations plan (F5).** Stage 8 writes `work-items.jsonl`, one JSON object
+  per operation, with `$new:<key>` placeholders, for a forge adapter or a person to apply.
+  It is validated before the report is hashed and carries no report revision: a resume
+  that rewrites the report supersedes the file with it. `/cca:act` applies none of it, so
+  no write path to a forge is added.
+- **The handoff command is an inline command, not a skill.** A skill named `handoff` would
+  collide with the command name, so `commands/handoff.md` holds the whole procedure.
+- **Typed claims (H2).** Five kinds, so each is checked the way its kind needs. A
+  handoff's kinds come from `handoff.sh claims`, never from judgment, and one item is one
+  claim, never split further. Prose files keep the sentence split with a kind per sentence,
+  by an ordered rule (verification first).
+- **Verification claims (departure from the feedback).** The feedback says a verification
+  claim "counts as false unless the audit reproduces the check". 0.2.0 never marks an
+  unreproduced verification claim `true`, but marks it `not verified` with the reason
+  `not reproduced`, and lists it in `claims-verdicts.md` as a recheck request, not a
+  correction. `false` stays reserved for counter-evidence. Reason: an audit that lacks
+  access (a declined live check, an expired budget, an exported tree) would otherwise tell
+  the build session to correct a statement that may be accurate, which is the memory
+  damage the return trip exists to prevent. The acceptance case reads: a verification claim
+  the fixture cannot reproduce is never reported `true`, and appears as a recheck request.
+  The owner can reverse this.
+- **A run under another setup is not counter-evidence.** A suite run without an
+  environment variable it needs, or in another directory, can fail for that reason alone.
+  Such a run leaves the claim `not verified, not reproduced`, because a `false` from it
+  would rewrite an accurate statement, which the departure above exists to prevent.
+- **Reproduction is not proof the check ran.** A reproduced result does not show that the
+  build session ran its stated check, and the report says so once.
+- **Decision classes (H3).** The class follows from three dimensions read from the record:
+  resolution (taken, open deferral, settled later), authority (a person, a role, a
+  checkpoint, not recorded), and evidence (alternatives weighed, or not). The classes are
+  `stale deferral`, `needs <owner>`, `default taken`, and `evidenced`, the first that
+  holds, with the reversibility class 0.1 already had. Evidence counts only from a record
+  the auditor can open; the handoff's own `rejected` lines are claims, not that record.
+  A checkpoint pointer cannot be opened, so a build session that wants a checkpoint choice
+  to count records it in a commit body or ticket comment. A deferral stays a deferral:
+  `/cca:handoff` never rewrites its status.
+- **Decision and scope entries are not findings.** They are report items with their own
+  sections, never enter `ledger/5.md`, `ledger/6.md`, or `ledger/7.md`, have no review
+  gate, and never change the verdict counts. When an entry shows a defect, the auditor
+  files a separate Q4 finding, which goes through the gate like any other. This keeps the
+  review gate's meaning, and the verdict counts, unchanged. For the same reason a missing
+  entry or challenge line does not fail a scope: a missing auditor entry is recorded as
+  `not assessed` (verdict `not verified`, reason "not assessed"), and a missing adversary
+  line as `not challenged`. The completeness gate for `verification` claims is unchanged.
+- **Scope check (H4).** For a raised ticket, the hygiene scope states whether the bundle
+  introduced the behavior, whether the fix lies inside the bundle's repos, and the cost,
+  then include or defer. It records disagreement with the handoff on the facts and on the
+  recommendation separately, since a handoff can be right on one and wrong on the other.
+  The acceptance case asserts the facts, not the recommendation.
+- **Return trip (H5).** `claims-verdicts.md` carries the report's revision and, for each
+  claims file, its hash, and each line carries the claim's text. A line applies only when
+  the hash and text match, so a file edited since the audit is not silently corrected.
+  `/cca:handoff --verdicts` reads the file before anything else.
+- **Base of a bundle in `/cca:handoff`.** The manifest's `base`, else the PR's base
+  branch, else the repository's default branch with a confirmation. A branch's upstream
+  tracking ref is never the base, since it is the branch's own remote copy.
+- **Handoff identity and grammar.** Bundle names are slugs that match the stage 1 names,
+  ticket ids are unique across the handoff and qualified when short ids collide, a
+  decision's ticket resolves among tickets first, every key appears once in a fixed order,
+  and a `## Bundles` line is split from the right. Each rule exists so the script can
+  validate with no judgment and every error carries a line number.
+- **A handoff needs a bundle.** `## Bundles` needs at least one bundle, while `## Tickets`,
+  `## Decisions`, and `## Raised tickets` may each hold `none`. Every other item refers to a bundle, and a
+  bundle with no tickets is valid.
+- **Relative `repo` paths in a handoff.** A relative `repo` path is relative to the handoff
+  file, as manifest paths are to the manifest. `/cca:handoff` writes absolute paths, so the
+  file can move.
+- **`claims-verdicts.md` entry layout.** `text:` and `correction:` sit on their own
+  indented lines under each entry's main line, so a `; ` inside either cannot be misread
+  as a field separator.
+- **Version string.** A 0.1.0 run resumed under 0.2.0 reruns from stage 1, by the existing
+  input-hash rule, since the stage files it was built from changed.
+
+Review findings on the first plan draft, and how each was settled:
+
+1. Unreproduced verification is not false: taken (the departure above).
+2. The ignored check lost the newer-than-marker channel: taken, with a marker per snapshot
+   and the last passing check as the ignored base, then superseded by sub-second mtime.
+3. A branch's upstream is not its base: taken.
+4. Decision classes mixed dimensions, and the handoff command erased deferrals: taken, with
+   the three dimensions and the rule that a deferral keeps its status.
+5. Handoff identities (bundle suffixes, ticket-to-bundle links, qualified refs, and the
+   mapping to manifest ids): taken.
+6. Grammar ambiguity (key multiplicity and order, non-empty values, option cardinality,
+   first-occurrence splits, tabs, CR, versions): taken.
+7. Script failure and filename handling, and portability coverage: taken, with exit 2 and
+   the CI matrix.
+8. Completeness of decision and scope entries, and defect promotion: taken, with completion
+   checks in stages 4 and 5.
+9. Return-trip provenance (file hash and claim text) and reading `--verdicts` first: taken.
+10. The work-item contract contradicted itself on forge ids and had no real validation:
+    taken.
+11. The raised-ticket case asserted a recommendation: it now asserts the facts only.
+12. Conditional acceptance expectations, the export-runs policy, and more grammar test
+    cases: taken.
+
+Review findings on the second plan draft:
+
+- Ticket identity: ids unique across the handoff, qualified when short ids collide, raised
+  `ticket` values unique, and a decision's ticket resolves among tickets first.
+- Grammar: bundle names are slugs, the Bundles line is split from the right, and every
+  listed bundle must exist.
+- Operations validation: the validator also checks `run`, `C<n>`, and claim references
+  against the report body and `claims.md`, before hashing, and operations carry no
+  revision.
+- Pending ignored writes: reconciled after every check that did not exit 1 or 2.
+- Self-certified decision evidence: only a record the auditor opened counts.
+- Validation after the report was final: moved before hashing.
+- A write during a snapshot reported again: sub-second mtime replaces the marker channel
+  for ignored files.
+- GNU-only `touch -d` in the test: the ISO form both GNU and macOS accept, with the times
+  asserted before the result.
+
+## Deferred past 0.2
+
+- ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
+  changes. `skills/cca/handoff.md` is the format ccl can adopt, and `/cca:handoff` can run
+  in any session, including one that ran ccl.
+- Applying `work-items.jsonl` to a forge. 0.2.0 writes and validates the plan; no adapter
+  ships.
+- Native Azure DevOps and other forge fetching. Exported files are accepted.
+- Automatic trigger from ccl. A ccl run's report is passed as a claims file, or
+  `/cca:handoff` writes a handoff.
 - Exact token accounting.
 - A PreToolUse hook that enforces the read-only boundary mechanically.
-- Feeding a live check result back into a run. In 0.1 the user reruns the audit or acts
+- Feeding a live check result back into a run. Today the user reruns the audit or acts
   on the finding by hand.
-- Bounded loading for every agent input (2026-09-30 review). In 0.1 the unit is the
+- Bounded loading for every agent input (2026-09-30 review). Today the unit is the
   450,000-byte chunk or ledger slice, an ordinary corpus file is read in full, a single
   finding larger than the split threshold is passed whole as an `over threshold` part,
   and a merger may reopen a full ledger file for a duplicate check. A per-agent byte
-  cap with sectioned inputs is a 0.2 design change.
+  cap with sectioned inputs is a later design change, still deferred.

@@ -38,18 +38,23 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
      or `interactions`);
    - the changed files it covers, copied from `groups.md` with their notes (for a
      specialist, every changed file of every bundle);
-   - the claim numbers assigned to it in stage 1 (for `combined`, every claim);
+   - each claim assigned to it in stage 1, by number with its kind (for `combined`, every
+     claim); the scope that holds the `hygiene` claims gets every one of them: `hygiene` at
+     high tier, `tests-hygiene` at medium, `combined` at low;
    - the tickets it concerns and the readable-tree path of each repo, from the brief;
    - the question ids to answer (every question, at every tier);
+   - for every scope that is assigned a `decision` claim, the decision ledger row of the
+     table below, copied beside its other checklist rows;
    - for a specialist or `combined` role, its checklist, copied from this table:
 
    | Role | Checklist |
    |---|---|
    | tests | coverage of new behavior; weakened, deleted, or skipped tests; CI config changes |
-   | hygiene | each ticket matches the change; each acceptance criterion met or not, with evidence; follow-ups recorded; every key the brief lists as "not in export" reported as a finding |
+   | hygiene | each ticket matches the change; each acceptance criterion met or not, with evidence; follow-ups recorded; every key the brief lists as "not in export" reported as a finding; the scope check for every `scope` claim (`## Scope` in `common.md`) |
    | tests-hygiene | both rows above |
    | interactions | contracts, schemas, and APIs changed in one bundle and used in another; stack order and the combined state the brief states |
    | combined | the group review of every changed file, plus the tests and hygiene rows above, in one report |
+   | decision ledger (every group and specialist scope with a `decision` claim) | the decision ledger for each `decision` claim assigned to the scope (`## Decisions` in `common.md`): three dimensions, class, reversibility, recommendation |
 
    At low tier the report's Coverage section says that one auditor covered the ticket,
    tests, and work-item hygiene with this checklist, instead of separate auditors.
@@ -95,6 +100,12 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
       barrier and for stage completion, and gets no pass two.
    4. On success, check that the file has `runs:` and `consumed:` headings (either may
       say none). The `consumed:` list names each digest and map read, with its hash.
+      Check coverage too: the report's `## Decisions` names every `decision` claim
+      assigned to the scope, and a report from a scope that holds `hygiene` claims has
+      a `## Scope` that names every `scope` claim assigned to it. A miss does not fail
+      the scope: the entry was never written, so record the claim as `not assessed`
+      in the stage entry. Stage 8 lists it in the coverage disclosure and gives it the
+      verdict `not verified`, with the reason "not assessed".
 
 8. **Reconciliation barrier.** Once stages 2 and 3 each have status `complete`,
    `failed`, or `not_applicable` in `stages.json`, compute the barrier for each scope
@@ -153,5 +164,5 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
 12. **Write the stage 4 entry last,** once the check has passed, per the preamble
     (temporary file beside `stages.json`, then rename): status, inputs (including each
     consumed digest and map hash), outputs (every `scope/` and `pass1/` file, and each
-    `.pre-topup.md` copy), agents, swaps, failed scopes with reasons, and each `_test`
-    fault applied.
+    `.pre-topup.md` copy), agents, swaps, failed scopes with reasons, each claim
+    recorded as `not assessed`, and each `_test` fault applied.

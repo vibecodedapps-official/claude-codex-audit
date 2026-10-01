@@ -25,7 +25,8 @@ the Verified OK list the tier lets you attack.
 
 1. Read `common.md` first, in full, at the path your prompt gives. Follow its
    "Hard rules", "Evidence", "Finding schema" (with its "Ids and origin tags"),
-   "Pass-two verdicts", and "Output contract" sections.
+   "Claim kinds", "Claims list", "Decisions", "Scope", "Pass-two verdicts", and "Output
+   contract" sections.
 2. Read `audit-brief.md`. Read only the trees the brief maps for you, plus the run
    directory files it names. Then read the pass-one report you were given, including any
    `## Top-up` sections.
@@ -46,11 +47,29 @@ the Verified OK list the tier lets you attack.
 8. Write `## Map corrections`: for each wrong answer in a map the report used, the map
    file, the line, what is wrong, and the source quote at its sha that shows it, or
    `none`.
-9. Close the file as the "Output contract" section says: every command you ran under
-   `runs:` (command, directory, exit status), every digest and map file you read under
-   `consumed:` with its `git hash-object --no-filters <file>` hash, `none` under either
-   when empty, and `status: complete` as the last line.
-10. Write the whole output file in one write before you report. Then return only the
+9. At every tier, write `## Claims challenged`: a line for every `verification` claim the
+   report marks `true, reproduced`. Reproduce the stated result yourself, by a run or a
+   quote; a quote of other text saying it was checked does not reproduce it. Mark the
+   line `upheld`, or `overturned to <...>` with the evidence, as "Pass-two verdicts"
+   gives. An `overturned to false, contradicted` needs counter-evidence from a run under
+   the stated setup. You may add a line for any other claim you find misjudged. Write
+   `none` only when the report marks no `verification` claim true.
+10. At every tier, write `## Decisions challenged`: a line for every entry of the report's
+    `## Decisions`. Open the records the entry cites, redo the three dimensions, and class
+    the decision by the order in "Decisions". Write `agree, <class>` or `disagree, <class>`
+    with the class you reach and your evidence. Write `none` only when the report has no
+    entry.
+11. At every tier, write `## Scope challenged`: a line for every entry of the report's
+    `## Scope`. Check "introduced by the bundle" against the merge-base and the cost and
+    ranking facts against the sources. Write `agree` or `disagree, <what differs>` with
+    your evidence. Write `none` only when the report has no entry. A challenge line is not
+    a finding. A defect an entry shows that no finding names is a new finding
+    `<group>-P<n>` (step 7).
+12. Close the file as the "Output contract" section says: every command you ran under
+    `runs:` (command, directory, exit status), every digest and map file you read under
+    `consumed:` with its `git hash-object --no-filters <file>` hash, `none` under either
+    when empty, and `status: complete` as the last line.
+13. Write the whole output file in one write before you report. Then return only the
     output path and one line of status.
 
 ## Late adversary mode
@@ -61,7 +80,7 @@ the Verified OK list the tier lets you attack.
    its stage 5 verdicts, as in steps 3 and 4.
 3. Anything you raise yourself is provisional: number it `L<n>` with the line
    `- origin: late` after its title. No further round follows.
-4. Finish with steps 9 and 10.
+4. Finish with steps 12 and 13.
 
 ## Second-opinion fallback mode
 
@@ -82,16 +101,18 @@ You stand in for Codex and answer the same request it would have received.
    and give no additions or merge verdicts.
 4. Your output file is the one your prompt names (`codex/response.md`, or
    `codex/response-<k>.md` for a later batch). After the merge verdicts (or, for a later
-   batch, the last position), finish with steps 9 and 10.
+   batch, the last position), finish with steps 12 and 13.
 
 ## Boundaries
 
 1. Never change any file except your output file.
-2. Bash runs only `git show`, `git log`, `git diff`, `git grep`, `git ls-files`, `rg`,
-   `ls`, their `git -C <repo>` forms, `git hash-object --no-filters <file>` for the
+2. Bash runs only `git show`, `git log`, `git diff <base>...<head>`, `git grep`, `git ls-files`,
+   `rg`, `ls`, their `git -C <repo>` forms, `git hash-object --no-filters <file>` for the
    `consumed:` list, and, when a question needs a run, the repo's own test or lint commands
    in a directly read working tree. Never run them in an export under `trees/`; say
    `not run` instead. A two-dot diff is never used.
+   A diff always names two commits: a working-tree `git diff` refreshes the index even
+   with `--no-optional-locks`, and `git status` is not run.
 3. Read and search trees as `common.md`'s "Reading trees and searching" section says. In
    a directly read working tree, search with `git grep` at the pinned sha, or with `rg`
    over the files `git ls-files` lists; use the Grep and Glob tools only in an export or

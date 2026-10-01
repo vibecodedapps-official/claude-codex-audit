@@ -490,6 +490,132 @@ EOF
   "claims": ["./session-summary.md"]
 }
 EOF
+	# Outside every repo, so no commit id changes: a manifest that reads the handoff, a
+	# manifest with the scratch key, and the handoff itself.
+	put manifest-handoff.json <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main",
+      "tickets": ["file:./exports/APP-1.md"] }
+  ],
+  "claims": ["./handoff.md"]
+}
+EOF
+	put manifest-scratch.json <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main",
+      "tickets": ["file:./exports/APP-1.md"] }
+  ],
+  "claims": ["./session-summary.md"],
+  "scratch": "./app/.test-output"
+}
+EOF
+	put handoff.md <<'EOF'
+---
+cca-handoff: 1
+generated: 2026-09-01T11:00:00Z
+---
+
+# Handoff: deactivate users
+
+## Bundles
+
+- app: repo ./app; pr none; branch feature; base main
+
+## Tickets
+
+### APP-1
+- type: Story
+- state: Active
+- iteration: none
+- owner: Developer
+- bundles: app
+- problem: Removing a user deletes the record, so its history is lost.
+- decision: Add a deactivate command that keeps the row and sets its status to inactive.
+- commits:
+  - app 9c5f77c: add the status column migration so every row has a status.
+  - app 0c23936: add the deactivate command, which keeps the row and sets its status to inactive.
+- verified:
+  - Deactivate was checked by hand against a copy of production data; check: not recorded
+  - The test suite runs with one test skipped; check: sh run-tests.sh
+
+## Decisions
+
+### D1
+- ticket: APP-1
+- decision: Deactivate removes the row instead of setting a status.
+- rationale: A removed row needs no change to the reads.
+- options:
+  - chosen: remove the row
+  - rejected: keep the row and set a status; why: every read would need a status filter
+- decided_by: checkpoint (recommended option taken)
+- recorded_at: checkpoint: plan review
+- status: default taken
+
+### D2
+- ticket: APP-1
+- decision: Whether a deactivated user can be reactivated is left for later.
+- rationale: not recorded
+- options: none recorded
+- decided_by: not recorded
+- recorded_at: not recorded
+- status: deferred
+
+## Raised tickets
+
+### R1
+- ticket: APP-6
+- type: Bug
+- state: New
+- iteration: none
+- owner: none
+- bundles: app
+- summary: Add accepts a second row with an id that already exists.
+- rank: 1
+- in_bundle_confidence: include
+- reason: The bundle introduced it when it changed add_user.
+EOF
+	# Two return-trip files for /cca:handoff --verdicts: one whose heading carries the
+	# handoff's own hash, one whose heading carries a stale hash.
+	h=$(git hash-object --no-filters "$T/handoff.md")
+	verdicts_md "$h" | put claims-verdicts.md
+	verdicts_md 0000000000000000000000000000000000000000 | put claims-verdicts-stale.md
+}
+
+# verdicts_md <hash>: a claims-verdicts.md for $T/handoff.md, its heading carrying <hash>.
+# Claim 1 is a correction whose text matches; claim 3 a correction whose text does not;
+# claim 5 contested; claim 6 a recheck request; claim 7 true.
+verdicts_md() {
+	cat <<EOF
+# Claims verdicts: fixture-verdicts
+
+report revision: sha256:0000000000000000000000000000000000000000000000000000000000000000
+generated: 2026-09-01T12:00:00Z
+
+Apply a line only when its file hash and claim text match what you hold. \`false\` lines
+are corrections: the statement is contradicted by the cited evidence. \`not verified\` lines
+on verification claims are recheck requests: the audit could not reproduce the check, which
+is not evidence the statement is wrong. \`contested\` lines need a person to decide.
+
+## $T/handoff.md (handoff), hash $1
+
+- claim 1 [status] $T/handoff.md:14 tickets/APP-1/fields: false; finding: none; evidence: exports/APP-1.md gives state In Progress
+  text: APP-1: type Story; state Active; iteration none; owner Developer
+  correction: APP-1: type Story; state In Progress; iteration none; owner Developer
+- claim 3 [code] $T/handoff.md:14 tickets/APP-1/decision: false; finding: C1; evidence: report item C1
+  text: Add a deactivate command that keeps the row.
+  correction: Add a deactivate command; it deletes the user's row, though the ticket asks for a soft delete.
+- claim 5 [code] $T/handoff.md:24 tickets/APP-1/commit/app/0c23936: contested; finding: C1; evidence: report section 10
+  text: app 0c23936: add the deactivate command, which keeps the row and sets its status to inactive.
+  correction: none
+- claim 6 [verification] $T/handoff.md:26 tickets/APP-1/verified/1: not verified; finding: none; evidence: not reproduced, needs a copy of production data
+  text: Deactivate was checked by hand against a copy of production data; check: not recorded
+  correction: none
+- claim 7 [verification] $T/handoff.md:27 tickets/APP-1/verified/2: true; finding: none; evidence: sh run-tests.sh printed the skip line
+  text: The test suite runs with one test skipped; check: sh run-tests.sh
+  correction: none
+EOF
 }
 
 # ---------------------------------------------------------------------------

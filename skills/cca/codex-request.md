@@ -16,8 +16,8 @@ The request's inputs are these run-directory files:
   including dropped findings)
 - every `pass2/<group>.md` and `pass2/<group>-topup.md` (for the coverage gaps)
 
-Audited source files are never inputs; the request points at them by the read paths
-and shas in `audit-brief.md`.
+Audited source files are never inputs; the request points at them by the absolute read
+paths and shas in `audit-brief.md`.
 
 Every generated run-directory file the request names starts with a sentinel line.
 Audited sources never get one. Stage 1 to 5 outputs are not changed to add one;
@@ -35,31 +35,24 @@ stage 6 entry's `sentinels` map, so the acknowledgment check can compare them.
 
 ## Forms
 
-- **By path.** When the run directory is inside the session's repository, the request
-  names each input copy by its path relative to that repository's root, and Codex
-  opens them.
-- **Inline.** When the run directory is outside the session's repository, the request
-  carries the full content of every input copy, each under a header with its
-  run-directory path, sentinel line first, diffs included, so it names no file Codex
-  must open. The retry after a missing acknowledgment carries only the unacknowledged
-  inputs in the same form, as stage 6 step 8 describes:
+The request has one form. It names every input copy by its absolute path, and every
+audited source by its absolute read path and sha from `audit-brief.md`, so Codex opens
+each one itself, wherever the run directory is. It carries no inline content and has no
+size cap, and no diff is dropped from it. An input Codex cannot open is caught by the
+acknowledgment rule below.
 
-  ```
-  ===== input: codex/inputs/<run-relative path> =====
-  cca-sentinel: <run-relative path> <token>
-  <content>
-  ===== end: codex/inputs/<run-relative path> =====
-  ```
+The follow-up after a missing acknowledgment is the only inline text. It carries the
+unacknowledged inputs in this layout, as stage 6 step 8 describes:
 
-  When the inline request would exceed 450,000 bytes (or `_test` `inline_cap_bytes`),
-  the diffs of the bundles whose repo is the session's repository, the one codex-lite
-  runs Codex from, are dropped from it first and it is measured again. The diff of a
-  bundle in any other repo is never dropped, since Codex cannot reach that repo. A
-  dropped diff is no longer an input or acknowledged; the request gives, per bundle
-  whose diff was dropped, the command to regenerate it from the shas in the brief,
-  `git -C <repo> diff <base>...<head>`. If it is still over, or no diff can be
-  dropped, it is not sent. Stage 6 is swapped to the fallback, which reads the inputs
-  by path, with the reason `request too large for inline form`.
+```
+===== input: codex/inputs/<run-relative path> =====
+cca-sentinel: <run-relative path> <token>
+<content>
+===== end: codex/inputs/<run-relative path> =====
+```
+
+When the follow-up would exceed 450,000 bytes (or `_test` `inline_cap_bytes`), it is
+not sent and stage 6 fails. No diff is dropped from it.
 
 ## Request
 
@@ -75,11 +68,11 @@ verify, not facts.
 
 ## Inputs
 
-<by path: one line per input copy, "- <path relative to the repository root>">
-<inline: every input copy, in the inline form>
+<one line per input copy, "- <absolute path of the copy under codex/inputs/>">
 
 Audited sources, read at the pinned shas in audit-brief.md:
-<one line per bundle, reference, and source of truth: name, read path, sha, mode>
+<one line per bundle, reference, and source of truth: name, absolute read path, sha,
+mode>
 
 ## Acknowledge your inputs first
 
@@ -120,13 +113,13 @@ Also consider the coverage gaps the pass-two reports list.
 
 After the answer, compare each input's sentinel with the `## Acknowledgments` section.
 A sentinel not quoted exactly means access to that input is not confirmed. Retry once,
-in the inline form. If any input is still unacknowledged, stage 6 fails: the findings
-it covered do not pass the review gate on its account, and the run ends `partial`.
-With `_test` `drop_ack`, treat the named input's acknowledgment as missing in the first
-`times` answers. Stage 6 also checks that the answer gives a position for every
-blocker or high finding and every pass-two downgrade or drop (asks 1 and 2); one still
-missing after the one follow-up fails the stage the same way. The ids checked are
-every mandatory id: when the set was split into batches of at most 60, the request
+carrying the unacknowledged inputs inline. If any input is still unacknowledged, stage 6
+fails: the findings it covered do not pass the review gate on its account, and the run
+ends `partial`. With `_test` `drop_ack`, treat the named input's acknowledgment as
+missing in the first `times` answers. Stage 6 also checks that the answer gives a
+position for every blocker or high finding and every pass-two downgrade or drop (asks 1
+and 2); one still missing after the one follow-up fails the stage the same way. The ids
+checked are every mandatory id: when the set was split into batches of at most 60, the request
 carries the first batch and the follow-up at most 60 positions (missing first-batch
 ids first, then second-batch ids), every id neither carries being answered by the
 fallback in batches of at most 60, one launch each; without Codex the fallback is

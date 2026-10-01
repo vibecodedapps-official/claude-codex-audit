@@ -86,7 +86,7 @@ a finished one.
      invalidates stage 1 (the bundles' head and base shas were already compared in
      step 3, which stops on any change);
    - upstream stage outputs, by `git hash-object --no-filters <file>`;
-   - `plugin_version`, which for this release is `0.1.0`.
+   - `plugin_version`, which for this release is `0.2.0`.
    A stage's inputs have changed when any recomputed value differs from the recorded
    one, or when an input is missing.
 5. **Pick the first stage to rerun.** It is the earliest of:
@@ -97,9 +97,9 @@ a finished one.
    - the first stage whose input hashes changed;
    - stage 1, when any tree `audit-brief.md` maps as `direct` fails a direct-read
      condition now: `git -C <repo> rev-parse HEAD` is not the pinned sha,
-     `git -C <repo> status --porcelain --untracked-files=no` is not empty, or
-     `git -C <repo> ls-files -v` shows a path flagged `S`, `h`, or `s`. Rerunning
-     stage 1 re-exports it.
+     `git -C <repo> --no-optional-locks status --porcelain --untracked-files=no` is not
+     empty, or `git -C <repo> ls-files -v` shows a path flagged `S`, `h`, or `s`.
+     Rerunning stage 1 re-exports it.
    A `not_applicable` stage whose inputs have not changed is reused. When the first
    stage to rerun is not 1, or nothing needs a rerun, remove every
    `forge/<bundle>/pr.json.new` now. When nothing needs a rerun and no `--from` was
@@ -123,9 +123,9 @@ a finished one.
    instead: move every one of these paths that exists to `superseded/<k>/<path>`:
    `audit-brief.md`, `common.md`, `claims.md`, `groups.md`, `diffs/`, `forge/`,
    `trees/`, `guidelines/`, `domain/`, `scope/`, `pass1/`, `pass2/`, `ledger/`,
-   `codex/`, `late/`, `converged/`, `converged.md`, `gate.md`, `report.md`, `usage.md`,
-   `tmp/`, and `baseline/`. `manifest.json`, `stages.json`, and `superseded/` are
-   never moved.
+   `codex/`, `late/`, `converged/`, `converged.md`, `gate.md`, `report.md`,
+   `claims-verdicts.md`, `work-items.jsonl`, `usage.md`, `tmp/`, and `baseline/`.
+   `manifest.json`, `stages.json`, and `superseded/` are never moved.
    With no entry to rewrite, keep the move records (`path`, `moved_to`, `time`) and put
    them in the `superseded` list of the new stage 1 entry when stage 1 writes it
    (`1-orient.md` section D, step D7).
@@ -134,11 +134,15 @@ a finished one.
 7. **Baseline.** When the first rerun stage is 1, stage 1 takes the baseline again.
    Otherwise, retake it now, before any agent launches, as in stage 1 step 1b: move
    the old `baseline/` files, except the stage check files of reused stages, to
-   `superseded/<k>/baseline/`, create a new `baseline/marker`, and write new snapshot
-   files. A fetch runs only when stage 1 reruns. A recorded approval covers only the
-   commands in its `commands` list: when the planned commands for a repo and remote
-   are all in one recorded list for that target, they are not asked again; otherwise
-   ask once, listing the new commands, and record a new approval entry.
+   `superseded/<k>/baseline/`, and take the snapshot again for each audited repo with
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh snapshot <repo> <run dir> <run dir>/baseline/<name>`
+   (resolved absolute script path), which writes each repo's new
+   `baseline/<name>.marker` and snapshot files. The ignored base for the next check
+   restarts at the new baseline (SKILL.md, Read-only check). A fetch runs only when
+   stage 1 reruns. A recorded approval covers only the commands in its `commands`
+   list: when the planned commands for a repo and remote are all in one recorded list
+   for that target, they are not asked again; otherwise ask once, listing the new
+   commands, and record a new approval entry.
 8. **Mark the run running.** Set the run's `state` in `runs.json` to `running`. A
    resumed run has no budget; the original invocation's budget does not carry over.
 9. **Continue.** Go to the SKILL.md section for the first rerun stage and run every

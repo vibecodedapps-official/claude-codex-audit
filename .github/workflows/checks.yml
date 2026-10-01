@@ -20,3 +20,35 @@ jobs:
         run: m=$(sh tests/fixture/build.sh solo-dirty) && sh tests/fixture/verify.sh "$m" solo-dirty
       - name: build and verify fixture full
         run: m=$(sh tests/fixture/build.sh full) && sh tests/fixture/verify.sh "$m" full
+
+  scripts:
+    name: scripts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - name: readonly
+        run: |
+          readlink -f "$(command -v awk)" || command -v awk
+          sh tests/readonly.sh
+      - name: handoff
+        run: sh tests/handoff.sh
+      - name: work-items
+        run: sh tests/work-items.sh
+      - name: awk tests with mawk
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mawk
+          mkdir -p "$RUNNER_TEMP/mawk-bin"
+          ln -sf "$(command -v mawk)" "$RUNNER_TEMP/mawk-bin/awk"
+          PATH="$RUNNER_TEMP/mawk-bin:$PATH"
+          awk -W version 2>&1 | head -n 1
+          sh tests/handoff.sh
+          sh tests/readonly.sh

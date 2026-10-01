@@ -1,7 +1,7 @@
 ---
 description: "Run a read-only, adversarial audit of a finished bundle of pull requests, in one or many repos, and stop at a report. Use when the user asks for a cca audit, or types /cca:audit. Inputs are an optional manifest JSON file and prompt inputs (repo paths, PR and ticket ids, exported ticket files). Flags are --effort low|medium|high, --no-codex, --codex-model <id>, --codex-timeout <seconds>, --models role=model,..., --questions <file>, --claims <file> (repeatable), --budget <minutes>, and --max-agents <n>. To rerun a run from a stage, use /cca:resume; to act on reported items, use /cca:act."
 argument-hint: '[<manifest.json>] [<inputs...>] [--effort low|medium|high] [--no-codex] [--codex-model <id>] [--codex-timeout <seconds>] [--models role=model,...] [--questions <file>] [--claims <file>]... [--budget <minutes>] [--max-agents <n>]'
-allowed-tools: Bash(git -C * rev-parse *), Bash(git -C * status *), Read, Skill
+allowed-tools: Bash(git -C * rev-parse *), Bash(git -C * status *), Bash(git -C * --no-optional-locks status *), Read, Skill
 ---
 
 You are a thin forwarder for the cca orchestrator. Do the steps below in order. Write no file, in any step.

@@ -50,18 +50,28 @@ corrected map, `pass2/<group>-topup.md` per map-correction top-up, and `ledger/5
      `origin: pass2` and an id `<scope>-P<n>`;
    - `## Map corrections`: map file, line, what is wrong, and the source quote at its
      sha that shows it; or `none`;
+   - at every tier, `## Claims challenged`, `## Decisions challenged`, and
+     `## Scope challenged`, in the shapes `common.md` gives;
    - `runs:`, `consumed:`, and a last line `status: complete`.
 
-   A report with a finding that has no verdict is incomplete and counts as a failure.
+   A report with a finding that has no verdict is incomplete and counts as a failure. So
+   is a report that misses a `## Claims challenged` line: every `verification` claim the
+   pass-one report marks true needs one. Every entry of the pass-one `## Decisions` and
+   `## Scope` also needs a line under `## Decisions challenged` and `## Scope challenged`,
+   but a missing line or heading there does not fail the scope: record each such entry as
+   `not challenged` in the stage 5 entry, and stage 8 shows the pass-one entry with
+   that mark. Challenge lines and the entries they challenge are report items, not
+   findings; they do not go into `ledger/5.md`.
 
 4. **Failure.** The adversary failed when it returned an error, its file is missing, its
-   last line is not `status: complete`, or a finding lacks a verdict. A `_test.fail`
-   entry with `role: adversary` and this scope or `any` makes the scope's first `times`
-   completions failures. Ladder: first failure, relaunch on the same model; second,
-   relaunch with `model: fable`, recorded as a swap; third, the scope failed and its
-   findings have no pass-two verdict. Record tokens and duration per completion with the
-   label "task notification, subagent_tokens; scope not documented". Check the budget
-   before every launch; after it expires, launch nothing and record each scope not run.
+   last line is not `status: complete`, a finding lacks a verdict, or a `## Claims
+   challenged` line is missing (step 3). A `_test.fail` entry with `role: adversary` and
+   this scope or `any` makes the scope's first `times` completions failures. Ladder: first failure,
+   relaunch on the same model; second, relaunch with `model: fable`, recorded as a swap;
+   third, the scope failed and its findings have no pass-two verdict. Record tokens and
+   duration per completion with the label "task notification, subagent_tokens; scope not
+   documented". Check the budget before every launch; after it expires, launch nothing
+   and record each scope not run.
 
 5. **Map corrections**, once every pass-two adversary has finished:
    1. Collect every `map corrections` entry. For each, open the cited source quote at its
@@ -127,5 +137,5 @@ corrected map, `pass2/<group>-topup.md` per map-correction top-up, and `ledger/5
 
 9. **Write the stage 5 entry last,** once the check has passed, per the preamble:
    status, inputs, outputs (every `pass2/` file, each `.r2.md`, and `ledger/5.md`),
-   agents, swaps, failed scopes, map corrections not applied, and each `_test` fault
-   applied.
+   agents, swaps, failed scopes, map corrections not applied, each decision or scope
+   entry recorded as `not challenged`, and each `_test` fault applied.
