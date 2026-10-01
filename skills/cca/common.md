@@ -42,7 +42,8 @@ These hold for every stage, for the orchestrator and every agent.
    file, stops the run `blocked`, unless an approved fetch caused it. A change among
    ignored files that no logged run accounts for stops it too. Not detected: an ignored
    file replaced with one of the same size and a restored modification time, changes
-   inside `.git/` other than refs, stashes, and config, and changes outside the audited
+   inside `.git/` other than refs, stashes, and config, a change to a nested repository's
+   refs other than its HEAD, its stashes, or its config, and changes outside the audited
    repos. The user should not edit audited repos during a run, since their own edits trip
    the check too.
 3. **No model, agent, or tool names** in anything external: commit messages, PR or

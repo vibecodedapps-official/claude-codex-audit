@@ -441,9 +441,9 @@ that could not complete, such as a missing baseline file, also stops the run `bl
 when a logged agent run or an approved fetch accounts for it (exit 3). A file newer than
 the marker that is neither ignored nor changed in content is listed as touched and does
 not stop the run. The git commands cca and its agents issue themselves run without an
-index write during an audit or resume: the script sets `GIT_OPTIONAL_LOCKS=0`, and the
-stages and agents run `git status` with `--no-optional-locks` and never diff the working
-tree (a working-tree `git diff` refreshes the index even with that flag). A repo's own
+index write during an audit or resume: the script sets `GIT_OPTIONAL_LOCKS=0`, the stages
+run `git status` with `--no-optional-locks`, and agents run neither `git status` nor a
+working-tree diff (a working-tree `git diff` refreshes the index even with that flag). A repo's own
 test or lint command, which agents may run in a directly read tree, can run git itself
 and is not covered. Stage 9 (act) is the write phase and is outside this boundary.
 
