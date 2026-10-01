@@ -144,6 +144,8 @@ function fm_line(s,   c, k, v) {
 function close_section() {
 	finish_item()
 	if (sec == 1 && cnt[1] == 0) err(secline[1], "section '## Bundles' needs at least one bundle")
+	if (sec >= 2 && sec <= 4 && cnt[sec] == 0 && !noneseen[sec])
+		err(secline[sec], "section '## " nsec[sec] "' is empty; write none")
 }
 
 function section(nm,   s, k) {

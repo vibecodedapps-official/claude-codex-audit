@@ -270,6 +270,12 @@ broken "same commit at two sha lengths" "handoff b.md:24: duplicate commit entry
 set_line "$v" "$tmp/b.md" 19 "- bundles: app, app"
 broken "bundle named twice" "handoff b.md:19: duplicate bundle 'app' in bundles"
 
+{ head -n 29 "$v"; tail -n +51 "$v"; } > "$tmp/b.md"
+broken "empty decisions" "handoff b.md:29: section '## Decisions' is empty; write none"
+
+sed '52,$d' "$v" > "$tmp/b.md"
+broken "file ends after raised tickets" "handoff b.md:51: section '## Raised tickets' is empty; write none"
+
 # A claim is read as one line, so the whole claim line, all six fields joined by tabs, is
 # capped at 8000 bytes: an error, never a truncation. The long values are fixed-length
 # runs; the byte counts below are literals, each worked out from the field widths.
