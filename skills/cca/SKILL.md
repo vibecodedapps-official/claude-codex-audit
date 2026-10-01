@@ -343,7 +343,7 @@ with `mv -f`. Never edit either in place.
   "plugin_version": "0.1.0",
   "approvals": [ { "kind": "fetch", "target": "<repo name>:<remote>",
                    "decision": "approved", "time": "2026-09-30T14:15:00Z",
-                   "commands": ["git -C <repo> fetch --no-tags ..."] } ],
+                   "commands": ["git -C <repo> fetch --no-tags --refmap= ..."] } ],
   "stages": {
     "4": {
       "status": "complete",
@@ -398,11 +398,7 @@ with `mv -f`. Never edit either in place.
    bundles dropped to fit the inline cap); stage 7 lists the `ledger/slices/` files
    among its outputs in split mode, marks a part `over threshold` when a single
    finding id alone exceeds the split threshold, and records `converged_check` (`pass`
-   or `fail`, absent when no merge was attempted), which stage 8 reads; a resumed
-   stage records `base_moved` (a map from bundle to the current base sha) when a base
-   sha moved but its merge base did not, and only when stage 1 is reused (the first
-   rerun stage is above 1); when stage 1 reruns it re-pins the base and nothing is
-   recorded.
+   or `fail`, absent when no merge was attempted), which stage 8 reads.
 
 ### Usage
 

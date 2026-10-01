@@ -139,10 +139,12 @@ Choices made while building 0.1.0 where the design left room.
   after step 1a and its approved fetch, and is stale only when that ref is missing. The
   PR's `baseRefOid` is GitHub's cached base at the last sync, not the live branch tip,
   so it is recorded in the brief as information only and never pinned or compared.
-  Resume stops only for a changed head or a changed merge base, comparing the head and
-  that local base sha; a moved base sha with the same merge base is recorded as
-  `base moved` only when stage 1 is reused (a rerun stage 1 re-pins the base, so
-  nothing has moved), while the recorded base sha is kept for every diff.
+  Whenever any fetch for a bundle's repo is approved, the base branch is fetched with
+  it, since a present remote-tracking ref may be behind. Every restricted fetch passes
+  `--refmap=` so a configured refspec cannot write a local tag. Resume stops for a
+  changed head or a changed base sha alike: the brief's base commit list and overlap
+  set depend on the base tip, so an unchanged merge base does not make them current
+  (a 2026-09-30 review reversed the earlier merge-base shortcut).
 - B3: each `gh` call is made once and saved by shell redirect, never through the model;
   the PR output is saved unprojected as `pr.json`, and `pr.hash.json`, a `jq` projection
   without the shas and viewer-dependent fields (which would otherwise invalidate stage 1
@@ -160,12 +162,14 @@ Choices made while building 0.1.0 where the design left room.
   are removed first.
 - B5: stage 6 requires a position for every mandatory id, and every mandatory id is
   requested in a run that completes. Above 60 ids the asks are batched: Codex gets the
-  first batch in the request and the second in its one follow-up; batches from the
-  third on go to the fallback, one launch per batch (scope `second-opinion-<k>`),
-  recorded as a partial swap (reason "mandatory ids beyond two Codex batches"). With no
-  Codex the fallback is launched once per batch. A batch past the second fails stage 6
-  only when it fails after the ladder; `missing_positions` holds the ids of the first
-  two Codex batches still missing after the follow-up and those of a failed fallback
+  first batch in the request, and its one follow-up asks for at most 60 positions
+  (missing first-batch ids first, then second-batch ids as far as 60 allows); every id
+  neither carries goes to the fallback in batches of at most 60, one launch per batch
+  (scope `second-opinion-<k>`), recorded as a partial swap (reason "mandatory ids
+  beyond the Codex request and follow-up"). With no Codex the fallback is launched once
+  per batch. A fallback batch fails stage 6 only when it fails after the ladder;
+  `missing_positions` holds the ids Codex was asked for and left without a position
+  after the follow-up and those of a failed fallback
   batch.
 - C1: a text file over 450,000 bytes is split into byte-range chunks, listed in
   `split_files` and in the report's Coverage. The orchestrator measures an exported
@@ -192,3 +196,8 @@ Choices made while building 0.1.0 where the design left room.
 - A PreToolUse hook that enforces the read-only boundary mechanically.
 - Feeding a live check result back into a run. In 0.1 the user reruns the audit or acts
   on the finding by hand.
+- Bounded loading for every agent input (2026-09-30 review). In 0.1 the unit is the
+  450,000-byte chunk or ledger slice, an ordinary corpus file is read in full, a single
+  finding larger than the split threshold is passed whole as an `over threshold` part,
+  and a merger may reopen a full ledger file for a duplicate check. A per-agent byte
+  cap with sectioned inputs is a 0.2 design change.

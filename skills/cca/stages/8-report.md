@@ -117,9 +117,6 @@ Outputs: `report.md`.
        - every file stage 2 split by byte range, from the stage 2 entry's `split_files`:
          the source, the path, its size, each range, and the chunk id (`digest-N`) that
          covered it with that chunk's status;
-       - each bundle whose base sha moved on resume while its merge base stayed the same
-         (`base moved`, the stage entries' `base_moved` key): the recorded and the
-         current base sha, noting that the recorded base sha was kept for every diff;
        - unanswered questions and departures from the stage plan;
        - map corrections not applied, from `ledger/5.md`;
        - when exports were used, that the forge was not queried;

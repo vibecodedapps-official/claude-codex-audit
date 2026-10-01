@@ -22,9 +22,11 @@
   `<other remote>/<branch>` ref is fetched from that remote.
 - Stage 1: a GitHub PR bundle's base is pinned to the local sha of
   `<remote>/<baseRefName>` after the approved fetch (`baseRefOid` is recorded for
-  information only); resume compares the head and that base, and a moved base with the
-  same merge base is recorded as `base moved` without stopping, only when stage 1 is
-  reused.
+  information only), refreshed with every approved fetch; every restricted fetch passes
+  `--refmap=`; resume stops and asks for a changed head or base sha.
+- Resume: hash pipelines fail closed (`pipefail`), and a GitHub-backed run without
+  `forge_hashes` reruns stage 1. Stage 6: the Codex follow-up asks for at most 60
+  positions; the rest go to the fallback.
 - Stage 1: `gh` output is saved by shell redirect, and a `jq` projection of it
   (`pr.hash.json`) is hashed (`forge_hashes`); resume re-queries once and compares.
   `jq` is required for GitHub PRs.

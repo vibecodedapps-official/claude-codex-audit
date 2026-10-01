@@ -89,13 +89,11 @@ states the merged, normalized manifest before stage 1 and saves it in the run di
 stage after it, and marks their old outputs superseded. Approvals you gave are not
 asked again, except that a fetch approval covers only the commands it listed (an
 approval for a bare name covers either candidate refspec for it); other fetch
-commands are asked again. If any bundle's head has moved since the run started,
-or its base has moved so that the merge base changed, resume stops and asks whether to
-restart from stage 1. A base that moved with the merge base unchanged does not stop it:
-the old base sha is kept for every diff and the move is recorded as `base moved` in
-the report, but only when stage 1 is reused; when stage 1 reruns it pins the base
-again (for a GitHub PR, the local `<remote>/<base branch>` ref after any approved
-fetch, not GitHub's cached `baseRefOid`). Resume also re-queries the forge data the
+commands are asked again. If any bundle's head or base has moved since the run
+started, resume stops and asks whether to restart from stage 1, since the brief's base
+commit list and overlap set depend on the base tip. A GitHub PR's base is the local
+`<remote>/<base branch>` ref, refreshed with every approved fetch, not GitHub's cached
+`baseRefOid`. Resume also re-queries the forge data the
 brief used; a difference invalidates stage 1, and if the forge cannot be queried,
 resume stops. A run directory with `manifest.json` but no `stages.json` reruns from
 stage 1; one without `manifest.json` is unrecoverable.
@@ -291,7 +289,7 @@ During `/cca:audit` and `/cca:resume`, nothing changes an audited repo's tracked
 untracked non-ignored files, the index, branches, tags, stashes, config, or remotes. An
 audited repo is every bundle, reference, and source of truth. The only writes are the
 run directory, `runs.json`, codex-lite's own request and thread files in its data
-directory, and an explicit `git fetch --no-tags` into remote-tracking refs after you
+directory, and an explicit `git fetch --no-tags --refmap=` into remote-tracking refs after you
 approve the listed commands (a remote configured with `remote.<name>.prune` may also
 delete stale remote-tracking refs). An ignored file written by a check run that an
 agent logged is allowed and reported.

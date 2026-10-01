@@ -43,18 +43,12 @@ a finished one.
    - A changed head: stop and ask whether to restart from stage 1, showing each
      bundle's recorded and current shas. On yes, the first stage to rerun is 1. On no,
      stop and change nothing.
-   - A changed base sha alone does not stop or invalidate. Compare the merge base
-     recorded in `audit-brief.md` with
-     `git -C <repo> merge-base <current base sha> <recorded head sha>`. When they are
-     equal, continue and keep the moved base sha pending until step 5 has picked the
-     first rerun stage. When that stage is above 1 (stage 1 is reused), record the
-     current base sha as `base moved` (stage entry key `base_moved`, a map from bundle
-     to the current base sha) in the first rerun stage's entry and in the report's
-     Coverage, and keep the recorded base sha for every diff and every comparison.
-     When stage 1 reruns, drop it and record nothing: stage 1 re-pins the base from
-     the remote-tracking ref after its approved fetch, so nothing has moved. When they
-     differ, or the current base sha is not present locally (resume does not fetch),
-     ask as for a changed head.
+   - A changed base sha is handled like a changed head: stop and ask whether to
+     restart from stage 1, showing the recorded and current shas. The brief's list of
+     base commits since the merge base and its set of files changed on both sides
+     depend on the base tip, not only on the merge base, so an unchanged merge base
+     does not make them current. A base sha not present locally (resume does not
+     fetch) asks the same way.
    On a stop, remove every `forge/<bundle>/pr.json.new`. When stage 1 reruns, it keeps
    these files and reuses them (`1-orient.md` section C); otherwise step 5 removes
    them.
@@ -70,21 +64,24 @@ a finished one.
      with the identical `jq` command of step 2, reading
      `forge/<bundle>/pr.json.new`, and hash the result, with no second query:
      `jq '<filter>' forge/<bundle>/pr.json.new | git hash-object --no-filters --stdin`.
-     The projection leaves out `headRefOid` and `baseRefOid`, so a base moved by step 3
-     does not change the hash. For `pr-threads.json` and each `<ticket>.json`, run the
-     identical `gh` command of step 2, with the same owner, repo, number, and
-     projection, and with its `> <path>` redirect replaced by
-     `| git hash-object --no-filters --stdin`, so no file is written. A difference
-     invalidates stage 1. Keep each `forge/<bundle>/pr.json.new` until step 5 picks the
-     first stage to rerun; step 5 removes them unless that stage is 1 (then stage 1
-     renames them, `1-orient.md` section C), and any stop removes them. A `gh` or `jq`
-     failure during the re-query stops resume with one line, since the brief's evidence
-     cannot be confirmed current;
+     The projection leaves out `headRefOid` and `baseRefOid`, which step 3 compares on
+     their own. For `pr-threads.json` and each `<ticket>.json`, run the identical `gh`
+     command of step 2, with the same owner, repo, number, and projection, and with
+     its `> <path>` redirect replaced by `| git hash-object --no-filters --stdin`, so
+     no file is written. Run every such pipeline with `set -o pipefail` in front of it
+     (or write the producer's output to a temporary file and hash it only when the
+     producer exited 0): a failed `gh` or `jq` would otherwise hash an empty input and
+     read as changed evidence. A producer failure stops resume with one line, since
+     the brief's evidence cannot be confirmed current; it is never treated as a
+     difference. A difference invalidates stage 1. So does a stage 1 entry of a run
+     with any `github:` PR or ticket that has no `forge_hashes` map (a run recorded
+     before the map existed). Keep each `forge/<bundle>/pr.json.new` until step 5
+     picks the first stage to rerun; step 5 removes them unless that stage is 1 (then
+     stage 1 renames them, `1-orient.md` section C), and any stop removes them;
    - each bundle's head, base, and merge-base sha and the pinned sha of every
      reference and source of truth, by resolving each again as stage 1 did, through
      the brief's ref mapping lines (step 3), and for a GitHub PR from step 3's result;
-     a changed one invalidates stage 1, except a base sha that step 3 accepted as
-     `base moved`, whose recorded value stands;
+     a changed one invalidates stage 1;
    - upstream stage outputs, by `git hash-object --no-filters <file>`;
    - `plugin_version`, which for this release is `0.1.0`.
    A stage's inputs have changed when any recomputed value differs from the recorded
@@ -103,8 +100,7 @@ a finished one.
    A `not_applicable` stage whose inputs have not changed is reused. When the first
    stage to rerun is not 1, or nothing needs a rerun, remove every
    `forge/<bundle>/pr.json.new` now. When nothing needs a rerun and no `--from` was
-   given, say the run is current, print its report path and terminal state (and any
-   `base moved` shas), and stop.
+   given, say the run is current, print its report path and terminal state, and stop.
 6. **Supersede.** Every stage from the first rerun stage through stage 8 is rerun. For
    each of those stages that has an entry, in order:
    1. Move each of its outputs that exists to `superseded/<k>/<path>`, where `<k>` is
@@ -147,8 +143,7 @@ a finished one.
    or 4, launch every stage among 2, 3, and 4 that is being rerun together; a reused
    stage 2 or 3 counts as satisfied for the barrier, and its recorded
    `output_hashes` are the final hashes. Rerun stages write new entries, each keeping
-   the `superseded` list from step 6; the first rerun stage's entry also carries the
-   `base_moved` map when step 3 recorded one (only when stage 1 is reused). When
+   the `superseded` list from step 6. When
    stage 1 reruns, it reuses this run's directory, run id, `runs.json` entry,
    approvals, and superseded records, and only rewrites the stage 1 entry as `running`
    (stage 1, section D).

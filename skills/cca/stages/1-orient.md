@@ -176,8 +176,11 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    `git -C <repo> rev-parse --verify <ref>^{commit}` fails; a bundle's head is stale
    when the PR's `headRefOid` is not the sha of any local ref, or is not present
    (`git -C <repo> cat-file -e <sha>^{commit}` fails); a GitHub PR bundle's base is
-   stale only when `<remote>/<baseRefName>` is missing locally (a present ref is used
-   as is, since nothing but a fetch can tell whether it is behind). When any are, ask
+   missing when `<remote>/<baseRefName>` does not resolve locally. A present base ref
+   may be behind the branch, and nothing but a fetch can tell, so whenever any fetch
+   for a bundle's repo is asked for, the base fetch below is part of the question and
+   runs with the others; when no fetch is needed for the repo, the local ref is used
+   as is and the brief says so ("base as fetched on <date>"). When any are, ask
    the user once, listing each repo, remote, the refs involved, and the exact fetch
    commands below, for approval to `git fetch`. Record the answer in `stages.json`
    `approvals` with kind `fetch`, target `<repo name>:<remote>`, the decision, the
@@ -193,21 +196,24 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    `/cca:resume`, the recorded `resolved` kind picks the candidate, so resume matches
    it against `commands` without contacting the remote.
    On approval, run only these fetches (and the `ls-remote` check), which take no tags
-   and write remote-tracking refs only:
+   and write remote-tracking refs only. `--refmap=` (empty) keeps a configured fetch
+   refspec of the remote, such as `+refs/tags/*:refs/tags/*`, from also writing its own
+   destination; `--no-tags` alone does not stop that:
    - for a GitHub PR bundle whose head is missing or stale:
-     `git -C <repo> fetch --no-tags <remote> +refs/pull/<n>/head:refs/remotes/<remote>/pr/<n>/head`
-   - for a GitHub PR bundle whose base ref is missing:
-     `git -C <repo> fetch --no-tags <remote> +refs/heads/<baseRefName>:refs/remotes/<remote>/<baseRefName>`
+     `git -C <repo> fetch --no-tags --refmap= <remote> +refs/pull/<n>/head:refs/remotes/<remote>/pr/<n>/head`
+   - for a GitHub PR bundle, whenever any fetch for its repo is approved, and on its
+     own account when the base ref is missing:
+     `git -C <repo> fetch --no-tags --refmap= <remote> +refs/heads/<baseRefName>:refs/remotes/<remote>/<baseRefName>`
    - for a missing ref that is a 40-hex sha:
-     `git -C <repo> fetch --no-tags <remote> +<sha>:refs/remotes/<remote>/cca/<sha>`;
+     `git -C <repo> fetch --no-tags --refmap= <remote> +<sha>:refs/remotes/<remote>/cca/<sha>`;
      when the remote refuses (not every server serves arbitrary shas), stop `blocked`
      naming the sha, and resolve it as `<remote>/cca/<sha>` from then on;
    - for a missing ref `<name>` that is a tag on the remote:
-     `git -C <repo> fetch --no-tags <remote> +refs/tags/<name>:refs/remotes/<remote>/tags/<name>`,
+     `git -C <repo> fetch --no-tags --refmap= <remote> +refs/tags/<name>:refs/remotes/<remote>/tags/<name>`,
      and resolve it as `<remote>/tags/<name>` from then on;
    - for any other missing ref: when the ref is `<other>/<branch>` and `<other>` is a
      configured remote of the repo (`git -C <repo> remote`), split it there and run
-     `git -C <repo> fetch --no-tags <other> +refs/heads/<branch>:refs/remotes/<other>/<branch>`
+     `git -C <repo> fetch --no-tags --refmap= <other> +refs/heads/<branch>:refs/remotes/<other>/<branch>`
      (when `<other>` is not the selected remote, the question lists it, under the same
      approval, with target `<repo name>:<other>`); a prefix that is not a configured
      remote makes the whole ref a bare branch name that contains a slash. When it is a
@@ -270,7 +276,7 @@ unchanged (never through the model), beside the rendered files. The hashed conte
 a fixed projection of the fields, not the raw JSON, because viewer-dependent fields
 such as `viewerDidAuthor` and reactions, and the head and base shas (which resume
 compares on their own), would otherwise change the hash and invalidate stage 1 on
-resume under another login or after the base moved. Resume runs these identical
+resume under another login. Resume runs these identical
 commands and the same `jq` projection.
 
 - `forge/<bundle>/pr.json`, the one `gh pr view` call, unprojected (section C runs it

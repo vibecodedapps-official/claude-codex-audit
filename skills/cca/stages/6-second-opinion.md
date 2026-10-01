@@ -65,13 +65,17 @@ it answers (from 2, or from 3 when Codex answered the first two).
       more than 60 ids, so when the set has more, split it in id order into batches of
       at most 60 ids; each batch is the id list in the slot of asks 1 and 2.
       - Codex: `codex/request.md` carries the first batch and the one follow-up (step
-        8) carries the second. Batches from the third on go to the fallback (step 11),
-        one `cca:adversary` launch per batch with scope `second-opinion-<k>`, each with
-        its own `codex/request-<k>.md` (built as in the next bullet), launched after
-        Codex's answer is saved (step 9). It is recorded as a partial swap: role second
-        opinion, scope those batches, from Codex `<model>` to `cca:adversary`, reason
-        "mandatory ids beyond two Codex batches". These batches fail stage 6 only when
-        one of them fails after the ladder (step 11).
+        8) carries at most 60 positions in total: the first batch's ids still without a
+        position come first, then the second batch's ids in order until 60 is reached.
+        Every mandatory id that neither carries (the rest of the second batch, and
+        batches from the third on) goes to the fallback (step 11), in batches of at
+        most 60, one `cca:adversary` launch per batch with scope `second-opinion-<k>`,
+        each with its own `codex/request-<k>.md` (built as in the next bullet),
+        launched after Codex's follow-up answer is saved (step 9). It is recorded as a
+        partial swap: role second opinion, scope those batches, from Codex `<model>` to
+        `cca:adversary`, reason "mandatory ids beyond the Codex request and follow-up".
+        These batches fail stage 6 only when one of them fails after the ladder (step
+        11).
       - Fallback (step 11): `cca:adversary` is launched once per batch, each launch
         with its own request, `codex/request.md` for the first batch and
         `codex/request-<k>.md` for batch `<k>` from 2, written at step 11. Each has
@@ -152,10 +156,11 @@ it answers (from 2, or from 3 when Codex answered the first two).
      <timeout> --resume <thread id>`. As the question it carries, together: the
      unacknowledged inputs in inline form (full content under their path and sentinel
      headers) with a request to acknowledge them and revise any answer that depended on
-     them; the mandatory ids without a position, with a request for their positions;
-     and the second batch of asks 1 and 2, ending each ask with `for these ids: <the
-     second batch's id list>`, when step 4.3 left one for Codex (then `batched` is
-     true). Apply the inline cap to this follow-up. Over it, first drop the diffs of
+     them; and asks 1 and 2 for at most 60 ids in total, ending each ask with
+     `for these ids: <id list>`: the first batch's ids still without a position, then
+     the second batch's ids in order as far as 60 allows (step 4.3; `batched` is then
+     true). Second-batch ids that do not fit are not asked here; step 4.3 sends them to
+     the fallback. Apply the inline cap to this follow-up. Over it, first drop the diffs of
      session-repository bundles from it and re-measure as in step 5 (record
      `inline_reduced: true`; the diff of a bundle in another repo is never dropped); a
      dropped diff no longer needs acknowledgment, and the follow-up gives its three-dot
@@ -176,14 +181,14 @@ it answers (from 2, or from 3 when Codex answered the first two).
      `ledger/6.md` that no finding passes the review gate on stage 6's account. The run
      will end `partial`.
 
-   There is at most one follow-up per run of stage 6. A mandatory position of the first
-   two batches still missing after it is handled in step 10. Batches from the third on
-   are not part of the follow-up: step 11 launches them.
+   There is at most one follow-up per run of stage 6. A mandatory position the request
+   or the follow-up asked for and still missing after the follow-up is handled in step
+   10. Ids neither carried are not part of the follow-up: step 11 launches them.
 
 9. **Save the answer verbatim** in `codex/response.md`: the codex-lite output as
    returned, unchanged. A follow-up's output is appended after a line
-   `--- follow-up, thread <id> ---`. When Codex answered and step 4.3 left batches from
-   the third on, launch them now, as step 11 says, and wait for them before step 10.
+   `--- follow-up, thread <id> ---`. When Codex answered and step 4.3 left ids for the
+   fallback, launch those batches now, as step 11 says, and wait for them before step 10.
 
 10. **Check the mandatory positions, then write `ledger/6.md` once.** Before writing,
     take the ids step 10 requires, which are every mandatory id from step 4.3 (computed
@@ -192,8 +197,8 @@ it answers (from 2, or from 3 when Codex answered the first two).
     position. When an id has a position in more than one place, the later one replaces
     the earlier; both stay in `codex/response.md`. For Codex this is a check after the
     fact: the follow-up for missing positions was already sent in step 8, and step 10
-    sends none. A mandatory id of the first two batches still without a position in the
-    answer with the follow-up appended fails stage 6: keep the answer, list the ids in
+    sends none. A mandatory id the request or the follow-up asked for, still without a
+    position in the answer with the follow-up appended, fails stage 6: keep the answer, list the ids in
     `ledger/6.md` and under `missing_positions` in the stage entry, and mark in
     `ledger/6.md` that no finding passes the review gate on stage 6's account. For the
     fallback, whether it fills the role or only a batch from the third on, a mandatory
