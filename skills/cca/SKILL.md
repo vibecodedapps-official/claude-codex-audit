@@ -130,7 +130,7 @@ Approvals recorded in `stages.json` are not asked again.
 | Domain mapper (stage 3) | `cca:mapper`, opus | as for the digester |
 | Auditor (stage 4, top-ups) | `cca:auditor`, opus | as for the digester |
 | Adversary (stages 5 and 7) | `cca:adversary`, opus, fresh context | as for the digester |
-| Second opinion (stage 6) | Codex, `--codex-model` (default `gpt-6.1-sol`), through `codex-lite:ask` | `cca:adversary` on fable, else opus, launched once per batch, each given its Codex request; also for the batches from the third on when Codex answered the first two (a partial swap) |
+| Second opinion (stage 6) | Codex, `--codex-model` (default `gpt-6.1-sol`), through `codex-lite:ask` | `cca:adversary` on fable, else opus, launched once per batch, each given its Codex request; also for the batches of ids that neither the Codex request nor its follow-up carried (a partial swap) |
 | Merger (stage 7) | `cca:merger`, sonnet | you merge |
 
 An agent **fails** when it returns an error, or when its output file lacks
@@ -391,9 +391,9 @@ with `mv -f`. Never edit either in place.
    split into byte-range chunks); stage 3 records `test_planted` when `_test` planted
    a map error; stage 6 records
    `codex_model` and `codex_timeout`, the values passed, `sentinels`,
-   `missing_positions` (the mandatory finding ids of the first two Codex batches still
-   without a position after the follow-up, plus the ids of any fallback batch that
-   failed after the ladder), `batched` (true when more than one batch of mandatory ids
+   `missing_positions` (the mandatory finding ids the Codex request or follow-up asked
+   for and left without a position, plus the ids of any fallback batch that failed
+   after the ladder), `batched` (true when more than one batch of mandatory ids
    was requested, else false), and `inline_reduced` (diffs of session-repository
    bundles dropped to fit the inline cap); stage 7 lists the `ledger/slices/` files
    among its outputs in split mode, marks a part `over threshold` when a single

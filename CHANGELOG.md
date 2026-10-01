@@ -8,9 +8,10 @@
   Codex's.
 - Stage 6: every blocker or high finding and every pass-two downgrade or drop needs a
   position; missing ones get one follow-up, then fail the stage (`missing_positions`);
-  above 60 mandatory ids the asks are batched (`batched`): Codex gets the second batch
-  in its one follow-up, batches from the third on go to the fallback (one launch each,
-  a partial swap), and the fallback is launched once per batch without Codex. The
+  above 60 mandatory ids the asks are batched (`batched`): Codex gets the first batch
+  and at most 60 positions in its one follow-up, every other id goes to the fallback
+  (one launch per batch of 60, a partial swap), and the fallback is launched once per
+  batch without Codex. The
   stage fails on such a batch only when it fails after the ladder. Every mandatory id
   is requested in a run that completes.
 - Stage 6: a request over the inline cap is first reduced by dropping the diffs of

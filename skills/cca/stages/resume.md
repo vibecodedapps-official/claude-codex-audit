@@ -34,14 +34,17 @@ a finished one.
    `audit-brief.md`. Resolve every ref through the mapping lines in the brief's Read
    paths (`<ref as given> -> <remote>/...`) before `rev-parse`. For a GitHub PR, run
    the `gh pr view` command of `1-orient.md` step 2 once, with its output redirected
-   to `forge/<bundle>/pr.json.new`, and read `headRefOid` from that file with `jq`;
+   to `forge/<bundle>/pr.json.new`; when `gh` exits non-zero or the file is empty,
+   stop resume with one line (the forge cannot be queried), never treating it as a
+   changed head. Read `headRefOid` from that file with `jq`;
    step 4 projects the same file, with no second query. Its base is the sha the local
    remote-tracking ref `<remote>/<baseRefName>` resolves to (`<remote>` selected as
    `1-orient.md` A5 does for a PR bundle, from the `url` in `pr.json.new`); the PR's
    `baseRefOid` is not compared, since it is GitHub's cached value. For any other
    bundle, the shas its `branch` and `base` refs resolve to. Then:
    - A changed head: stop and ask whether to restart from stage 1, showing each
-     bundle's recorded and current shas. On yes, the first stage to rerun is 1. On no,
+     bundle's recorded and current shas. On yes, the first stage to rerun is 1: skip
+     steps 4 and 5 and go to step 6. On no,
      stop and change nothing.
    - A changed base sha is handled like a changed head: stop and ask whether to
      restart from stage 1, showing the recorded and current shas. The brief's list of
@@ -78,10 +81,10 @@ a finished one.
      before the map existed). Keep each `forge/<bundle>/pr.json.new` until step 5
      picks the first stage to rerun; step 5 removes them unless that stage is 1 (then
      stage 1 renames them, `1-orient.md` section C), and any stop removes them;
-   - each bundle's head, base, and merge-base sha and the pinned sha of every
-     reference and source of truth, by resolving each again as stage 1 did, through
-     the brief's ref mapping lines (step 3), and for a GitHub PR from step 3's result;
-     a changed one invalidates stage 1;
+   - the pinned sha of every reference and source of truth, by resolving each again as
+     stage 1 did, through the brief's ref mapping lines (step 3); a changed one
+     invalidates stage 1 (the bundles' head and base shas were already compared in
+     step 3, which stops on any change);
    - upstream stage outputs, by `git hash-object --no-filters <file>`;
    - `plugin_version`, which for this release is `0.1.0`.
    A stage's inputs have changed when any recomputed value differs from the recorded

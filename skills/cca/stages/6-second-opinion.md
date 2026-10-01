@@ -68,7 +68,7 @@ it answers (from 2, or from 3 when Codex answered the first two).
         8) carries at most 60 positions in total: the first batch's ids still without a
         position come first, then the second batch's ids in order until 60 is reached.
         Every mandatory id that neither carries (the rest of the second batch, and
-        batches from the third on) goes to the fallback (step 11), in batches of at
+        any further batch) goes to the fallback (step 11), in batches of at
         most 60, one `cca:adversary` launch per batch with scope `second-opinion-<k>`,
         each with its own `codex/request-<k>.md` (built as in the next bullet),
         launched after Codex's follow-up answer is saved (step 9). It is recorded as a
@@ -187,8 +187,14 @@ it answers (from 2, or from 3 when Codex answered the first two).
 
 9. **Save the answer verbatim** in `codex/response.md`: the codex-lite output as
    returned, unchanged. A follow-up's output is appended after a line
-   `--- follow-up, thread <id> ---`. When Codex answered and step 4.3 left ids for the
-   fallback, launch those batches now, as step 11 says, and wait for them before step 10.
+   `--- follow-up, thread <id> ---`. The fallback batches of step 4.3 are known once
+   step 8 has composed the follow-up, so launch them then, before the follow-up call
+   (they are Agent launches, not Codex calls), and wait for them before step 10.
+   Number them `<k>` from 2 upward in id order over the ids neither the request nor
+   the follow-up carried, re-batched in at most 60; when the fallback fills the role,
+   `<k>` is the batch number of the original split. That `<k>` names the request and
+   response files, the agent scope `second-opinion-<k>`, and the `--- batch <k> ---`
+   line.
 
 10. **Check the mandatory positions, then write `ledger/6.md` once.** Before writing,
     take the ids step 10 requires, which are every mandatory id from step 4.3 (computed
@@ -201,7 +207,7 @@ it answers (from 2, or from 3 when Codex answered the first two).
     position in the answer with the follow-up appended, fails stage 6: keep the answer, list the ids in
     `ledger/6.md` and under `missing_positions` in the stage entry, and mark in
     `ledger/6.md` that no finding passes the review gate on stage 6's account. For the
-    fallback, whether it fills the role or only a batch from the third on, a mandatory
+    fallback, whether it fills the role or only the batches Codex did not carry, a mandatory
     id of that launch's batch without a position fails the attempt (the ladder in step
     11). "seen, no position" applies only to ids outside the mandatory set.
 
@@ -235,8 +241,8 @@ it answers (from 2, or from 3 when Codex answered the first two).
 
 11. **Fallback.** Launch `cca:adversary` with the Agent tool, in the background, never as
     a fork, with `model: fable`, once per batch of step 4.3 that the fallback answers
-    (every batch when it fills the role; only the batches from the third on when Codex
-    answered the first two, a partial swap), all together, after first writing
+    (every batch when it fills the role; only the batches of ids that neither the Codex
+    request nor its follow-up carried, step 4.3, a partial swap), all together, after first writing
     `codex/request-<k>.md` for each batch `<k>` from 2. Each launch is a separate agent
     in the stage entry, with scope `second-opinion-<k>` for batch `<k>` (scope
     `second-opinion` when it fills the role with one batch). The prompt holds the paths
@@ -245,7 +251,7 @@ it answers (from 2, or from 3 when Codex answered the first two).
     instruction to answer the request as it asks, within its caps, and write the answer
     to `codex/response.md` (batch `<k>` from 2: `codex/response-<k>.md`) ending with
     `status: complete`. Record a swap (role second opinion, from Codex `<model>` to
-    `cca:adversary` on `fable`, reason; for batches from the third on, the partial swap
+    `cca:adversary` on `fable`, reason; for the batches Codex did not carry, the partial swap
     of step 4.3 with its scope). Once every batch has succeeded, append each
     `codex/response-<k>.md` to `codex/response.md` (after Codex's answer and follow-up,
     in the partial case) after a line `--- batch <k> ---`. The ladder applies to each
@@ -306,8 +312,8 @@ it answers (from 2, or from 3 when Codex answered the first two).
     "not reported".
 
     `missing_positions` lists the mandatory ids still without a position at stage end:
-    those of the first two Codex batches missing after the follow-up, and those of any
-    fallback batch that failed after the ladder;
+    those the Codex request or follow-up asked for and left unanswered after the
+    follow-up, and those of any fallback batch that failed after the ladder;
     `batched` is true when more than one batch of asks 1 and 2 was requested, by a Codex
     follow-up or by a further fallback launch (one agent per batch, scope
     `second-opinion-<k>`), else false;

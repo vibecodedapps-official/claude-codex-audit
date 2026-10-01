@@ -177,12 +177,13 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    when the PR's `headRefOid` is not the sha of any local ref, or is not present
    (`git -C <repo> cat-file -e <sha>^{commit}` fails); a GitHub PR bundle's base is
    missing when `<remote>/<baseRefName>` does not resolve locally. A present base ref
-   may be behind the branch, and nothing but a fetch can tell, so whenever any fetch
-   for a bundle's repo is asked for, the base fetch below is part of the question and
-   runs with the others; when no fetch is needed for the repo, the local ref is used
-   as is and the brief says so ("base as fetched on <date>"). When any are, ask
-   the user once, listing each repo, remote, the refs involved, and the exact fetch
-   commands below, for approval to `git fetch`. Record the answer in `stages.json`
+   may be behind the branch, and nothing but a fetch can tell, so the base fetch below
+   is always part of the question for every GitHub PR bundle, and for every bundle
+   whose `base` is a remote-tracking ref `<remote>/<branch>`; a run with such a bundle
+   therefore always asks once. On decline, the local base ref is used as is and the
+   brief records "base: local ref, refresh declined", which the report's Coverage
+   repeats. Ask the user once, listing each repo, remote, the refs involved, and the
+   exact fetch commands below, for approval to `git fetch`. Record the answer in `stages.json`
    `approvals` with kind `fetch`, target `<repo name>:<remote>`, the decision, the
    time, `commands`, the exact fetch commands actually run, and `resolved`, a map from
    each bare name to the kind the check found (`tag` or `branch`), one entry per repo
@@ -201,8 +202,8 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    destination; `--no-tags` alone does not stop that:
    - for a GitHub PR bundle whose head is missing or stale:
      `git -C <repo> fetch --no-tags --refmap= <remote> +refs/pull/<n>/head:refs/remotes/<remote>/pr/<n>/head`
-   - for a GitHub PR bundle, whenever any fetch for its repo is approved, and on its
-     own account when the base ref is missing:
+   - for a GitHub PR bundle, always, and for any bundle whose `base` is a
+     remote-tracking ref `<remote>/<baseRefName>`:
      `git -C <repo> fetch --no-tags --refmap= <remote> +refs/heads/<baseRefName>:refs/remotes/<remote>/<baseRefName>`
    - for a missing ref that is a 40-hex sha:
      `git -C <repo> fetch --no-tags --refmap= <remote> +<sha>:refs/remotes/<remote>/cca/<sha>`;
@@ -274,9 +275,10 @@ was queried for a bundle, the brief says so.
 For a GitHub PR or issue, the `gh` calls below write their output by shell redirect,
 unchanged (never through the model), beside the rendered files. The hashed content is
 a fixed projection of the fields, not the raw JSON, because viewer-dependent fields
-such as `viewerDidAuthor` and reactions, and the head and base shas (which resume
-compares on their own), would otherwise change the hash and invalidate stage 1 on
-resume under another login. Resume runs these identical
+such as `viewerDidAuthor` and reactions, would otherwise change the hash and
+invalidate stage 1 on resume under another login; the head and base shas are left out
+because resume step 3 compares them first and stops on a change. Resume runs these
+identical
 commands and the same `jq` projection.
 
 - `forge/<bundle>/pr.json`, the one `gh pr view` call, unprojected (section C runs it

@@ -20,7 +20,8 @@ Tested on Claude Code 2.1.284.
 ## Requirements
 
 - Claude Code with plugin agents and the Agent tool's `model` option.
-- `git`. Each audited repo is a local clone.
+- `git` 2.29 or later (the fetch commands use an empty `--refmap=`). Each audited repo
+  is a local clone.
 - For GitHub bundles, `gh` authenticated and `jq`. For any other forge, or without a
   forge CLI, supply ticket and thread text as exported files (see Exported forge
   files); the report then says the forge was not queried.
@@ -92,7 +93,7 @@ approval for a bare name covers either candidate refspec for it); other fetch
 commands are asked again. If any bundle's head or base has moved since the run
 started, resume stops and asks whether to restart from stage 1, since the brief's base
 commit list and overlap set depend on the base tip. A GitHub PR's base is the local
-`<remote>/<base branch>` ref, refreshed with every approved fetch, not GitHub's cached
+`<remote>/<base branch>` ref, which stage 1 always asks to refresh, not GitHub's cached
 `baseRefOid`. Resume also re-queries the forge data the
 brief used; a difference invalidates stage 1, and if the forge cannot be queried,
 resume stops. A run directory with `manifest.json` but no `stages.json` reruns from

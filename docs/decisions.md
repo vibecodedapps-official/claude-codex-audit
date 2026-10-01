@@ -136,7 +136,8 @@ Choices made while building 0.1.0 where the design left room.
   step 1a needs a fetch, and several remotes without `origin` stop the run only then. A
   PR bundle whose repo has no remote stops with `bundle <name>: no remote`.
 - B2: a GitHub PR bundle's base is pinned to the local sha of `<remote>/<baseRefName>`
-  after step 1a and its approved fetch, and is stale only when that ref is missing. The
+  after step 1a and its approved fetch, which refreshes the base branch for every
+  GitHub PR bundle and every remote-tracking `base` ref. The
   PR's `baseRefOid` is GitHub's cached base at the last sync, not the live branch tip,
   so it is recorded in the brief as information only and never pinned or compared.
   Whenever any fetch for a bundle's repo is approved, the base branch is fetched with

@@ -109,11 +109,13 @@ Outputs: `report.md`.
        - at low tier, that one auditor covered the ticket, tests, and work-item hygiene;
        - failed scopes and scopes not run because the budget expired, naming the last
          byte offset of a digest that ended `status: failed at byte <offset>`;
+       - each bundle whose base refresh was declined, from the brief's "base: local
+         ref, refresh declined" line;
        - stage 6: whether the mandatory ids were requested in batches (`batched`) and,
-         from `missing_positions`, every mandatory id left without a position (those of
-         the first two Codex batches still missing after the follow-up, and those of a
-         fallback batch that failed); a partial swap (the fallback answering the
-         batches after Codex's first two) is listed as a swap with its scope;
+         from `missing_positions`, every mandatory id left without a position (those
+         Codex was asked for and left unanswered after the follow-up, and those of a
+         fallback batch that failed); a partial swap (the fallback answering the ids
+         Codex was not asked for) is listed as a swap with its scope;
        - every file stage 2 split by byte range, from the stage 2 entry's `split_files`:
          the source, the path, its size, each range, and the chunk id (`digest-N`) that
          covered it with that chunk's status;

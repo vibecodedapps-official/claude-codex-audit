@@ -127,8 +127,9 @@ With `_test` `drop_ack`, treat the named input's acknowledgment as missing in th
 blocker or high finding and every pass-two downgrade or drop (asks 1 and 2); one still
 missing after the one follow-up fails the stage the same way. The ids checked are
 every mandatory id: when the set was split into batches of at most 60, the request
-carries the first batch and the follow-up the second (Codex, with any batch after the
-second answered by one fallback launch each), or the fallback is launched once per
-batch, each request with its own ids in the "for these ids" slot.
+carries the first batch and the follow-up at most 60 positions (missing first-batch
+ids first, then second-batch ids), every id neither carries being answered by the
+fallback in batches of at most 60, one launch each; without Codex the fallback is
+launched once per batch. Each request has its own ids in the "for these ids" slot.
 A request for a batch after the first, which only the fallback receives, keeps the
 inputs, the acknowledgments, and asks 1 and 2 alone.
