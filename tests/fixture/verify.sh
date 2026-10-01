@@ -114,6 +114,28 @@ full)
 	;;
 esac
 
+# Handoff files (solo and solo-dirty): the three files exist, and the claim count per
+# kind from handoff.sh equals the literals in expected.md.
+case $name in
+solo | solo-dirty)
+	hs=$(cd "$(dirname "$0")/../.." && pwd)/skills/cca/scripts/handoff.sh
+	for f in handoff.md manifest-handoff.json manifest-scratch.json; do
+		[ -f "$F/$f" ] || fail "$f is missing"
+	done
+	grep -q '"claims": \["./handoff.md"\]' "$F/manifest-handoff.json" 2>/dev/null ||
+		fail "manifest-handoff.json does not list ./handoff.md as claims"
+	grep -q '"scratch": "./app/.test-output"' "$F/manifest-scratch.json" 2>/dev/null ||
+		fail "manifest-scratch.json has no scratch key ./app/.test-output"
+	if claims=$(sh "$hs" claims "$F/handoff.md" 2>&1); then
+		same "handoff claim counts" "code=4 verification=2 decision=2 scope=1 status=2" \
+			"$(printf '%s\n' "$claims" | awk -F'\t' '{ n[$1]++ } END { printf "code=%d verification=%d decision=%d scope=%d status=%d", n["code"], n["verification"], n["decision"], n["scope"], n["status"] }')"
+		same "handoff claim total" 11 "$(printf '%s\n' "$claims" | wc -l | tr -d ' ')"
+	else
+		fail "handoff.sh claims failed: $claims"
+	fi
+	;;
+esac
+
 if [ "$fails" -gt 0 ]; then
 	exit 1
 fi

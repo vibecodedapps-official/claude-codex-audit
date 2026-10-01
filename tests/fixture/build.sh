@@ -490,6 +490,92 @@ EOF
   "claims": ["./session-summary.md"]
 }
 EOF
+	# Outside every repo, so no commit id changes: a manifest that reads the handoff, a
+	# manifest with the scratch key, and the handoff itself.
+	put manifest-handoff.json <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main",
+      "tickets": ["file:./exports/APP-1.md"] }
+  ],
+  "claims": ["./handoff.md"]
+}
+EOF
+	put manifest-scratch.json <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main",
+      "tickets": ["file:./exports/APP-1.md"] }
+  ],
+  "claims": ["./session-summary.md"],
+  "scratch": "./app/.test-output"
+}
+EOF
+	put handoff.md <<'EOF'
+---
+cca-handoff: 1
+generated: 2026-09-01T11:00:00Z
+---
+
+# Handoff: deactivate users
+
+## Bundles
+
+- app: repo ./app; pr none; branch feature; base main
+
+## Tickets
+
+### APP-1
+- type: Story
+- state: Active
+- iteration: none
+- owner: Developer
+- bundles: app
+- problem: Removing a user deletes the record, so its history is lost.
+- decision: Add a deactivate command that keeps the row and sets its status to inactive.
+- commits:
+  - app 9c5f77c: add the status column migration so every row has a status.
+  - app 0c23936: add the deactivate command, which keeps the row and sets its status to inactive.
+- verified:
+  - Deactivate was checked by hand against a copy of production data; check: not recorded
+  - The test suite runs with one test skipped; check: sh run-tests.sh
+
+## Decisions
+
+### D1
+- ticket: APP-1
+- decision: Deactivate removes the row instead of setting a status.
+- rationale: A removed row needs no change to the reads.
+- options:
+  - chosen: remove the row
+  - rejected: keep the row and set a status; why: every read would need a status filter
+- decided_by: checkpoint (recommended option taken)
+- recorded_at: checkpoint: plan review
+- status: default taken
+
+### D2
+- ticket: APP-1
+- decision: Whether a deactivated user can be reactivated is left for later.
+- rationale: not recorded
+- options: none recorded
+- decided_by: not recorded
+- recorded_at: not recorded
+- status: deferred
+
+## Raised tickets
+
+### R1
+- ticket: APP-6
+- type: Bug
+- state: New
+- iteration: none
+- owner: none
+- bundles: app
+- summary: Add accepts a second row with an id that already exists.
+- rank: 1
+- in_bundle_confidence: include
+- reason: The bundle introduced it when it changed add_user.
+EOF
 }
 
 # ---------------------------------------------------------------------------

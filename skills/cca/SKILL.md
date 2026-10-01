@@ -49,7 +49,9 @@ stage sections below say.
 The `allowed-tools` list above pre-approves read commands only. Export, snapshot,
 state-file, and probe commands (such as the export script, `rm -rf` and `mkdir` in
 the run directory, `stat`, `find`, `sha256sum`, `jq`, `awk`, `mv -f`, `wc -c`,
-and `codex --version`) follow the session's permission mode; tell the user once, before
+`codex --version`, and the `sh` runs of the three scripts in
+`${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`: `readonly.sh`, `handoff.sh`, and
+`work-items.sh`) follow the session's permission mode; tell the user once, before
 stage 1, that they may prompt. `git fetch` (with its `git ls-remote --tags` check),
 every act write, and live-data access are not pre-approved, and you also ask for them
 in words first.
@@ -245,50 +247,56 @@ At every stage boundary print one line: the stage, elapsed time, and agents run 
 
 ### Read-only check
 
-Stage 1 takes the baseline (see `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/1-orient.md`, step 1b): it writes
-`baseline/marker` and, per audited repo `<name>`, `baseline/<name>.status`,
-`.refs`, `.stash`, `.config`, `.hashes`, and `.ignored`. After every stage, including
-stages 1 and 8, and before writing that stage's final entry:
+Stage 1 takes the baseline (see `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/1-orient.md`, step 1b)
+with `readonly.sh snapshot`, one prefix per audited repo `<name>`: `baseline/<name>.marker`,
+`.status`, `.refs`, `.stash`, `.config`, `.hashes`, and `.ignored`. The scripts are
+in `${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`; run each as
+`sh <resolved absolute script path> ...`. After every stage, including stages 1 and 8,
+and before writing that stage's final entry:
 
-1. For each audited repo, rerun the snapshot commands into `baseline/<stage>/<name>.*`:
-   - `git -C <repo> status --porcelain=v2 --branch --untracked-files=all`
-   - `git -C <repo> for-each-ref`
-   - `git -C <repo> stash list`
-   - `git -C <repo> config --list --local`
-   - `git -C <repo> hash-object --no-filters <path>` for every modified and untracked
-     file the status lists
-   - the ignored-file inventory: every file `git -C <repo> status --porcelain=v2
-     --ignored --untracked-files=all` marks `!`, with its size and modification time
-     (`stat -c '%s %Y %n'`, or `stat -f '%z %m %N'` where `stat` is BSD), excluding
-     `.git/` and the run directory.
-2. List files newer than the marker:
-   `find <repo> -newer <run dir>/baseline/marker -type f -not -path '<repo>/.git/*'`,
-   excluding the run directory when it is inside the repo, and split the list with
-   `git -C <repo> check-ignore --stdin` into ignored and not ignored.
-3. Compare status, refs, stash, config, and hashes with the stage 1 baseline, which
-   never moves. Any difference in tracked files, untracked non-ignored files, refs,
-   index, stash, or config, including an added or deleted file, ends the run `blocked`
-   at once, unless an approved fetch recorded in `approvals` after the baseline caused
-   it (a change under `refs/remotes/` only). Show the difference. A non-ignored file
-   newer than the marker with no content difference is listed in the check file as
-   "touched, content unchanged" and does not block.
-4. Compare the ignored inventory, and the ignored files newer than the marker, with
-   the current ignored baseline (the stage 1 inventory, or the inventory of the last
-   check that passed). For each added, deleted, or changed ignored file:
+1. For each audited repo `<name>`, run
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh check <repo> <run dir> <run dir>/baseline/<name> <ignored base prefix> <run dir>/baseline/<stage>/<name>`
+   (create `baseline/<stage>/` first). The ignored base prefix is
+   `<run dir>/baseline/<name>` until a check passes after the baseline was last taken
+   (stage 1 step 1b, or resume step 7), then the out prefix of the last check that
+   passed since then. Resume moves older `baseline/<stage>/` directories away, so an
+   earlier prefix is never used. The script takes a fresh snapshot into the out prefix and prints
+   one line per difference: `blocked <status|stash|config|hashes|refs> <-|+> <line>`,
+   `remote-ref <-|+> <line>`, `ignored <added|deleted|changed> <path>`, and
+   `touched <path>`. When `stat` gives whole seconds only, the first line is
+   `note mtime precision: seconds`; it is not a difference and changes no exit status.
+   It compares everything but the ignored files with the stage 1 baseline, which never
+   moves.
+2. Read the exit status, the first that holds:
+   - `2`: a step of the check failed, so the boundary could not be checked. End the run
+     `blocked` at once and show the script's message.
+   - `1`: a `blocked` line was printed: a difference in tracked files, untracked
+     non-ignored files, refs, index, stash, or config. End the run `blocked` at once
+     and show the lines.
+   - `3`: only `remote-ref` or `ignored` lines were printed. Judge each below.
+   - `0`: nothing needs judgment. `touched` lines may have been printed.
+3. For each `remote-ref` line (exit 3): it passes only when an approved fetch recorded in
+   `approvals` after the baseline explains it. Otherwise end the run `blocked` at once
+   and show it.
+4. For each `ignored` line (exit 3), added, deleted, or changed:
    - If any agent with Bash (digester, mapper, auditor, adversary, or the stage 6
      fallback), in any stage, is running or has ended since the previous check (from
      the `agents` lists in `stages.json`), accept it provisionally, as pending.
    - Otherwise end the run `blocked` at once and show it.
-5. Reconcile: once every agent a pending difference was accepted under has ended, read
-   those agents' `runs:` headings. A difference is accounted for when a logged run's
+5. Reconcile, after every check that did not exit 1 or 2, including exit 0, so a pending
+   write never escapes attribution. Take every pending difference, from this check or
+   an earlier one. Once every agent a pending difference was accepted under has ended,
+   read those agents' `runs:` headings. A difference is accounted for when a logged run's
    directory is inside that repo. Any pending difference no logged run accounts for
    ends the run `blocked` now. Differences still waiting on running agents stay
    pending.
 6. Write `baseline/<stage>-check.md`: the stage, the time, the repos checked, the
    result (`pass` or `blocked: <reason>`), the ignored-file differences accepted (each
    with the agent and run that accounts for it, or `pending` with the agents it waits
-   on), or `none`, and the touched-but-unchanged list. On pass, the inventory from this
-   check becomes the ignored baseline for the next check.
+   on), or `none`, the `touched` lines as "touched, content unchanged", and the
+   `note mtime precision: seconds` line when the check printed it (the report's
+   Coverage repeats it from there). On pass, the out prefix of this check becomes the
+   ignored base for the next check, until the baseline is taken again.
 
 With `_test` absent, a user's own edit to an audited repo during a run trips this check
 too; the report says so.
@@ -340,7 +348,7 @@ with `mv -f`. Never edit either in place.
 
 ```json
 {
-  "plugin_version": "0.1.0",
+  "plugin_version": "0.2.0",
   "approvals": [ { "kind": "fetch", "target": "<repo name>:<remote>",
                    "decision": "approved", "time": "2026-09-30T14:15:00Z",
                    "commands": ["git -C <repo> fetch --no-tags --refmap= ..."] } ],
@@ -461,7 +469,8 @@ against the ledger.
 Read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/8-report.md` when stage 7 is complete or failed, when the
 budget has expired and no agent is running, or when any stage from 2 to 7 has failed
 and nothing more can run. It fills `${CLAUDE_PLUGIN_ROOT}/skills/cca/report.md` from what is on disk, applies
-the verdict rules, writes the revision line, and ends the run.
+the verdict rules, writes the revision line, and ends the run. Its outputs are
+`report.md`, `claims-verdicts.md`, and `work-items.jsonl`.
 
 ## Stage 9: act
 

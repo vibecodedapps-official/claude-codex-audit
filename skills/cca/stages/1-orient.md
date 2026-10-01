@@ -35,6 +35,8 @@ everything after it is checked.
 3. Normalize:
    - Every path to an absolute path. Every repo path must be a git checkout
      (`git -C <path> rev-parse --show-toplevel`); store the top level.
+   - `scratch`: when the manifest has it, an absolute path, relative to the manifest's
+     directory like every manifest path. D2 checks it.
    - Bundle names: the repo directory's base name, lowercased, with `-2`, `-3` added
      when two bundles share it. `<bundle>` in file names below is this name.
      References and sources of truth keep their `name`, slugged the same way.
@@ -102,6 +104,26 @@ or JSON.
 5. The manifest's `forge_exports` key records the command and date that produced the
    exports. Never run that command.
 
+A claims file may be a handoff, written in the format of
+`${CLAUDE_PLUGIN_ROOT}/skills/cca/handoff.md`. After the export checks:
+
+6. Run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/handoff.sh detect <file>` on each
+   claims file, with the resolved absolute script path. Exit 0 means the file is a
+   handoff: it has a `cca-handoff:` key, whatever its value, so a malformed or newer one
+   fails in the next step instead of being read as prose. Exit 1 means a prose claims
+   file. Exit 2 stops the run before stage 1, naming the file.
+7. For each handoff, run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/handoff.sh check
+   <file>`. On exit 1, stop the run before stage 1 and show the script's lines, one per
+   error, as for export errors. Check every handoff before stopping. Exit 2 stops the
+   run too, naming the file.
+8. Map each handoff to the manifest. A handoff bundle maps to a manifest bundle when its
+   `repo`, resolved against the handoff's directory, has the same top level, else when
+   the names are equal. A handoff ticket id maps to a manifest ticket when it equals the
+   normalized id, the export's `id`, or, for GitHub, the issue number in the bundle's
+   repo. A handoff claim that names a mapped bundle or ticket takes the manifest's name
+   in `claims.md` (Steps, step 7). An unmapped bundle or ticket is listed in the
+   brief's Handoff section, and its claims keep the handoff's names.
+
 ## C. Resolve PRs and check for disagreement
 
 1. For a `github:` PR, read it once: create `forge/<bundle>/` in the run directory
@@ -144,11 +166,17 @@ missing), and only rewrite the stage 1 entry as `running` with its inputs.
 1. The **primary repo** is the session's repository if it is one of the bundles,
    otherwise the first bundle.
 2. `<scratch>` is the first match of:
-   1. `scratch/`, `tmp/`, or `.scratch/` in the primary repo, when the directory exists
+   1. the manifest's `scratch` key, when it has one: the path must lie inside the primary
+      repo's top level and `git -C <primary> check-ignore -q <scratch>/` must succeed;
+      then `<scratch>` is that path, created with `mkdir -p` when missing. Otherwise stop
+      before stage 1 with `scratch <path>: not an ignored path inside <primary repo>`.
+      With the key present, rules 2 to 4 are not tried. Under `/cca:resume`, the run
+      keeps its recorded directory even when `scratch` changed;
+   2. `scratch/`, `tmp/`, or `.scratch/` in the primary repo, when the directory exists
       and `git -C <primary> check-ignore -q <dir>/` succeeds;
-   2. `.cca/` in the primary repo, when `git -C <primary> check-ignore -q .cca/`
+   3. `.cca/` in the primary repo, when `git -C <primary> check-ignore -q .cca/`
       succeeds;
-   3. `${CLAUDE_PLUGIN_DATA}/runs/`.
+   4. `${CLAUDE_PLUGIN_DATA}/runs/`.
 3. The run id is `<YYYY-MM-DD-HHMM>-<slug>`, local time. The slug is the first
    bundle's name followed by its PR number, or its branch name when it has no PR, both
    as the manifest or the prompt input gave them (no `gh` call), lowercased, with runs
@@ -162,7 +190,7 @@ missing), and only rewrite the stage 1 entry as `running` with its inputs.
    it as `manifest.json` in the run directory.
 6. Add the run to `${CLAUDE_PLUGIN_DATA}/runs.json` with `state: running` (read the
    array, or start one; write a temporary file beside it; rename).
-7. Write `stages.json` with `plugin_version` `0.1.0`, empty `approvals`, and a stage 1
+7. Write `stages.json` with `plugin_version` `0.2.0`, empty `approvals`, and a stage 1
    entry with status `running` and inputs: the hashes of `manifest.json`, each claims
    file, the questions file, and every `file:` ticket or PR export, and
    `plugin_version`. Step 10 adds the shas and `forge_hashes` to the final entry.
@@ -244,22 +272,14 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    remote are all in one recorded list for that target, they are not asked again.
    Otherwise ask once, as above, listing the new commands, and record a new approval
    entry.
-b. Take the read-only baseline now, before any other work:
-   1. Create `baseline/marker` (an empty file) in the run directory.
-   2. For each audited repo `<name>`, write:
-      - `baseline/<name>.status`:
-        `git -C <repo> status --porcelain=v2 --branch --untracked-files=all`
-      - `baseline/<name>.refs`: `git -C <repo> for-each-ref`
-      - `baseline/<name>.stash`: `git -C <repo> stash list`
-      - `baseline/<name>.config`: `git -C <repo> config --list --local`
-      - `baseline/<name>.hashes`: `git -C <repo> hash-object --no-filters <path>` for
-        every modified and untracked file the status lists, one `hash path` per line
-      - `baseline/<name>.ignored`: every file
-        `git -C <repo> status --porcelain=v2 --ignored --untracked-files=all` marks
-        `!`, with size and modification time (`stat -c '%s %Y %n'`, or
-        `stat -f '%z %m %N'` where `stat` is BSD), excluding `.git/` and the run
-        directory.
-   A repo that appears in more than one role is snapshotted once.
+b. Take the read-only baseline now, before any other work. For each audited repo
+   `<name>`, with `baseline/` created in the run directory first, run
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh snapshot <repo> <run dir> <run dir>/baseline/<name>`
+   with the resolved absolute script path. It writes `baseline/<name>.marker` (its own
+   marker, created first) and `baseline/<name>.status`, `.refs`, `.stash`, `.config`,
+   `.hashes`, and `.ignored`. A repo that appears in more than one role is snapshotted
+   once. A non-zero exit ends the run `blocked`, since the boundary cannot be checked;
+   show the script's message.
 
 ### 2. Forge data
 
@@ -398,17 +418,38 @@ at the pinned sha by extension; when more than half are documents (`.md`, `.mdx`
 
 ### 7. Claims
 
-Split every claims file into `claims.md`: every sentence, numbered from 1 across all
-files, in file order. Each line:
+Write `claims.md` from every claims file, numbered from 1 across all files, in file
+order. One claim per line, in these shapes:
 
 ```
-<n>. [claim|other] <bundle>/<ticket or none> <source file>:<line>: <sentence>
+<n>. [claim:<kind>] <bundle>/<ticket or none> <source file>:<line> (<handoff ref>): <text> -> <target>
+<n>. [claim:<kind>] <bundle>/<ticket or none> <source file>:<line>: <text> -> <target>
+<n>. [other] <bundle or none>/<ticket or none> <source file>:<line>: <text> -> none
 ```
 
-`claim` is a checkable statement about the work; `other` is anything else. Tag each
-with the bundle and ticket it concerns, or `none`. Headings, list items, and table
-cells count as sentences. Nothing is dropped; a sentence split across lines takes its
-first line. Step 9 appends the group.
+The first shape is for a handoff's claims, the second for a prose claims file's, the
+third for a prose sentence that is not a claim. `<ticket>` is the manifest's normalized
+id when the handoff id maps to one (section B, step 8), else the handoff's id.
+`<target>` is a group id from `groups.md`, or `hygiene`; step 9 appends it.
+
+The kinds, and for prose the typing rule (the first that applies, in this order):
+
+1. `verification`: says something was checked, tested, verified, confirmed, reproduced,
+   or passes.
+2. `decision`: states a choice made or rejected, a deferral, or who decided.
+3. `scope`: says what belongs in or out of the bundle, or ranks a ticket for inclusion.
+4. `status`: a work item's type, state, iteration, owner, or links.
+5. `code`: any other checkable statement about code, data, or behavior.
+
+A handoff's claims come from
+`sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/handoff.sh claims <file>`: one claim per
+output line, never split further, with the kind, ref, bundle, ticket, line, and text
+the script gives (never a kind chosen by judgment). The handoff's other lines are not
+listed. A prose claims file keeps the sentence split: every sentence, in file order,
+with a kind by the rule above for a checkable statement about the work, and `other` for
+anything else. Headings, list items, and table cells count as sentences. Nothing is
+dropped; a sentence split across lines takes its first line. Tag each with the bundle
+and ticket it concerns, or `none`.
 
 ### 8. Groups
 
@@ -426,7 +467,15 @@ Otherwise derive, per bundle:
 1. A ticket's commits are those whose message names the ticket's full id token,
    matched whole: the token followed by a non-digit, a non-letter, or the end, so `#12`
    does not match `#123` and `APP-1` does not match `APP-10` or `APP-1a`. In a bundle
-   with one ticket, every commit is that ticket's.
+   with one ticket, every commit is that ticket's. The commits a handoff lists for the
+   ticket are also its commits: run
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/handoff.sh commits <file>` (one
+   `<bundle>`, `<sha>`, `<ticket>`, `<line>` per line, tab-separated) and match each sha
+   by prefix among the bundle's commits from the merge-base to the head
+   (`git -C <repo> log --format=%H <merge-base>..<head>`). A handoff commit that matches
+   no commit or more than one, and a commit whose message names another ticket than the
+   handoff gives, is noted in the brief's Handoff section. Groups follow the union of
+   both sets.
 2. A ticket's group holds the changed files that the PR description, the commit
    messages, or the ticket text name (by path or by file name), and every changed file
    touched by any of that ticket's commits. A file touched by several tickets' commits
@@ -454,18 +503,21 @@ cross-bundle interaction specialists of stage 4 are scopes, not groups.
 
 ### 9. Claim assignment
 
-Append ` -> <group id>` to every `claim` line in `claims.md`:
+Append ` -> <target>` to every `claim` line in `claims.md`:
 
-1. A claim goes to the group whose files it concerns; a claim about a
-   `cross-cutting` file goes to `cross-cutting`.
-2. A claim that names no file goes to its ticket's group when that group exists in
+1. Every `scope` and `status` claim goes to `hygiene`, which is not a group. Stage 4
+   gives the `hygiene` claims to the `hygiene` scope at high, to `tests-hygiene` at
+   medium, and to `combined` at low.
+2. A `code`, `decision`, or `verification` claim goes to the group whose files it
+   concerns; a claim about a `cross-cutting` file goes to `cross-cutting`.
+3. Such a claim that names no file goes to its ticket's group when that group exists in
    `groups.md`; else to the first group in `groups.md` that holds a file of the
    claim's bundle; else to the first group in `groups.md`.
-3. Never assign a claim to a group that is absent from `groups.md` or has no files.
+4. Never assign a claim to a group that is absent from `groups.md` or has no files.
 
 `other` lines get ` -> none`. Before finishing the stage, check that every `claim`
-line names a group present in `groups.md` with at least one file, so each claim has a
-scope that stage 4 schedules; reassign any that does not by rule 2.
+line names `hygiene` or a group present in `groups.md` with at least one file, so each
+claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
 
 ### 10. Brief, common, tier, and the end of the stage
 
@@ -495,8 +547,11 @@ scope that stage 4 schedules; reassign any that does not by rule 2.
    exports); Forge (queried or not, per bundle; "not in export" keys); Questions; Stage
    applicability; Run directory (its path, and whether it is inside the session's
    repository: a run directory inside it avoids the inline form of the Codex request);
-   Test injection (the `_test` key, when present); Claims (a statement that every claim
-   is assigned to a scope that stage 4 schedules, with the count per group);
+   Test injection (the `_test` key, when present); Handoff (each handoff file with its
+   hash and that it passed `handoff.sh check`, its claim counts by kind, the bundle and
+   ticket mapping notes of section B, and the commit notes of step 8; "none" when no
+   claims file is a handoff); Claims (a statement that every claim is assigned to a
+   scope that stage 4 schedules, with the count per kind and per target);
    Corrections (filled in stage 5).
 4. **`common.md`**: read the template `${CLAUDE_PLUGIN_ROOT}/skills/cca/common.md` with
    the Read tool and write the copy to `common.md` in the run directory with the Write

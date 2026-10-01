@@ -24,13 +24,16 @@ custom list.
 
 1. Read `common.md` first, in full, at the path your prompt gives. Follow its
    "Hard rules", "Evidence", "Finding schema" (with its "Ids and origin tags"),
-   "Verified OK list", "Claims list", and "Output contract" sections. Do not invent other
-   shapes or ids.
+   "Verified OK list", "Claim kinds", "Claims list", "Decisions", "Scope", and "Output
+   contract" sections. Do not invent other shapes or ids.
 2. Read `audit-brief.md`: bundles, head, base, and merge-base shas, the stack order, the
    source order, the tier, and the path the brief maps for each tree. Read only the trees
    the brief maps for you, plus the run directory files it names.
-3. Read `groups.md` and `claims.md`. Your scope is every changed file in your group and
-   every claim assigned to it. Review every one; none may be skipped.
+3. Read `groups.md`, your scope file, and `claims.md`. Your scope is every changed file
+   in your group and every claim your scope file lists by number and kind; take the claim
+   text from `claims.md`. Do not search `claims.md` for your scope id, since a claim
+   targeted `hygiene` is listed in the scope file of `tests-hygiene` or `combined`.
+   Review every one; none may be skipped.
 4. Read the three-dot diff for your bundle from `diffs/<bundle>.diff`, and the changed files
    at the head sha. Read the digests under `guidelines/` and the maps under `domain/` that
    exist now; use them as leads and cite the original document or source at its sha.
@@ -50,24 +53,38 @@ custom list.
    - A missing rationale in a ticket or PR is not by itself a defect.
 6. Write the `## Verified OK` list: each item checked and found sound, with its evidence.
 7. Write the `## Claims` list: every claim assigned to your scope, `true`, `false`, or
-   `not verified`, with the finding id or the evidence.
-8. Close the file as the "Output contract" section says: every command you ran under
-   `runs:` (command, directory, exit status), every digest and map file you read under
-   `consumed:` with its `git hash-object --no-filters <file>` hash, `none` under either
-   when empty, and `status: complete` as the last line.
-9. Write the whole output file in one write before you report. Then return only the
-   output path and one line of status.
+   `not verified`, with the finding id or the evidence. A `verification` claim takes the
+   line shapes in "Claims list" and is `true, reproduced` only when you reproduced the
+   stated result yourself, by a run or a quote. A quote of other text saying it was
+   checked is not a reproduction. When you cannot run the check (not run, no access, needs
+   a live check, budget expired, or an exported tree), write
+   `not verified, not reproduced` with the reason; never `true`.
+8. Write `## Decisions`: a line for every `decision` claim assigned to your scope, in the
+   shape and with the classes "Decisions" gives, or `none`. Open the record each
+   dimension needs (commit bodies, forge comments, documents at their pinned sha) before
+   you class the entry. When an entry shows a defect, file it as a separate Q4 finding and
+   name it in `finding:`. An entry is a report item, never a finding.
+9. In a scope that holds `hygiene` claims (`hygiene`, `tests-hygiene`, or `combined`),
+   write `## Scope`: a line for every `scope` claim, in the shape "Scope" gives, or `none`.
+   Check "introduced by the bundle" against the merge-base, never the head alone. When an
+   entry shows a regression, file a separate Q4 finding and name it in `finding:`.
+10. Close the file as the "Output contract" section says: every command you ran under
+    `runs:` (command, directory, exit status), every digest and map file you read under
+    `consumed:` with its `git hash-object --no-filters <file>` hash, `none` under either
+    when empty, and `status: complete` as the last line.
+11. Write the whole output file in one write before you report. Then return only the
+    output path and one line of status.
 
 ## Specialist scopes
 
 When your prompt names a specialist scope, apply its checklist across every bundle the
-prompt assigns, in addition to steps 1 to 9.
+prompt assigns, in addition to steps 1 to 11.
 
 1. Tests: coverage of new behavior; tests weakened, skipped, or deleted; assertions
    loosened; CI configuration changes.
 2. Work-item hygiene: each ticket matches the change; each acceptance criterion is met or
    not, with evidence; follow-ups are recorded. Read the brief's "not in export" items and
-   report each as a gap in what could be checked.
+   report each as a gap in what could be checked. Write `## Scope` as step 9 says.
 3. Cross-bundle interactions: shared contracts, schemas, and APIs changed in one bundle and
    used in another; the stack order the brief records.
 4. Low tier: one auditor covers the ticket's group, tests, and work-item hygiene with the

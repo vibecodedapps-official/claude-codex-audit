@@ -1,4 +1,6 @@
-# Acceptance record: v0.1.0
+# Acceptance record: v0.1.0 and v0.2.0
+
+The v0.2.0 section is at the end of this file, after "What a full acceptance run needs".
 
 This file records the acceptance cases for cca 0.1.0 and their results, checked on
 2026-09-30 and 2026-10-01 with Claude Code 2.1.284 on Windows 11 with Git Bash. The
@@ -175,3 +177,41 @@ can pass `--no-codex`). Each case is judged against the run directory, `stages.j
 and the report, using the literals in `tests/fixture/expected.md`. A single audit run is
 expected to take up to hours of wall clock, and the set covers dozens of runs; the
 actual time is not measured.
+
+The first medium-tier run on a real bundle is the acceptance run. It judges the cases
+that need a live audit, for 0.1.0 and 0.2.0 alike.
+
+# Acceptance record: v0.2.0
+
+This section records the acceptance cases for cca 0.2.0. Results are `pass`, `fail`,
+`superseded: <reason>`, `not run`, or `not run: <reason>`. The cases that run in the
+release build (the lint, the three script tests, the fixture builds and verifies, and the
+CI matrix) are `not run` until the release checks run; the evidence cell is then filled
+in from that run. No case is recorded as passed without a run that shows it. The v0.1.0
+record above is unchanged.
+
+## Release checks
+
+| Case | Description | Result | Evidence or reason |
+|---|---|---|---|
+| V2-a | `sh tests/lint.sh` passes | pass | 2026-10-01, Windows 11, Git Bash: printed `lint: ok`, exit 0 |
+| V2-b | `sh tests/readonly.sh` passes on its twelve cases | pass | 2026-10-01, Windows 11, Git Bash: printed `readonly test: ok`, exit 0; `RO_SH=dash dash tests/readonly.sh`, which runs the script itself under dash, printed the same, exit 0 |
+| V2-c | `sh tests/handoff.sh` passes | pass | 2026-10-01, Windows 11, Git Bash (gawk): `sh tests/handoff.sh` and `dash tests/handoff.sh` each printed `handoff test: ok`, exit 0. mawk was not available locally; CI runs it (V2-f) |
+| V2-d | `sh tests/work-items.sh` passes | pass | 2026-10-01, Windows 11, Git Bash, jq 1.8.2: `sh tests/work-items.sh` and `dash tests/work-items.sh` each printed `work-items test: ok`, exit 0 |
+| V2-e | `sh tests/fixture/build.sh` then `sh tests/fixture/verify.sh` pass for `solo`, `solo-dirty`, and `full` | pass | 2026-10-01, Windows 11, Git Bash: each build exited 0 and printed its manifest path; the three verifies printed `verify solo: ok`, `verify solo-dirty: ok`, and `verify full: ok`, exit 0 |
+| V2-f | The CI `scripts` job passes on Linux, macOS, and Windows, and the existing job still passes | not run | to be filled from the pull request's checks |
+
+## Agent-driven cases
+
+Each is judged against the run directory and the report, and each expected outcome holds
+only when the stage that judges it completes.
+
+| Case | Description | Result | Evidence or reason |
+|---|---|---|---|
+| V2-g | A verification claim the fixture cannot reproduce is never reported `true`, and appears in `claims-verdicts.md` as a recheck request | not run: needs a live multi-agent audit run | |
+| V2-h | A decision with status `deferred` and no owner is a `stale deferral` | not run: needs a live multi-agent audit run | |
+| V2-i | A raised ticket ranked `include` whose behavior predates the merge-base has `facts disagree with the handoff: yes` | not run: needs a live multi-agent audit run | |
+| V2-j | `claims-verdicts.md` names the handoff line of every `false` | not run: needs a live multi-agent audit run | |
+| V2-k | `/cca:handoff` writes a handoff that passes `handoff.sh check` | not run: needs a live multi-agent audit run | |
+| V2-l | The manifest `scratch` key puts the run directory under `app/.test-output/cca/` | not run: needs a live multi-agent audit run | |
+| V2-m | `work-items.jsonl` passes `work-items.sh check` | not run: needs a live multi-agent audit run | |

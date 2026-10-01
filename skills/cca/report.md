@@ -73,8 +73,9 @@ The verdict line reads:
 
 ### 2. Findings by ticket
 
-Per ticket (then `unticketed`, then `cross-cutting`), items severity first. Each: item
-id (`C<n>`), title, effective severity, gate, disposition, the absorbed ledger ids,
+Per ticket (then `unticketed`, then `cross-cutting`), items severity first. Each item
+sits under a heading `#### C<n>: <title>`; the work-items validator finds items by it.
+Under the heading: effective severity, gate, disposition, the absorbed ledger ids,
 the evidence (as cited in the ledger), what breaks and for whom, and its state after
 each stage (pass-two verdict, second opinion, late adversary). Provisional items are
 marked `provisional` and say which review they still lack.
@@ -104,13 +105,32 @@ By repo, then file: each change, with the item ids it resolves.
 Per ticket: the ticket text to change, drafted, with the item ids. Drafted text names
 no model, agent, or tool.
 
+Then each operation in `work-items.jsonl`, one line per operation: its `W<n>` id, the
+op, the target, the item ids it covers, and its reason. These are drafts for a person
+or an adapter; act applies none of them.
+
 ### 8. Decisions
 
-Each decision the change made or needs: the recommendation, the reason, and a
-reversibility class (`reversible`, `hard to reverse`, or `contract change`). A named
-owner, from the tickets or threads only, for `hard to reverse` and `contract change`;
-otherwise "owner not recorded". Act may post a decision to its ticket as a drafted
-comment only when the user says to for that item.
+Three parts.
+
+- Decision ledger: each `decision` claim, with its class (`stale deferral`,
+  `needs <owner>`, `default taken`, or `evidenced`), resolution, authority, whether
+  alternatives were weighed, reversibility class, the recommendation, and the owner. The
+  auditor's position and the adversary's follow; when they differ, both are kept and no
+  side is picked.
+- Raised tickets: each `scope` claim, with whether the bundle introduced it, whether the
+  fix is inside the bundle's repos, cost, the recommendation (`include` or `defer`) and
+  its reason, the handoff's ranking, and whether the facts and the recommendation
+  differ from the handoff, each stated on its own. The adversary's position follows.
+- Other decisions: each decision the change made or needs that is not a `decision`
+  claim: the recommendation, the reason, and a reversibility class (`reversible`,
+  `hard to reverse`, or `contract change`). A named owner, from the tickets or threads
+  only, for `hard to reverse` and `contract change`; otherwise "owner not recorded".
+  Act may post a decision to its ticket as a drafted comment only when the user says to
+  for that item.
+
+Decision and scope entries are report items, not findings: they have no item id, never
+enter a ledger, and never change the counts.
 
 ### 9. Live checks
 
@@ -121,11 +141,26 @@ audit or acts on the finding by hand. Every approved live access is logged here.
 
 ### 10. Claims
 
-Every numbered claim from `claims.md` with `true`, `false`, or `not verified`, and the
-item id or evidence. `other` sentences are counted, not listed.
+Every numbered claim from `claims.md` with its kind (`code`, `decision`, `verification`,
+`scope`, or `status`), then `true`, `false`, or `not verified`, and the item id or
+evidence. `other` sentences are counted, not listed.
+
+A `verification` claim is `true, reproduced` only when the audit reproduced the stated
+result itself, `false, contradicted` only with counter-evidence, and otherwise
+`not verified, not reproduced` with the reason. One line says that reproducing a stated
+result does not show that the build session ran its stated check. Where the auditor's
+and the adversary's verdicts differ, both are shown.
+
+`claims-verdicts.md`, beside this report, carries these verdicts back to the build
+session.
 
 ### 11. Coverage
 
+- Handoffs: each handoff claims file, its hash, and whether `handoff.sh check`
+  validated it.
+- Work items: the `work-items.sh check` result for `work-items.jsonl`: `work-items: ok`,
+  the error lines and that the file is not ready for an adapter, or that it was not
+  validated and why.
 - Stages: each stage 1 to 8 as `complete`, `not applicable`, `failed`, `swapped`, or
   `not run: budget expired`, with the reason.
 - Swaps: every swap, with role, scope, from, to, and reason (including Codex swaps and
@@ -148,7 +183,9 @@ item id or evidence. `other` sentences are counted, not listed.
   accepted, with the run that wrote it. Not detected by the check: an ignored file
   replaced with one of the same size and a restored modification time, changes inside
   `.git/` other than refs, stashes, and config, and changes outside the audited
-  repos. A user's own edits to an audited repo during the run would also have tripped
+  repos. When any check file carries the note `note mtime precision: seconds`, say
+  the ignored-file comparison used whole-second times, so a same-size rewrite within
+  the same second was not detected. A user's own edits to an audited repo during the run would also have tripped
   the check.
 - Forge: which bundles were not queried, and exports' "not in export" keys.
 - Test injection: the `_test` key, when present.

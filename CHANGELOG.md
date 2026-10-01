@@ -1,8 +1,59 @@
 # Changelog
 
+## 0.2.0 - 2026-10-01
+
+Closes the gaps found by one real audit of 0.1.0, and adds a typed handoff from the build
+session to the audit, with a return trip back. No full multi-agent audit has run yet; see
+`docs/acceptance.md`.
+
+### Added
+
+- `/cca:handoff`: run in the build session, it writes a typed `handoff.md` (tickets,
+  decisions, raised tickets) from the record, and with `--verdicts` applies a
+  `claims-verdicts.md` from an earlier audit.
+- The handoff format (`skills/cca/handoff.md`) and `skills/cca/scripts/handoff.sh`, which
+  detects, validates, and turns a handoff into typed claims and a commit list.
+- Typed claims, with kinds `code`, `decision`, `verification`, `scope`, and `status`.
+  Prose claims files get a kind per sentence. A handoff's commit lists seed the review
+  groups.
+- A decision ledger for `decision` claims: each is `stale deferral`, `needs <owner>`,
+  `default taken`, or `evidenced`, with a reversibility class. Report section 8 lists them.
+- A scope check for raised tickets: introduced by the bundle or not, fix inside the
+  bundle's repos or not, cost, include or defer, and any disagreement with the handoff.
+- `claims-verdicts.md`, a stage 8 output that tells the build session which of its
+  statements were shown false, which could not be reproduced, and which are contested.
+- `work-items.jsonl` and `skills/cca/scripts/work-items.sh`: a work-item operations plan,
+  one JSON object per operation, with placeholders for tickets that do not exist yet, and
+  its validator. Nothing applies it; no forge adapter ships.
+- A manifest `scratch` key: an ignored path in the primary repo, under any name, for the
+  run directory.
+- `skills/cca/scripts/readonly.sh`: the per-stage read-only check as a script.
+- Tests `tests/readonly.sh`, `tests/handoff.sh`, and `tests/work-items.sh`, and a CI
+  `scripts` job on Linux, macOS, and Windows. The fixture gains a handoff and two
+  manifests.
+- README: a "Before the first run" note on sizing sources, and the new commands and
+  outputs.
+
+### Changed
+
+- A `verification` claim is `true` only when the audit reproduces the result itself. One
+  it cannot reproduce is `not verified` with the reason `not reproduced`, listed in
+  `claims-verdicts.md` as a recheck request, never as a correction. The pass-two
+  adversary re-checks every verification claim marked `true`.
+- The read-only check runs a script. An ignored file is compared by size and sub-second
+  modification time, and each audited repo has its own baseline marker. Paths that git
+  prints quoted are not supported and stop the check with exit 2.
+- Agents run no test or lint command in an exported tree, in `skills/cca/common.md` as
+  well as in the agent definition.
+- Stage 8 writes three outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`.
+- The README no longer says "Tested on"; it says what ran and what has not.
+
+A run started under 0.1.0 and resumed under 0.2.0 reruns from stage 1, by the existing
+input-hash rule.
+
 ## 0.1.0 - 2026-09-30
 
-First release. Tested on Claude Code 2.1.284.
+First release. Built against Claude Code 2.1.284; see `docs/acceptance.md` for what ran.
 
 ### Added
 

@@ -13,8 +13,8 @@
 # Outside a git work tree, every file under root except .git/.
 #
 # Checks:
-# - commands/audit.md, resume.md, act.md exist; every commands/*.md has frontmatter
-#   keys description, argument-hint, allowed-tools.
+# - commands/audit.md, resume.md, act.md, handoff.md exist; every commands/*.md has
+#   frontmatter keys description, argument-hint, allowed-tools.
 # - agents/digester.md, mapper.md, auditor.md, adversary.md, merger.md exist; every
 #   agents/*.md has frontmatter keys name (equal to the file name), description,
 #   model, tools; every tools entry (YAML list, comma string, or [flow list]) is one
@@ -23,6 +23,9 @@
 # - skills/cca/SKILL.md has frontmatter keys name, description, and the line
 #   `user-invocable: false`; it names each stage file below by path, and every
 #   stages/*.md path it mentions exists under skills/cca/.
+# - skills/cca/handoff.md and skills/cca/work-items.md exist.
+# - Every scripts/<name>.sh path that a file under skills/ or commands/ mentions
+#   exists under skills/cca/scripts/.
 # - .claude-plugin/plugin.json and marketplace.json parse as JSON (node, else
 #   python3, else skipped with a note).
 # - No file under .claude-plugin/, commands/, skills/, agents/, docs/, or README.md
@@ -127,7 +130,7 @@ listed() {
 }
 
 # Commands.
-for c in audit resume act; do
+for c in audit resume act handoff; do
 	grep -qx "commands/$c.md" "$files" || fail "missing: commands/$c.md"
 done
 for f in $(listed '^commands/[^/]+\.md$'); do
@@ -175,6 +178,16 @@ if grep -qx "$skill" "$files"; then
 else
 	fail "missing: $skill"
 fi
+
+# The handoff and work-item formats, and the scripts the plugin files name.
+for f in skills/cca/handoff.md skills/cca/work-items.md; do
+	grep -qx "$f" "$files" || fail "missing: $f"
+done
+for f in $(listed '^(skills|commands)/'); do
+	for p in $(tr -d '\r' < "$f" | grep -oE 'scripts/[A-Za-z0-9._-]+\.sh' | sort -u); do
+		[ -f "skills/cca/$p" ] || fail "$f: names skills/cca/$p, which does not exist"
+	done
+done
 
 # Plugin manifests.
 if command -v node >/dev/null 2>&1; then

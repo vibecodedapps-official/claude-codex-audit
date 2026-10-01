@@ -9,7 +9,9 @@ the commit body.
 `sh tests/fixture/verify.sh <manifest path> [name]` checks the key literals below against
 a built fixture with git commands (commit ids, the two-dot and three-dot diffs, the skipped
 test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule, the legacy ids, the
-CRLF bytes, and the three tickets on `src/output.sh`) and prints one line per mismatch. CI
+CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and `solo-dirty`, that the
+three handoff files exist and `handoff.sh claims` gives the claim count per kind below) and
+prints one line per mismatch. CI
 runs it after each build. Its expected values are copies of the literals here, so a change
 to one changes the other.
 
@@ -30,6 +32,9 @@ on Ubuntu with dash, gawk, and mawk).
 | `$F/exports/APP-1.md` | Ticket export with id, url, title, state, description, source, exported_by, exported_at; no `acceptance_criteria` |
 | `$F/exports/APP-2.md` | Ticket export with no `title` |
 | `$F/session-summary.md` | The claims file |
+| `$F/manifest-handoff.json` | `manifest.json` with `"claims": ["./handoff.md"]` |
+| `$F/manifest-scratch.json` | `manifest.json` with `"scratch": "./app/.test-output"` added |
+| `$F/handoff.md` | The handoff, in the format of `skills/cca/handoff.md` (see "Handoff" below) |
 | `$F/app` | The app repo, checked out on `feature`, no tracked changes |
 
 ### Commits
@@ -86,6 +91,65 @@ on Ubuntu with dash, gawk, and mawk).
   where `<path>` names `exports/APP-2.md`.
 - The main manifest runs, and the brief lists `acceptance_criteria` for `APP-1` as
   "not in export".
+
+### Handoff
+
+The three handoff files sit outside every repo, so no commit id above changes. `solo-dirty`
+builds on `solo` and has the same three files. `full` has none of them, because its app
+commit ids differ.
+
+`handoff.md` holds one bundle `app` (repo `./app`, pr `none`, branch `feature`, base
+`main`), the ticket `APP-1` (bundle `app`), decisions `D1` and `D2`, and the raised ticket
+`R1`. The commits it lists are the `solo` commits `9c5f77c` and `0c23936`. It passes
+`handoff.sh check`. The lines that matter:
+
+| Item | Content | Truth in the fixture |
+|---|---|---|
+| `APP-1` state | `Active` | False: the export says `In Progress` |
+| `APP-1` decision | keeps the row and sets its status to inactive | False: `deactivate_user` deletes the row |
+| commit `0c23936` | says it keeps the row | False, for the same reason |
+| verified 1 | `Deactivate was checked by hand against a copy of production data; check: not recorded` | Cannot be reproduced |
+| verified 2 | `The test suite runs with one test skipped; check: sh run-tests.sh` | True when run |
+| `D1` | deactivate removes the row; rejected: keep the row; `decided_by: checkpoint (recommended option taken)`; `recorded_at: checkpoint: plan review`; `status: default taken` | Describes the code |
+| `D2` | whether a deactivated user can be reactivated is left for later; `options: none recorded`; `decided_by: not recorded`; `recorded_at: not recorded`; `status: deferred` | An open deferral with no owner |
+| `R1` | ticket `APP-6`, bundle `app`, "add accepts a second row with an id that already exists", rank 1, `include`, reason "the bundle introduced it when it changed add_user" | Predates the bundle |
+
+`sh skills/cca/scripts/handoff.sh claims $F/handoff.md` prints these 11 claims, 4 `code`,
+2 `verification`, 2 `decision`, 1 `scope`, 2 `status`. Fields are separated by one tab,
+written `<TAB>` here:
+
+```
+status<TAB>tickets/APP-1/fields<TAB>app<TAB>APP-1<TAB>14<TAB>APP-1: type Story; state Active; iteration none; owner Developer
+code<TAB>tickets/APP-1/problem<TAB>app<TAB>APP-1<TAB>14<TAB>Removing a user deletes the record, so its history is lost.
+code<TAB>tickets/APP-1/decision<TAB>app<TAB>APP-1<TAB>14<TAB>Add a deactivate command that keeps the row and sets its status to inactive.
+code<TAB>tickets/APP-1/commit/app/9c5f77c<TAB>app<TAB>APP-1<TAB>23<TAB>app 9c5f77c: add the status column migration so every row has a status.
+code<TAB>tickets/APP-1/commit/app/0c23936<TAB>app<TAB>APP-1<TAB>24<TAB>app 0c23936: add the deactivate command, which keeps the row and sets its status to inactive.
+verification<TAB>tickets/APP-1/verified/1<TAB>app<TAB>APP-1<TAB>26<TAB>Deactivate was checked by hand against a copy of production data; check: not recorded
+verification<TAB>tickets/APP-1/verified/2<TAB>app<TAB>APP-1<TAB>27<TAB>The test suite runs with one test skipped; check: sh run-tests.sh
+decision<TAB>decisions/D1<TAB>app<TAB>APP-1<TAB>31<TAB>Deactivate removes the row instead of setting a status. | rationale: A removed row needs no change to the reads. | options: chosen: remove the row; rejected: keep the row and set a status; why: every read would need a status filter | decided_by: checkpoint (recommended option taken) | recorded_at: checkpoint: plan review | status: default taken
+decision<TAB>decisions/D2<TAB>app<TAB>APP-1<TAB>42<TAB>Whether a deactivated user can be reactivated is left for later. | rationale: not recorded | options: none recorded | decided_by: not recorded | recorded_at: not recorded | status: deferred
+scope<TAB>raised/R1<TAB>app<TAB>APP-6<TAB>53<TAB>APP-6: Add accepts a second row with an id that already exists. | rank 1, include: The bundle introduced it when it changed add_user.
+status<TAB>raised/R1/fields<TAB>app<TAB>APP-6<TAB>53<TAB>APP-6: type Bug; state New; iteration none; owner none
+```
+
+`sh skills/cca/scripts/handoff.sh commits $F/handoff.md` prints
+`app<TAB>9c5f77c<TAB>APP-1<TAB>23` and `app<TAB>0c23936<TAB>APP-1<TAB>24`.
+
+Expected audit outcomes, each only when the stage that judges it completes:
+
+- The `APP-1` state claim, the `APP-1` decision claim, and the `0c23936` commit claim are
+  judged false, with the export and `src/users.sh` as the evidence.
+- Verified 1 is never `true`. It is `not verified, not reproduced`, and appears in
+  `claims-verdicts.md` as a recheck request, not a correction.
+- Verified 2 is `true, reproduced` when the auditor ran `sh run-tests.sh` in the
+  direct-read `solo` tree; it is `not verified, not reproduced` when that run was not made.
+- `D1` is classed `needs owner (not recorded)`: deleting rows is hard to reverse, and no
+  person decided.
+- `D2` is classed `stale deferral`.
+- `R1` is judged `introduced by the bundle: no`, because `add_user` at the merge-base
+  `bd5d5e1e67a1fc55adeaa1452920245b1d368f7f` already appends without an id check, and
+  `facts disagree with the handoff: yes`. The recommendation itself is not asserted.
+- With `manifest-scratch.json`, the run directory lands under `app/.test-output/cca/`.
 
 ### Traps that must not appear
 
