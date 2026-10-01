@@ -29,9 +29,12 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 ro=$here/../skills/cca/scripts/readonly.sh
 sh_bin=${RO_SH:-sh}
-tmp=$(mktemp -d)
-dirs=$tmp
-trap 'rm -rf $dirs' EXIT
+# Every temporary path, the fixtures and run directories included, lives under one root,
+# removed as one quoted path, so a temp path that holds a space cannot split the cleanup.
+root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
+tmp=$root/work
+mkdir "$tmp"
 bad=0
 
 sha=2b5e8f3511e25bc0225ffc4ef6957dcca51d9fcd
@@ -46,14 +49,13 @@ mismatch() {
 # fresh: build a new solo-dirty fixture; sets A (the app repo) and R (a run directory
 # outside it).
 fresh() {
-	m=$(sh "$here/fixture/build.sh" solo-dirty) || {
+	m=$(TMPDIR=$root sh "$here/fixture/build.sh" solo-dirty) || {
 		mismatch "fixture build failed"
 		exit 1
 	}
 	F=$(dirname "$m")
 	A=$F/app
-	R=$(mktemp -d)
-	dirs="$dirs $F $R"
+	R=$(mktemp -d "$root/run.XXXXXX")
 	results=$A/.test-output/results.txt
 }
 
