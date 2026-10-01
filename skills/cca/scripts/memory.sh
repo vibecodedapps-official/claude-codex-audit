@@ -119,7 +119,7 @@ function iskey(w,   n) {
 	if (w ~ /^[0-9]+([.,][0-9]+)*$/) return 1
 	if (n >= 7 && n <= 40 && w ~ /^[0-9a-f]+$/) return 1
 	if (w ~ /^[A-Za-z][A-Za-z0-9_]*-[0-9]+$/) return 1
-	if (w ~ /^([A-Za-z0-9_.-]+[/][A-Za-z0-9_.-]+)?[A-Za-z]*#[0-9]+$/) return 1
+	if (w ~ "^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?[A-Za-z]*#[0-9]+$") return 1
 	return 0
 }
 
