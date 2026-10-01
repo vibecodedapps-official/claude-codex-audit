@@ -425,11 +425,12 @@ first.
 Role agents' tool lists exclude Edit and NotebookEdit. Each agent has Write, limited by
 instruction to its own output file in the run directory; the read-only check after every
 stage, described below, is the guard that detects a change to an audited repo and stops
-the run. Agents with Bash are told to run only read commands (`git show`, `git log`, `git diff`,
-`git grep`, `git ls-files`, `rg`, `ls`) and, when a question needs a run, the repo's
-test or lint commands. That is instruction, not enforcement: cca has no mechanical
-block on Bash. Instead cca detects changes, with a script the orchestrator runs rather
-than a procedure it follows by hand: `skills/cca/scripts/readonly.sh`. In stage 1,
+the run. Agents with Bash are told to run only read commands (`git show`, `git log`,
+`git diff <base>...<head>`, `git grep`, `git ls-files`, `rg`, `ls`) and, when a question
+needs a run, the repo's test or lint commands. That is instruction, not enforcement: cca
+has no mechanical block on Bash. Instead cca detects changes, with a script the
+orchestrator runs rather than a procedure it follows by hand:
+`skills/cca/scripts/readonly.sh`. In stage 1,
 `snapshot` records each audited repo (status, refs, stash, local config, content hashes
 of modified and untracked files, and an inventory of ignored files with sub-second
 modification times) and a marker file. After every stage, `check` snapshots again and
@@ -439,8 +440,12 @@ that could not complete, such as a missing baseline file, also stops the run `bl
 (exit 2). A change among ignored files, or a new remote-tracking ref, is accepted only
 when a logged agent run or an approved fetch accounts for it (exit 3). A file newer than
 the marker that is neither ignored nor changed in content is listed as touched and does
-not stop the run. The script sets `GIT_OPTIONAL_LOCKS=0`, so the check itself never
-rewrites an audited repo's index.
+not stop the run. The git commands cca and its agents issue themselves run without an
+index write during an audit or resume: the script sets `GIT_OPTIONAL_LOCKS=0`, and the
+stages and agents run `git status` with `--no-optional-locks` and never diff the working
+tree (a working-tree `git diff` refreshes the index even with that flag). A repo's own
+test or lint command, which agents may run in a directly read tree, can run git itself
+and is not covered. Stage 9 (act) is the write phase and is outside this boundary.
 
 Nested repositories count as part of the audited repo: a checked-out submodule, or an
 untracked directory with its own `.git`, at any depth. The snapshot records each one's

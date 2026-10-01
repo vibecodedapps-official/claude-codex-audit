@@ -4,6 +4,7 @@ description: The orchestrator for the cca plugin. It is loaded by /cca:audit, /c
 user-invocable: false
 allowed-tools:
   - Bash(git status *)
+  - Bash(git --no-optional-locks status *)
   - Bash(git diff *)
   - Bash(git log *)
   - Bash(git show *)
@@ -15,6 +16,7 @@ allowed-tools:
   - Bash(git hash-object --no-filters *)
   - Bash(git grep *)
   - Bash(git -C * status *)
+  - Bash(git -C * --no-optional-locks status *)
   - Bash(git -C * diff *)
   - Bash(git -C * log *)
   - Bash(git -C * show *)

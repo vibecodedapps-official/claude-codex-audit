@@ -367,8 +367,8 @@ For every bundle at its head sha, and every reference and source of truth at its
 pinned sha, decide how agents read it:
 
 1. **Direct**: when `git -C <repo> rev-parse HEAD` is that sha,
-   `git -C <repo> status --porcelain --untracked-files=no` is empty, and
-   `git -C <repo> ls-files -v` shows no path flagged `S`, `h`, or `s` (skip-worktree
+   `git -C <repo> --no-optional-locks status --porcelain --untracked-files=no` is empty,
+   and `git -C <repo> ls-files -v` shows no path flagged `S`, `h`, or `s` (skip-worktree
    or assume-unchanged). Agents read the
    checkout and search per the direct-read rules in `common.md`.
 2. **Export**: otherwise. First size it: the sum of blob sizes from

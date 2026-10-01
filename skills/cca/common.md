@@ -26,13 +26,17 @@ These hold for every stage, for the orchestrator and every agent.
    it once per run. Nothing else. An ignored file written by a check run that an agent
    logged under its `runs:` heading is allowed and reported, never silently.
 2. **Prevention and detection.** Agent tool lists exclude Edit and NotebookEdit. An
-   agent with Bash runs only these commands: `git show`, `git log`, `git diff`,
-   `git grep`, `git ls-files`, `rg`, `ls`, `git hash-object --no-filters` (never `-w`)
-   for the `consumed:` hashes, `cat` of an exported file with `tail -c`, `head -c`,
-   `wc -c`, `sed '$d'`, and one `awk` line-numbering stage for a digester's byte range,
-   and, when a question needs a run in a directly read tree, the repo's test or lint
-   commands, which may write ignored build output. This is instruction, not enforcement:
-   nothing blocks Bash mechanically. The orchestrator snapshots every audited repo in
+   agent with Bash runs only these commands: `git show`, `git log`,
+   `git diff <base>...<head>`, `git grep`, `git ls-files`, `rg`, `ls`,
+   `git hash-object --no-filters` (never `-w`) for the `consumed:` hashes, `cat` of an
+   exported file with `tail -c`, `head -c`, `wc -c`, `sed '$d'`, and one `awk`
+   line-numbering stage for a digester's byte range, and, when a question needs a run in
+   a directly read tree, the repo's test or lint commands, which may write ignored build
+   output. A diff always names two commits: a working-tree `git diff` refreshes the index
+   even with `--no-optional-locks`, so it is never run. The orchestrator's `git status`
+   runs as `git -C <repo> --no-optional-locks status ...`, and the snapshot script sets
+   `GIT_OPTIONAL_LOCKS=0`, so no status check rewrites the index. This is instruction,
+   not enforcement: nothing blocks Bash mechanically. The orchestrator snapshots every audited repo in
    stage 1 and compares after every stage. A change to tracked files, untracked
    non-ignored files, refs, the index, stashes, or config, including an added or deleted
    file, stops the run `blocked`, unless an approved fetch caused it. A change among

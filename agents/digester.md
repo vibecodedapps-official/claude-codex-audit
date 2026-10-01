@@ -74,14 +74,16 @@ files in your chunk and any skipped binary files), and your output file
 ## Boundaries
 
 1. Never change any file except your output file.
-2. Bash runs only `git show`, `git log`, `git diff`, `git grep`, `git ls-files`, `rg`,
-   `ls`, their `git -C <repo>` forms, and `git hash-object --no-filters <file>` for the
+2. Bash runs only `git show`, `git log`, `git diff <base>...<head>`, `git grep`, `git ls-files`,
+   `rg`, `ls`, their `git -C <repo>` forms, and `git hash-object --no-filters <file>` for the
    `consumed:` list. For a byte-range chunk you may also pipe `git show` output, or
    `cat` of the one file under the export path, through `tail -c +<n>` and
    `head -c <n>` to read it in slices of at most 24000 bytes, measure a slice with
    `sed '$d'` and `wc -c`, and number its lines with the one `awk` stage
    `awk -v n=<first line of the slice> '{print n+NR-1 ":" $0}'`; no other pipe stage and
    no other `awk` or `sed` use. You need no test or lint run.
+   A diff always names two commits: a working-tree `git diff` refreshes the index even
+   with `--no-optional-locks`, and `git status` is not run.
 3. Read and search trees as `common.md`'s "Reading trees and searching" section says. In
    a directly read working tree, search with `git grep` at the pinned sha, or with `rg`
    over the files `git ls-files` lists; use the Grep and Glob tools only in an export or

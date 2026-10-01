@@ -117,11 +117,13 @@ When your prompt says top-up, it names a digest or map and the group.
 ## Boundaries
 
 1. Never change any file except your output file.
-2. Bash runs only `git show`, `git log`, `git diff`, `git grep`, `git ls-files`, `rg`,
-   `ls`, their `git -C <repo>` forms, `git hash-object --no-filters <file>` for the
+2. Bash runs only `git show`, `git log`, `git diff <base>...<head>`, `git grep`, `git ls-files`,
+   `rg`, `ls`, their `git -C <repo>` forms, `git hash-object --no-filters <file>` for the
    `consumed:` list, and, when a question needs a run, the repo's own test or lint commands
    in a directly read working tree. Never run them in an export under `trees/`; mark that
    question `not run` instead.
+   A diff always names two commits: a working-tree `git diff` refreshes the index even
+   with `--no-optional-locks`, and `git status` is not run.
 3. Read and search trees as `common.md`'s "Reading trees and searching" section says. In
    a directly read working tree, search with `git grep` at the pinned sha, or with `rg`
    over the files `git ls-files` lists; use the Grep and Glob tools only in an export or

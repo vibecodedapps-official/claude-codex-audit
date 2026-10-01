@@ -97,9 +97,9 @@ a finished one.
    - the first stage whose input hashes changed;
    - stage 1, when any tree `audit-brief.md` maps as `direct` fails a direct-read
      condition now: `git -C <repo> rev-parse HEAD` is not the pinned sha,
-     `git -C <repo> status --porcelain --untracked-files=no` is not empty, or
-     `git -C <repo> ls-files -v` shows a path flagged `S`, `h`, or `s`. Rerunning
-     stage 1 re-exports it.
+     `git -C <repo> --no-optional-locks status --porcelain --untracked-files=no` is not
+     empty, or `git -C <repo> ls-files -v` shows a path flagged `S`, `h`, or `s`.
+     Rerunning stage 1 re-exports it.
    A `not_applicable` stage whose inputs have not changed is reused. When the first
    stage to rerun is not 1, or nothing needs a rerun, remove every
    `forge/<bundle>/pr.json.new` now. When nothing needs a rerun and no `--from` was

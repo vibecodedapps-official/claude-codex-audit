@@ -1,7 +1,7 @@
 ---
 description: "Resume a cca audit run by id, rerunning from the first stage that is incomplete or whose inputs changed, or from a named stage, and reusing every earlier stage whose inputs are unchanged. Use when the user asks to resume or rerun a cca audit, or types /cca:resume. Takes a run id and an optional --from <stage> (1 to 8). To start a new audit, use /cca:audit."
 argument-hint: '<run-id> [--from <stage>]'
-allowed-tools: Bash(git -C * rev-parse *), Bash(git -C * status *), Read, Skill
+allowed-tools: Bash(git -C * rev-parse *), Bash(git -C * status *), Bash(git -C * --no-optional-locks status *), Read, Skill
 ---
 
 You are a thin forwarder for the cca orchestrator. Do the steps below in order. Write no file, in any step.

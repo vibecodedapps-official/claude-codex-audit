@@ -1,7 +1,7 @@
 ---
 description: "Write a typed handoff from a build session, for /cca:audit to read as claims. Use when the user asks for a cca handoff, or types /cca:handoff. Inputs are an optional manifest JSON file and prompt inputs (repo paths, PR and ticket ids, exported ticket files). Flags are --out <path> and --verdicts <claims-verdicts.md>. It writes one file and never edits tracked files, commits, or posts anything."
 argument-hint: '[<manifest.json>] [<inputs...>] [--out <path>] [--verdicts <claims-verdicts.md>]'
-allowed-tools: Read, Write, Bash(git -C * rev-parse *), Bash(git -C * log *), Bash(git -C * merge-base *), Bash(git -C * symbolic-ref *), Bash(git -C * check-ignore *), Bash(git -C * status *), Bash(git -C * hash-object --no-filters *), Bash(git check-ignore *), Bash(gh pr view *), Bash(gh issue view *), Bash(date *), Bash(sh *handoff.sh check *), Bash(sh *handoff.sh claims *)
+allowed-tools: Read, Write, Bash(git -C * rev-parse *), Bash(git -C * log *), Bash(git -C * merge-base *), Bash(git -C * symbolic-ref *), Bash(git -C * check-ignore *), Bash(git -C * status *), Bash(git -C * --no-optional-locks status *), Bash(git -C * hash-object --no-filters *), Bash(git check-ignore *), Bash(gh pr view *), Bash(gh issue view *), Bash(date *), Bash(sh *handoff.sh check *), Bash(sh *handoff.sh claims *)
 ---
 
 You write one handoff file for the session's work, from the record only. Do the steps below in order. The only file you write is the handoff, in step 6. You never edit a tracked file, commit, push, or post to a forge.
