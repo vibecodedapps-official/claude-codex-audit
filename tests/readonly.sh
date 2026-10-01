@@ -6,8 +6,9 @@
 # Each case builds a fresh solo-dirty fixture (tests/fixture/build.sh), takes a baseline
 # snapshot, makes one change, runs `readonly.sh check`, and compares stdout, stderr, and
 # the exit status with literals. The run directory is outside the app repository, except
-# in case 10. The script under test runs under `sh`, or under $RO_SH when set, for
-# example `RO_SH=dash sh tests/readonly.sh`.
+# in cases 10 and 19. The script under test runs under `sh`, or under $RO_SH when set, for
+# example `RO_SH=dash sh tests/readonly.sh`. Cases 13 to 18 and 21 build their extra repos inline,
+# with a pinned identity and commit date, so their shas are literals.
 #
 # The literal hashes are the blob ids of the fixture's README.md (the committed line
 # plus `Local edit, not committed.`, then that plus `Second local edit.`). The sha in
@@ -20,6 +21,11 @@
 #  4 ignored file appended            10 run directory inside an ignored directory
 #  5 ignored file deleted             11 second check, ignored base moved
 #  6 same-size rewrite, same second   12 usage and baseline errors
+# 13 submodule: ignored file added    17 nested repo: HEAD moves
+# 14 submodule: tracked file edited   18 upstream ref moves
+# 15 dirty submodule edited again     19 run directory in other letters
+# 16 nested repo: edit and new file   20 stat-only change, index kept
+# 21 submodule not checked out: file added
 #
 # Prints one line per mismatch, then `readonly test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -223,6 +229,157 @@ fresh
 snap "$R/b"
 ro check "$A" "$R" "$R/b" "$R/b" "$R/b"
 expect "case 12, out prefix equals the baseline" 2 '' "readonly: out prefix equals the baseline prefix: $R/b\n"
+
+# Nested repository, upstream, case, and index cases (13 to 20). The extra repos are built
+# inline under $root, with a pinned identity and one fixed commit date, so every sha in an
+# expected line is the same on every machine.
+
+# g <git args>: git with a pinned identity and a fixed commit date.
+g() {
+	GIT_AUTHOR_DATE='2026-09-02 10:00:00 +0000'
+	GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
+	export GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+	git -c user.name=fixture -c user.email=fixture@example.invalid \
+		-c commit.gpgsign=false -c core.autocrlf=false -c init.defaultBranch=main "$@"
+}
+
+# mkrepo <dir>: a repo on main with one commit, holding s.txt and a .gitignore for out/.
+mkrepo() {
+	mkdir -p "$1" && g init -q "$1" && g -C "$1" symbolic-ref HEAD refs/heads/main &&
+		printf 'out/\n' > "$1/.gitignore" && printf 'one\n' > "$1/s.txt" &&
+		g -C "$1" add -A && g -C "$1" commit -q -m one || {
+		mismatch "$case_id: cannot build $1"
+		exit 1
+	}
+}
+
+# add_sub: check out a copy of $root/subsrc as the submodule `sub` of $A.
+add_sub() {
+	g -c protocol.file.allow=always -C "$A" submodule add -q "$root/subsrc" sub > /dev/null 2>&1 || {
+		mismatch "$case_id: submodule add failed"
+		exit 1
+	}
+}
+
+sha2=bd5d5e1e67a1fc55adeaa1452920245b1d368f7f
+case_id="setup"
+mkrepo "$root/subsrc"
+
+# 13. an ignored file written inside a checked-out submodule: listed as ignored, no error.
+case_id="case 13"
+fresh
+add_sub
+snap "$R/b"
+mkdir "$A/sub/out"
+printf '%s\n' 'built' > "$A/sub/out/o.txt"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 13" 3 'ignored added sub/out/o.txt\n' ''
+
+# 14. a tracked file of a submodule edited: blocked.
+case_id="case 14"
+fresh
+add_sub
+snap "$R/b"
+printf '%s\n' 'edit' >> "$A/sub/s.txt"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 14" 1 'blocked hashes + f9d46ff33ebc777fef8c92782244c46f6a8fdb47 sub/s.txt
+blocked status + 1 .M N... 100644 100644 100644 5626abf0f72e58d7a153368ba57db4c673c0e171 5626abf0f72e58d7a153368ba57db4c673c0e171 sub/s.txt
+blocked status + 1 AM S.M. 000000 160000 160000 0000000000000000000000000000000000000000 9ab67a52d32684221ae03164802c45aa847ef148 sub
+blocked status - 1 A. S... 000000 160000 160000 0000000000000000000000000000000000000000 9ab67a52d32684221ae03164802c45aa847ef148 sub
+' ''
+
+# 15. a submodule already dirty at the baseline, edited again: blocked.
+case_id="case 15"
+fresh
+add_sub
+printf '%s\n' 'edit' >> "$A/sub/s.txt"
+snap "$R/b"
+printf '%s\n' 'edit again' >> "$A/sub/s.txt"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 15" 1 'blocked hashes + 72f088f38fb8aa6e08454dee9aab8e86872ddd82 sub/s.txt
+blocked hashes - f9d46ff33ebc777fef8c92782244c46f6a8fdb47 sub/s.txt
+' ''
+
+# 16. an untracked nested repo: a file edited and a file added: blocked.
+case_id="case 16"
+fresh
+mkrepo "$A/vendor"
+snap "$R/b"
+printf '%s\n' 'two' > "$A/vendor/s.txt"
+printf '%s\n' 'new' > "$A/vendor/new.txt"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 16" 1 'blocked hashes + 3e757656cf36eca53338e520d134963a44f793f8 vendor/new.txt
+blocked hashes + f719efd430d52bcfc8566a43b2eb655688d38871 vendor/s.txt
+blocked status + 1 .M N... 100644 100644 100644 5626abf0f72e58d7a153368ba57db4c673c0e171 5626abf0f72e58d7a153368ba57db4c673c0e171 vendor/s.txt
+blocked status + ? vendor/new.txt
+' ''
+
+# 17. an untracked nested repo whose HEAD moves (a new, empty commit): blocked.
+case_id="case 17"
+fresh
+mkrepo "$A/vendor"
+snap "$R/b"
+g -C "$A/vendor" commit -q --allow-empty -m two
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 17" 1 'blocked status + # branch.oid 3568a00fd681353143030ce4c197f52904eba9c0 in vendor
+blocked status - # branch.oid 9ab67a52d32684221ae03164802c45aa847ef148 in vendor
+' ''
+
+# 18. the upstream of the checked-out branch moves: only remote-ref lines, no
+# `# branch.ab` difference. scratch-branch has no upstream in the fixture, so give it one.
+case_id="case 18"
+fresh
+git -C "$A" update-ref refs/remotes/origin/main "$sha"
+git -C "$A" config remote.origin.url "$root/none"
+git -C "$A" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+git -C "$A" config branch.scratch-branch.remote origin
+git -C "$A" config branch.scratch-branch.merge refs/heads/main
+snap "$R/b"
+git -C "$A" update-ref refs/remotes/origin/main "$sha2"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 18" 3 "remote-ref + $sha2 commit\trefs/remotes/origin/main\nremote-ref - $sha commit\trefs/remotes/origin/main\n" ''
+
+# 19. a run directory inside the ignored .test-output/, passed in other letters than the
+# directory has: its own files are not reported. Only a repository with core.ignorecase
+# true has a case-insensitive file system, so any other (Linux) skips the case.
+case_id="case 19"
+fresh
+if [ "$(git -C "$A" config --bool core.ignorecase)" = true ]; then
+	RD=$A/.test-output/cca-run
+	RU=$A/.test-output/CCA-RUN
+	mkdir -p "$RD"
+	ro snapshot "$A" "$RD" "$RD/baseline/app"
+	[ "$rc" = 0 ] || mismatch "case 19: snapshot exit $rc: $(cat "$tmp/err")"
+	printf '%s\n' 'note' > "$RD/note.txt"
+	ro check "$A" "$RU" "$RD/baseline/app" "$RD/baseline/app" "$RU/stage/app"
+	expect "case 19" 0 '' ''
+fi
+
+# 20. a stat-only change to a tracked file: a snapshot and a check leave the index of the
+# repository and the index of its submodule byte for byte as they were.
+case_id="case 20"
+fresh
+add_sub
+subidx=$(git -C "$A/sub" rev-parse --absolute-git-dir)/index
+touch -d '2037-01-01T00:00:00' "$A/src/users.sh" "$A/sub/s.txt"
+top0=$(git hash-object --no-filters "$A/.git/index")
+sub0=$(git hash-object --no-filters "$subidx")
+snap "$R/b"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 20" 0 'touched src/users.sh\ntouched sub/s.txt\n' ''
+[ "$(git hash-object --no-filters "$A/.git/index")" = "$top0" ] || mismatch "case 20: the repository index changed"
+[ "$(git hash-object --no-filters "$subidx")" = "$sub0" ] || mismatch "case 20: the submodule index changed"
+
+# 21. a submodule that is not checked out (deinitialized): its directory is empty and its
+# gitlink stays in the index. A file written into the directory is untracked content.
+case_id="case 21"
+fresh
+add_sub
+g -C "$A" submodule deinit -q -f sub > /dev/null 2>&1 || mismatch "case 21: submodule deinit failed"
+snap "$R/b"
+printf '%s\n' 'new' > "$A/sub/new.txt"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 21" 1 'blocked hashes + 3e757656cf36eca53338e520d134963a44f793f8 sub/new.txt\n' ''
 
 if [ "$bad" -gt 0 ]; then
 	exit 1

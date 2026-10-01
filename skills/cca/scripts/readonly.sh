@@ -12,9 +12,12 @@
 #
 # snapshot: creates <out prefix>.marker (an empty file, written fresh), then writes six
 # files, each renamed into place only when every part succeeded. Paths are relative to the
-# repository's top level.
-# - .status:  git status --porcelain=v2 --branch --untracked-files=all (every status runs
-#             with --no-optional-locks, so it does not rewrite the repository's index)
+# repository's top level. Every git call runs with GIT_OPTIONAL_LOCKS=0, so none rewrites
+# the repository's index.
+# - .status:  git status --porcelain=v2 --branch --untracked-files=all
+#             --ignore-submodules=none, without its `# branch.ab` line (that follows the
+#             upstream's remote-tracking ref, which .refs records). See nested
+#             repositories below.
 # - .refs:    git for-each-ref
 # - .stash:   git stash list
 # - .config:  git config --list --local
@@ -30,6 +33,20 @@
 # .ignored, or `deleted <path>` in .hashes.
 # A path git prints quoted (one with a double quote, backslash, tab, newline, or other
 # control character) is not supported: exit 2 naming it.
+# Nested repositories: a checked-out submodule (a gitlink in the index whose directory has
+# a .git) or an untracked directory that has a .git, at any depth. Each one's own status
+# lines go into .status with its path from the top level in front of every path, for
+# example `1 .M N... 100644 100644 100644 <h> <h> sub/s.txt`, and ` in <path>` after each
+# `#` line, for example `# branch.oid <sha> in sub`, which records its HEAD. Its changed
+# and untracked files get .hashes entries, and its ignored files go into .ignored, all with
+# the prefixed path. A touched file in a nested repository is checked with that
+# repository's own `git check-ignore`. Files of a nested repository that are neither
+# changed, untracked, nor ignored are not hashed. A gitlink whose directory exists but has
+# no .git (a submodule that is not checked out), at any depth, is not inspected by git, so
+# every file under it, except any .git, is hashed in .hashes as untracked content, and a
+# touched file under it is not passed to `git check-ignore`.
+# When the repository's core.ignorecase is true, the run directory is matched against the
+# top level, and against every path, without regard to case.
 #
 # check: refuses (exit 2) when <out prefix> equals the baseline or the ignored base
 # prefix, is not inside the run directory, or when a baseline file it needs is missing.
@@ -57,6 +74,9 @@ set -u
 # C collation for sort, comm, and awk, on every platform.
 LC_ALL=C
 export LC_ALL
+# No git call takes an optional lock, so none rewrites an index.
+GIT_OPTIONAL_LOCKS=0
+export GIT_OPTIONAL_LOCKS
 
 names='status refs stash config hashes ignored'
 out=
@@ -109,6 +129,127 @@ check_quoted() {
 	fi
 }
 
+# collect <path>: record one repository's state. <path> is `.` for the top level, else the
+# nested repository's path from the top level. Appends to $tmp/status (its status lines,
+# with the path prefixed), $tmp/paths (the changed and untracked paths, prefixed), and
+# $tmp/ign.paths (its ignored files, prefixed), and queues the repositories nested in it
+# in $tmp/next and $tmp/nested.
+collect() {
+	if [ "$1" = . ]; then
+		cdir=$top
+		cpre=
+	else
+		cdir=$top/$1
+		cpre=$1/
+	fi
+	# --ignore-submodules=none so a configured `ignore` cannot hide a submodule's changes.
+	git -c core.quotePath=false -C "$cdir" status --porcelain=v2 --branch \
+		--untracked-files=all --ignore-submodules=none > "$tmp/st.one" < /dev/null ||
+		die "git status failed${cpre:+ in $1}"
+
+	# The paths the status lists as changed or untracked, one per line, and any that git
+	# printed quoted. A rename's old path is only checked. The status lines are kept with
+	# the repository's path in front of each path, and `in <path>` after each `#` line. The
+	# `# branch.ab` line is left out: it follows the upstream's remote-tracking ref, which
+	# the refs file records. An untracked directory is a nested repository candidate.
+	: > "$tmp/dirs"
+	BADF=$tmp/bad STF=$tmp/status DIRF=$tmp/dirs PRE=$cpre awk '
+		function rest(s, n,   i) {
+			for (i = 0; i < n; i++) sub(/^[^ ]+ /, "", s)
+			return s
+		}
+		BEGIN {
+			badf = ENVIRON["BADF"]; stf = ENVIRON["STF"]; dirf = ENVIRON["DIRF"]
+			pre = ENVIRON["PRE"]
+			lab = pre
+			sub(/\/$/, "", lab)
+		}
+		/^# branch\.ab / { next }
+		/^# / {
+			if (pre != "") print $0 " in " lab >> stf
+			else print $0 >> stf
+			next
+		}
+		/^[12u?] / {
+			t = substr($0, 1, 1)
+			o = ""
+			if (t == "?") {
+				p = substr($0, 3)
+				head = "? "
+			} else {
+				if (t == "1") n = 8
+				else if (t == "u") n = 10
+				else n = 9
+				p = rest($0, n)
+				head = substr($0, 1, length($0) - length(p))
+				if (t == "2") {
+					k = index(p, "\t")
+					if (k > 0) {
+						o = substr(p, k + 1)
+						p = substr(p, 1, k - 1)
+						if (substr(o, 1, 1) == "\"") print o > badf
+					}
+				}
+			}
+			if (substr(p, 1, 1) == "\"") print p > badf
+			if (o != "") print head pre p "\t" pre o >> stf
+			else print head pre p >> stf
+			print pre p
+			if (t == "?" && substr(p, length(p)) == "/") print pre p >> dirf
+		}' "$tmp/st.one" >> "$tmp/paths" || die "cannot read the status"
+	check_quoted "$tmp/bad"
+
+	# The ignored inventory.
+	git -c core.quotePath=false -C "$cdir" status --porcelain=v2 --ignored \
+		--untracked-files=all --ignore-submodules=none > "$tmp/st.ign" < /dev/null ||
+		die "git status --ignored failed${cpre:+ in $1}"
+	BADF=$tmp/bad.ign PRE=$cpre RUNPRE=${relrun:+$relrun/} IC=$ic awk '
+		BEGIN {
+			badf = ENVIRON["BADF"]; pre = ENVIRON["PRE"]; rr = ENVIRON["RUNPRE"]
+			ic = ENVIRON["IC"]; rrl = tolower(rr)
+		}
+		/^! / {
+			p = substr($0, 3)
+			if (substr(p, 1, 1) == "\"") { print p > badf; next }
+			if (index(p, ".git/") == 1) next
+			p = pre p
+			if (rr != "") {
+				if (ic == 1) { if (index(tolower(p), rrl) == 1) next }
+				else if (index(p, rr) == 1) next
+			}
+			print p
+		}' "$tmp/st.ign" >> "$tmp/ign.paths" || die "cannot read the ignored status"
+	check_quoted "$tmp/bad.ign"
+
+	# The nested repositories: a checked-out submodule (a gitlink in the index whose
+	# directory has a .git), and an untracked directory that has a .git.
+	git -c core.quotePath=false -C "$cdir" ls-files -s > "$tmp/ls" < /dev/null ||
+		die "git ls-files failed${cpre:+ in $1}"
+	BADF=$tmp/bad PRE=$cpre awk '
+		BEGIN { badf = ENVIRON["BADF"]; pre = ENVIRON["PRE"] }
+		$1 == "160000" {
+			p = substr($0, index($0, "\t") + 1)
+			if (substr(p, 1, 1) == "\"") print p > badf
+			else print pre p
+		}' "$tmp/ls" > "$tmp/gitlinks" || die "cannot read the index"
+	check_quoted "$tmp/bad"
+	# A gitlink whose directory exists but has no .git (a submodule that is not checked
+	# out) is not inspected by git: its files are untracked content, hashed below.
+	while IFS= read -r c; do
+		if [ -d "$top/$c" ] && [ ! -e "$top/$c/.git" ]; then
+			printf '%s\n' "$c" >> "$tmp/uninit"
+		fi
+	done < "$tmp/gitlinks"
+	cat "$tmp/dirs" >> "$tmp/gitlinks" || die "cat failed"
+	while IFS= read -r c; do
+		c=${c%/}
+		if [ -e "$top/$c/.git" ]; then
+			printf '%s\n' "$c" >> "$tmp/next"
+			printf '%s\n' "$c" >> "$tmp/nested"
+		fi
+	done < "$tmp/gitlinks"
+}
+
 # snapshot <repo> <run dir> <out prefix>: sets top, rd, relrun, and statkind for check.
 snapshot() {
 	repo=$1
@@ -116,10 +257,24 @@ snapshot() {
 	top=$(git -C "$repo" rev-parse --show-toplevel) || die "not a git work tree: $repo"
 	top=$(cd "$top" && pwd -P) || die "cannot enter the repository: $repo"
 	rd=$(cd "$2" && pwd -P) || die "run directory not found: $2"
+	# A case-insensitive file system keeps the case the caller typed in `pwd -P`, so the
+	# run directory is matched against the top level without regard to case.
+	ic=0
+	if [ "$(git -C "$top" config --bool core.ignorecase 2> /dev/null)" = true ]; then
+		ic=1
+	fi
 	relrun=
-	case $rd in
-	"$top"/*) relrun=${rd#"$top"/} ;;
-	esac
+	if [ "$ic" = 1 ]; then
+		rdl=$(printf '%s' "$rd" | tr 'A-Z' 'a-z') || die "tr failed"
+		topl=$(printf '%s' "$top" | tr 'A-Z' 'a-z') || die "tr failed"
+		case $rdl in
+		"$topl"/*) relrun=$(printf '%s' "$rd" | cut -c "$((${#top} + 2))-") ;;
+		esac
+	else
+		case $rd in
+		"$top"/*) relrun=${rd#"$top"/} ;;
+		esac
+	fi
 
 	mkdir -p -- "$(dirname -- "$out")" || die "cannot create the directory for $out"
 	# A failed snapshot must not leave files that look complete.
@@ -129,38 +284,32 @@ snapshot() {
 	rm -f "$out.marker"
 	: > "$out.marker" || die "cannot write $out.marker"
 
-	git --no-optional-locks -c core.quotePath=false -C "$top" status --porcelain=v2 --branch \
-		--untracked-files=all > "$tmp/status" || die "git status failed"
 	git -C "$top" for-each-ref > "$tmp/refs" || die "git for-each-ref failed"
 	git -C "$top" stash list > "$tmp/stash" || die "git stash list failed"
 	git -C "$top" config --list --local > "$tmp/config" || die "git config failed"
 
-	# The paths the status lists as changed or untracked, one per line, and any that git
-	# printed quoted. A rename's old path is only checked.
-	BADF=$tmp/bad awk '
-		function rest(s, n,   i) {
-			for (i = 0; i < n; i++) sub(/^[^ ]+ /, "", s)
-			return s
-		}
-		BEGIN { badf = ENVIRON["BADF"] }
-		/^[12u?] / {
-			t = substr($0, 1, 1)
-			if (t == "?") p = substr($0, 3)
-			else if (t == "1") p = rest($0, 8)
-			else if (t == "u") p = rest($0, 10)
-			else {
-				p = rest($0, 9)
-				n = index(p, "\t")
-				if (n > 0) {
-					o = substr(p, n + 1)
-					p = substr(p, 1, n - 1)
-					if (substr(o, 1, 1) == "\"") print o > badf
-				}
-			}
-			if (substr(p, 1, 1) == "\"") print p > badf
-			print p
-		}' "$tmp/status" > "$tmp/paths" || die "cannot read the status"
-	check_quoted "$tmp/bad"
+	# The top level, then the repositories nested in it, level by level. Nothing past the
+	# top level runs when it has no nested repository.
+	: > "$tmp/status"
+	: > "$tmp/paths"
+	: > "$tmp/ign.paths"
+	: > "$tmp/nested"
+	: > "$tmp/uninit"
+	echo . > "$tmp/level"
+	while [ -s "$tmp/level" ]; do
+		: > "$tmp/next"
+		while IFS= read -r rp; do
+			collect "$rp"
+		done < "$tmp/level"
+		sort -u "$tmp/next" > "$tmp/level.new" && mv -f "$tmp/level.new" "$tmp/level" ||
+			die "sort failed"
+	done
+	sort -u "$tmp/nested" > "$tmp/nested.sorted" || die "sort failed"
+	# Every file under a submodule that is not checked out, except any .git, is hashed.
+	while IFS= read -r u; do
+		(cd "$top" && find "$u" -name .git -prune -o \( -type f -o -type l \) -print) >> "$tmp/paths" ||
+			die "find failed: $u"
+	done < "$tmp/uninit"
 
 	while IFS= read -r p; do
 		if [ -L "$top/$p" ]; then
@@ -182,19 +331,6 @@ snapshot() {
 	done < "$tmp/paths" > "$tmp/hashes.raw"
 	sort "$tmp/hashes.raw" > "$tmp/hashes" || die "sort failed"
 
-	# The ignored inventory.
-	git --no-optional-locks -c core.quotePath=false -C "$top" status --porcelain=v2 --ignored \
-		--untracked-files=all > "$tmp/st.ign" || die "git status --ignored failed"
-	BADF=$tmp/bad.ign PRE=${relrun:+$relrun/} awk '
-		BEGIN { badf = ENVIRON["BADF"]; pre = ENVIRON["PRE"] }
-		/^! / {
-			p = substr($0, 3)
-			if (substr(p, 1, 1) == "\"") { print p > badf; next }
-			if (index(p, ".git/") == 1) next
-			if (pre != "" && index(p, pre) == 1) next
-			print p
-		}' "$tmp/st.ign" > "$tmp/ign.paths" || die "cannot read the ignored status"
-	check_quoted "$tmp/bad.ign"
 	sort "$tmp/ign.paths" > "$tmp/ign.sorted" || die "sort failed"
 
 	# Probe the stat form once, on the marker.
@@ -325,21 +461,80 @@ check() {
 			for (p in base) if (!(p in now)) print "ignored deleted " p
 		}' "$tmp/both" > "$tmp/ignored.diff" || die "awk failed"
 
-	# Touched: newer than the baseline marker, not ignored, not part of a blocked line.
-	(cd "$top" && find . -path ./.git -prune -o -type f -newer "$np_base.marker" -print) \
+	# Touched: newer than the baseline marker, not ignored, not part of a blocked line. A
+	# .git (a directory, or a submodule's file) is pruned at any depth.
+	(cd "$top" && find . -name .git -prune -o -type f -newer "$np_base.marker" -print) \
 		> "$tmp/found" || die "find failed"
 	sed 's|^\./||' "$tmp/found" > "$tmp/found.rel" || die "sed failed"
-	PRE=${relrun:+$relrun/} awk '
-		BEGIN { pre = ENVIRON["PRE"] }
-		{ if (pre != "" && index($0, pre) == 1) next; print }' "$tmp/found.rel" |
+	PRE=${relrun:+$relrun/} IC=$ic awk '
+		BEGIN { pre = ENVIRON["PRE"]; ic = ENVIRON["IC"]; prel = tolower(pre) }
+		{
+			if (pre != "") {
+				if (ic == 1) { if (index(tolower($0), prel) == 1) next }
+				else if (index($0, pre) == 1) next
+			}
+			print
+		}' "$tmp/found.rel" |
 		sort > "$tmp/cand" || die "cannot list the files newer than the marker"
 	: > "$tmp/touched"
 	if [ -s "$tmp/cand" ]; then
-		tr '\n' '\0' < "$tmp/cand" > "$tmp/cand.nul" || die "tr failed"
-		git -C "$top" check-ignore -z --stdin < "$tmp/cand.nul" > "$tmp/ign.nul" 2> /dev/null
-		[ $? -le 1 ] || die "git check-ignore failed"
-		tr '\0' '\n' < "$tmp/ign.nul" | sort > "$tmp/cand.ign" || die "check-ignore output failed"
-		comm -23 "$tmp/cand" "$tmp/cand.ign" > "$tmp/cand.free" || die "comm failed"
+		# Each candidate goes to the innermost repository that holds it, as a path
+		# relative to that repository: group 0 is the top level, group n the nth line of
+		# $tmp/nested.sorted. A path below a nested repository must not reach the top
+		# level's check-ignore, which fails on it.
+		# A candidate under a submodule that is not checked out reaches no check-ignore:
+		# .hashes covers it.
+		if [ -s "$tmp/uninit" ]; then
+			awk '
+				NR == FNR { up[++nu] = $0 "/"; next }
+				{
+					for (i = 1; i <= nu; i++) if (index($0, up[i]) == 1) next
+					print
+				}' "$tmp/uninit" "$tmp/cand" > "$tmp/cand.chk" || die "awk failed"
+		else
+			cp "$tmp/cand" "$tmp/cand.chk" || die "cp failed"
+		fi
+		if [ -s "$tmp/nested.sorted" ]; then
+			awk '
+				NR == FNR { np[++nn] = $0 "/"; next }
+				{
+					best = 0; bl = 0
+					for (i = 1; i <= nn; i++)
+						if (index($0, np[i]) == 1 && length(np[i]) > bl) { best = i; bl = length(np[i]) }
+					print best " " substr($0, bl + 1)
+				}' "$tmp/nested.sorted" "$tmp/cand.chk" > "$tmp/groups" || die "awk failed"
+		else
+			sed 's/^/0 /' "$tmp/cand.chk" > "$tmp/groups" || die "sed failed"
+		fi
+		: > "$tmp/cand.ign"
+		g=0
+		ng=$(wc -l < "$tmp/nested.sorted") || die "wc failed"
+		ng=$((ng + 0))
+		while [ "$g" -le "$ng" ]; do
+			if [ "$g" -eq 0 ]; then
+				gdir=$top
+				gpre=
+			else
+				gp=$(sed -n "${g}p" "$tmp/nested.sorted") || die "sed failed"
+				gdir=$top/$gp
+				gpre=$gp/
+			fi
+			awk -v g="$g" '{
+				s = index($0, " ")
+				if (substr($0, 1, s - 1) == g) print substr($0, s + 1)
+			}' "$tmp/groups" > "$tmp/group" || die "awk failed"
+			if [ -s "$tmp/group" ]; then
+				tr '\n' '\0' < "$tmp/group" > "$tmp/cand.nul" || die "tr failed"
+				git -C "$gdir" check-ignore -z --stdin < "$tmp/cand.nul" > "$tmp/ign.nul" 2> /dev/null
+				[ $? -le 1 ] || die "git check-ignore failed"
+				tr '\0' '\n' < "$tmp/ign.nul" |
+					PRE=$gpre awk '{ print ENVIRON["PRE"] $0 }' >> "$tmp/cand.ign" ||
+					die "check-ignore output failed"
+			fi
+			g=$((g + 1))
+		done
+		sort "$tmp/cand.ign" > "$tmp/cand.ign.sorted" || die "sort failed"
+		comm -23 "$tmp/cand" "$tmp/cand.ign.sorted" > "$tmp/cand.free" || die "comm failed"
 		{
 			sed 's/^/B /' "$tmp/blocked" && sed 's/^/C /' "$tmp/cand.free"
 		} > "$tmp/both" || die "sed failed"

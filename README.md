@@ -439,8 +439,17 @@ that could not complete, such as a missing baseline file, also stops the run `bl
 (exit 2). A change among ignored files, or a new remote-tracking ref, is accepted only
 when a logged agent run or an approved fetch accounts for it (exit 3). A file newer than
 the marker that is neither ignored nor changed in content is listed as touched and does
-not stop the run. The script runs `git status` with `--no-optional-locks`, so the check
-itself never rewrites an audited repo's index.
+not stop the run. The script sets `GIT_OPTIONAL_LOCKS=0`, so the check itself never
+rewrites an audited repo's index.
+
+Nested repositories count as part of the audited repo: a checked-out submodule, or an
+untracked directory with its own `.git`, at any depth. The snapshot records each one's
+status, HEAD, changed and untracked files, and ignored files, with paths from the top
+level, whatever the submodule's `ignore` setting. Every file under a submodule that is not
+checked out is hashed, since git does not look there. The status leaves out the count of
+commits ahead of and behind the upstream, so a fetch that moves the upstream shows only as
+a remote-tracking ref. Where the repo's `core.ignorecase` is true, the run directory is
+matched without regard to case.
 
 The script does not support a file name that git prints quoted, even with
 `core.quotePath=false`: one holding a double quote, a backslash, a tab, a newline, or
@@ -452,6 +461,8 @@ What is not detected:
 - an ignored file replaced with one of the same size and a restored modification time,
   to the precision `stat` reports (sub-second where the system gives it, else seconds);
 - changes inside `.git/` other than refs, stashes, and config;
+- in a nested repository, a change to a ref other than its HEAD, to its stashes, or to its
+  config;
 - changes outside the audited repos.
 
 The report says so. Do not edit an audited repo during a run: your own edits trip the
