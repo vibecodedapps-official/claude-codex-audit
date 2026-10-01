@@ -543,8 +543,9 @@ its stage files and templates, and five agent definitions. Its checks are:
   needs `jq`; without it, it prints a note and exits 0.
 
 CI runs the existing lint and fixture job, and a `scripts` job that runs the three new
-tests on Linux, macOS, and Windows (under Git Bash). On Linux it also runs
-`tests/handoff.sh` with gawk first on `PATH` as `awk`, since the default there is mawk.
+tests on Linux, macOS, and Windows (under Git Bash). On Linux the default `awk` is gawk,
+and a second step runs the awk-using tests (`tests/handoff.sh` and `tests/readonly.sh`)
+with mawk first on `PATH` as `awk`. macOS runs them with its own BSD awk.
 
 Acceptance results are recorded in `docs/acceptance.md` and design decisions in
 `docs/decisions.md`. On Windows, run the scripts under Git Bash.

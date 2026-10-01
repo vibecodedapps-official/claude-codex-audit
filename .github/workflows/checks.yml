@@ -34,18 +34,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: readonly
-        run: sh tests/readonly.sh
+        run: |
+          readlink -f "$(command -v awk)" || command -v awk
+          sh tests/readonly.sh
       - name: handoff
         run: sh tests/handoff.sh
       - name: work-items
         run: sh tests/work-items.sh
-      - name: handoff with gawk as awk
+      - name: awk tests with mawk
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gawk
-          mkdir -p "$RUNNER_TEMP/gawk-bin"
-          ln -sf "$(command -v gawk)" "$RUNNER_TEMP/gawk-bin/awk"
-          PATH="$RUNNER_TEMP/gawk-bin:$PATH"
-          awk --version | head -n 1
+          sudo apt-get install -y mawk
+          mkdir -p "$RUNNER_TEMP/mawk-bin"
+          ln -sf "$(command -v mawk)" "$RUNNER_TEMP/mawk-bin/awk"
+          PATH="$RUNNER_TEMP/mawk-bin:$PATH"
+          awk -W version 2>&1 | head -n 1
           sh tests/handoff.sh
+          sh tests/readonly.sh
