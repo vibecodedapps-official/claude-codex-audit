@@ -407,9 +407,9 @@ pinned sha, decide how agents read it:
    add a worktree.
 
 The brief maps each name to the path agents must read, the sha, and the mode
-(`direct`, `export`, or `git show`). An export holds tracked files only, so a check run
-that needs installed dependencies is done only in a directly read tree; otherwise the
-question is marked "not run".
+(`direct`, `export`, or `git show`). An export holds tracked files only, so no test or lint
+command runs in an export, whether or not it needs installed dependencies; a check run
+is done only in a directly read tree, and otherwise the question is marked "not run".
 
 Classify each source of truth with a `path` for stages 2 and 3: count the tracked files
 at the pinned sha by extension; when more than half are documents (`.md`, `.mdx`,

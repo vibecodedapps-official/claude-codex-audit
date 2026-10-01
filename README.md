@@ -461,9 +461,8 @@ check too.
 
 The second opinion (stage 6) goes to Codex through codex-lite when the Codex CLI and
 codex-lite are installed. Without them, with `--no-codex`, or when a Codex call is
-refused, times out, or fails twice, or when the follow-up would carry inline inputs over
-450,000 bytes, the role is swapped to a fresh `cca:adversary` agent on Fable, else Opus, given the same
-request (one launch per batch of at most 60 mandatory ids). The swap is named in the
+refused, times out, or fails twice, the role is swapped to a fresh `cca:adversary` agent on Fable, else Opus,
+given the same request (one launch per batch of at most 60 mandatory ids). The swap is named in the
 report. Stage 6 always runs.
 
 cca never runs the `codex` CLI itself, except `codex --version` to check it is there.
