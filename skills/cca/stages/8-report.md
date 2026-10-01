@@ -253,17 +253,22 @@ is not evidence the statement is wrong. `contested` lines need a person to decid
 ## <claims file absolute path> (handoff | prose), hash <git hash-object --no-filters>
 
 - claim <n> [<kind>] <source file>:<line> <handoff ref or ->: <true | false | not verified | contested>; finding: <C<n>, ... or none>; evidence: <pointer>
+  ticket: <the claim's ticket id, or none>
   text: <the claim's text as in claims.md>
   correction: <text or none>
 ```
 
 - The header text and the intro paragraph are written as shown.
-- One entry per `claim` line of `claims.md`: a main line and two sub-lines indented two
-  spaces, `text:` and `correction:`. A sub-line holds the whole rest of its line, so a
-  claim's text or a correction may contain `; `. Entries are grouped by claims file, in claim order. The
-  file's hash is the one stage 1 recorded for that claims file in the `inputs` of its
-  `stages.json` entry, so it names the bytes the audit read, not the file as it is now.
-  `other` sentences are not listed.
+- One entry per `claim` line of `claims.md`: a main line and three sub-lines indented two
+  spaces, `ticket:`, `text:`, and `correction:`. A sub-line holds the whole rest of its
+  line, so a claim's text or a correction may contain `; `. Entries are grouped by claims
+  file, in claim order. The file's hash is the one stage 1 recorded for that claims file
+  in the `inputs` of its `stages.json` entry, so it names the bytes the audit read, not
+  the file as it is now. `other` sentences are not listed.
+- `ticket` is the ticket the claim is about, so a build session can find what it wrote
+  about that ticket. For a handoff claim, it is the ticket field `handoff.sh claims`
+  printed; for a prose claim, the ticket stage 1 tagged it with, an export written as its
+  `id`; else `none`. A file written by 0.2.0 has no `ticket:` sub-line.
 - `(handoff)` for a file `handoff.sh detect` accepted, else `(prose)`. The handoff ref
   is the one in the claim line, or `-` for a prose claim.
 - `contested` is used when the auditor's and the adversary's verdicts differ; both are

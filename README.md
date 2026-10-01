@@ -69,6 +69,7 @@ audit, check out the pinned sha cleanly so the repo is read directly.
 /cca:resume <run-id> [--from <stage>]
 /cca:act <run-id> <item-id...> [--per-item]
 /cca:handoff [<manifest.json>] [<inputs...>] [--out <path>] [--verdicts <claims-verdicts.md>]
+           [--memory <dir>]
 ```
 
 - `/cca:handoff` runs in the build session and writes a typed handoff for `/cca:audit`.
@@ -132,6 +133,10 @@ Run it in the build session, before the audit. It takes the same input forms as
 - `--verdicts <claims-verdicts.md>`: a return-trip file from an earlier audit. It is read
   first. A line whose file hash and claim text match the handoff source it names is
   applied; a mismatch is listed as reconciliation work and not applied.
+- `--memory <dir>`: a directory of the build session's memory files; it needs `--verdicts`
+  and an existing directory. For each `false` entry it lists the files under `<dir>` that
+  mention the entry's ticket id, quoted names, numbers, shas, or issue ids, grouped by
+  claim, as memory reconciliation work. It never edits those files.
 
 The command settles each bundle's base first: the manifest's `base`, else the PR's base
 branch, else the repository's default branch, which it asks you to confirm. It never uses
@@ -292,10 +297,12 @@ decision ledger, the raised tickets, and the other decisions.
 revision. It has one entry per claim of each claims file, in claim order, grouped by file
 (each group names the file's hash). An entry is a main line with the claim number, kind,
 source line, handoff ref, verdict (`true`, `false`, `not verified`, or `contested`),
-finding ids, and a pointer to the evidence, followed by two indented sub-lines, `text:`
-and `correction:` (a correction or `none`). The text and the correction sit on their own
-lines so a `; ` inside them cannot be misread. `false` entries are corrections. `not verified` lines on verification claims are recheck
-requests, not evidence the statement is wrong. `contested` entries need a person to decide.
+finding ids, and a pointer to the evidence, followed by three indented sub-lines,
+`ticket:` (the claim's ticket id, or `none`), `text:`, and `correction:` (a correction or
+`none`). The text and the correction sit on their own lines so a `; ` inside them cannot
+be misread. A file from 0.2.0 has no `ticket:` sub-line. `false` entries are corrections.
+`not verified` lines on verification claims are recheck requests, not evidence the
+statement is wrong. `contested` entries need a person to decide.
 
 To apply it, run `/cca:handoff --verdicts <claims-verdicts.md>` in the build session. A
 line is applied only when its file hash and claim text match the handoff source it names;

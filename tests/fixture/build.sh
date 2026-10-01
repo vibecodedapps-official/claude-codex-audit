@@ -585,7 +585,8 @@ EOF
 
 # verdicts_md <hash>: a claims-verdicts.md for $T/handoff.md, its heading carrying <hash>.
 # Claim 1 is a correction whose text matches; claim 3 a correction whose text does not;
-# claim 5 contested; claim 6 a recheck request; claim 7 true.
+# claim 5 contested; claim 6 a recheck request; claim 7 true. Each entry has the ticket:
+# sub-line stage 8 writes, the claim's ticket field.
 verdicts_md() {
 	cat <<EOF
 # Claims verdicts: fixture-verdicts
@@ -601,18 +602,23 @@ is not evidence the statement is wrong. \`contested\` lines need a person to dec
 ## $T/handoff.md (handoff), hash $1
 
 - claim 1 [status] $T/handoff.md:14 tickets/APP-1/fields: false; finding: none; evidence: exports/APP-1.md gives state In Progress
+  ticket: APP-1
   text: APP-1: type Story; state Active; iteration none; owner Developer
   correction: APP-1: type Story; state In Progress; iteration none; owner Developer
 - claim 3 [code] $T/handoff.md:14 tickets/APP-1/decision: false; finding: C1; evidence: report item C1
+  ticket: APP-1
   text: Add a deactivate command that keeps the row.
   correction: Add a deactivate command; it deletes the user's row, though the ticket asks for a soft delete.
 - claim 5 [code] $T/handoff.md:24 tickets/APP-1/commit/app/0c23936: contested; finding: C1; evidence: report section 10
+  ticket: APP-1
   text: app 0c23936: add the deactivate command, which keeps the row and sets its status to inactive.
   correction: none
 - claim 6 [verification] $T/handoff.md:26 tickets/APP-1/verified/1: not verified; finding: none; evidence: not reproduced, needs a copy of production data
+  ticket: APP-1
   text: Deactivate was checked by hand against a copy of production data; check: not recorded
   correction: none
 - claim 7 [verification] $T/handoff.md:27 tickets/APP-1/verified/2: true; finding: none; evidence: sh run-tests.sh printed the skip line
+  ticket: APP-1
   text: The test suite runs with one test skipped; check: sh run-tests.sh
   correction: none
 EOF

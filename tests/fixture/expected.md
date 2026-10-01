@@ -159,7 +159,8 @@ Expected audit outcomes, each only when the stage that judges it completes:
 `git hash-object --no-filters $F/handoff.md` is `36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8`.
 `claims-verdicts.md` holds one claims file heading,
 `## $F/handoff.md (handoff), hash 36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8`, and five
-entries, each a main line with `text:` and `correction:` sub-lines:
+entries, each a main line with `ticket:`, `text:`, and `correction:` sub-lines (`ticket:` is
+`APP-1` in all five, the ticket field `handoff.sh claims` prints for each claim):
 
 | Claim | Ref | Verdict | Its `text:` | Expected handling |
 |---|---|---|---|---|

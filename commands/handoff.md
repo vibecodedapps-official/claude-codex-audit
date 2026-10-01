@@ -1,7 +1,7 @@
 ---
-description: "Write a typed handoff from a build session, for /cca:audit to read as claims. Use when the user asks for a cca handoff, or types /cca:handoff. Inputs are an optional manifest JSON file and prompt inputs (repo paths, PR and ticket ids, exported ticket files). Flags are --out <path> and --verdicts <claims-verdicts.md>. It writes one file and never edits tracked files, commits, or posts anything."
-argument-hint: '[<manifest.json>] [<inputs...>] [--out <path>] [--verdicts <claims-verdicts.md>]'
-allowed-tools: Read, Write, Bash(git -C * rev-parse *), Bash(git -C * log *), Bash(git -C * merge-base *), Bash(git -C * symbolic-ref *), Bash(git -C * check-ignore *), Bash(git -C * status *), Bash(git -C * --no-optional-locks status *), Bash(git -C * hash-object --no-filters *), Bash(git check-ignore *), Bash(gh pr view *), Bash(gh issue view *), Bash(date *), Bash(sh *handoff.sh check *), Bash(sh *handoff.sh claims *)
+description: "Write a typed handoff from a build session, for /cca:audit to read as claims. Use when the user asks for a cca handoff, or types /cca:handoff. Inputs are an optional manifest JSON file and prompt inputs (repo paths, PR and ticket ids, exported ticket files). Flags are --out <path>, --verdicts <claims-verdicts.md>, and --memory <dir>. It writes one file and never edits tracked files, commits, or posts anything."
+argument-hint: '[<manifest.json>] [<inputs...>] [--out <path>] [--verdicts <claims-verdicts.md>] [--memory <dir>]'
+allowed-tools: Read, Write, Bash(git -C * rev-parse *), Bash(git -C * log *), Bash(git -C * merge-base *), Bash(git -C * symbolic-ref *), Bash(git -C * check-ignore *), Bash(git -C * status *), Bash(git -C * --no-optional-locks status *), Bash(git -C * hash-object --no-filters *), Bash(git check-ignore *), Bash(gh pr view *), Bash(gh issue view *), Bash(date *), Bash(sh *handoff.sh check *), Bash(sh *handoff.sh claims *), Bash(sh *memory.sh find *)
 ---
 
 You write one handoff file for the session's work, from the record only. Do the steps below in order. The only file you write is the handoff, in step 6. You never edit a tracked file, commit, push, or post to a forge.
@@ -12,10 +12,13 @@ You write one handoff file for the session's work, from the record only. Do the 
 "$ARGUMENTS"
 </user-text>
 
-   - A flag is a token that starts with `--`. Accepted flags: `--out` and `--verdicts`. Reject any other flag.
+   - A flag is a token that starts with `--`. Accepted flags: `--out`, `--verdicts`, and `--memory`. Reject any other flag.
    - Each flag takes exactly one value, the next token, which must not start with `--`. Reject a missing value. Reject a flag given twice.
    - `--out`: a path. Without it, out is `default`.
    - `--verdicts`: a path to an existing file. Without it, verdicts is `none`.
+   - `--memory`: a path to an existing directory, the build session's memory files. It
+     needs `--verdicts`: without it, stop with `cca: --memory needs --verdicts`. Without
+     `--memory`, memory is `none`.
    - A token that is not a flag or a flag value is positional. The manifest is the first positional token that ends in `.json` and has no scheme prefix. A scheme prefix is a name of two or more characters followed by `:` at the start of the token, such as `file:` or `github:`. A single letter followed by `:/` or `:\`, such as `C:/`, is a Windows drive letter, not a scheme, so that token is a path. Without such a token, manifest is `none`. A `.json` token with a scheme prefix is an input. A second positional token ending in `.json` is also an input.
    - Every other positional token is an input, kept verbatim in the order typed: a repo path, a PR or ticket id (`github:owner/repo#n`, `#n`, `file:<path>`, or a forge URL), or a file path. Quoted text stays one token.
    - With no manifest and no input, the bundle is the session's own repository and its current branch.
@@ -23,7 +26,7 @@ You write one handoff file for the session's work, from the record only. Do the 
    Validate cheaply. Relative paths in the prompt are relative to the session's directory; relative paths inside the manifest are relative to the manifest's directory.
    - The manifest, when given, exists and parses as a JSON object. Check with the Read tool.
    - Every repo path the manifest names (each `bundles[].repo`) and every input that names an existing directory is a git checkout: `git -C <path> rev-parse --git-dir` succeeds.
-   - Every `file:<path>` input names an existing file. The `--verdicts` file exists.
+   - Every `file:<path>` input names an existing file. The `--verdicts` file exists, and the `--memory` directory exists.
    - `--out` does not name an existing directory.
 
    Reject the request with one short line that names the offending token or path, such as `cca: unknown flag --bogus` or `cca: --out needs a value`, if any rule fails. When you reject, run no other command and write no file.
@@ -31,6 +34,7 @@ You write one handoff file for the session's work, from the record only. Do the 
 2. With `--verdicts`, read that file first, before anything else. For each `claim` line under a claims file that is a handoff, find the handoff source item it names. Compare the file hash in the line's `## ` heading with `git hash-object --no-filters` of that file as it is now. Then run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/handoff.sh claims <that file>` and compare the entry's `text:` sub-line (the whole rest of that line) with the text field (the sixth, tab-separated) of the output line whose ref equals the line's handoff ref. Both must match.
    - A line that matches, about a ticket of the bundles settled in step 3, is applied in step 5.
    - A line that does not match, a line about a prose claims file, and a `contested` line are listed as reconciliation work and not applied.
+   - With `--memory`, run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/memory.sh find <verdicts> <dir>` and keep its output: one line per match, tab-separated, `claim <n>`, the key, and a file path, or `none` when no file holds the key; or `claim <n>`, `-`, `no key` for a `false` entry with no key. On exit 2, print its message and stop. The memory files are never edited; step 7 lists them as work for the user.
 
 3. Settle the bundles, base first, one bundle per repo. The bundles are those the manifest names, else the repo paths among the inputs, else the session's own repository. Per bundle, the base is the first of:
    - the manifest bundle's `base`;
@@ -61,4 +65,5 @@ You write one handoff file for the session's work, from the record only. Do the 
    - the path;
    - the corrections applied from `--verdicts`, or `none`;
    - the reconciliation list from step 2, or `none`;
+   - with `--memory`, the memory reconciliation work from step 2, grouped by claim: per claim, each key with the files that hold it, `no file holds it` for `none`, and `no key to search for` for `no key`; or `none` when the output was empty. No file in the directory was edited;
    - the next command: `/cca:audit <manifest or inputs> --claims <path>`.
