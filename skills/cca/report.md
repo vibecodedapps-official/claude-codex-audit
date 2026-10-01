@@ -116,12 +116,15 @@ Three parts.
 - Decision ledger: each `decision` claim, with its class (`stale deferral`,
   `needs <owner>`, `default taken`, or `evidenced`), resolution, authority, whether
   alternatives were weighed, reversibility class, the recommendation, and the owner. The
-  auditor's position and the adversary's follow; when they differ, both are kept and no
-  side is picked.
+  auditor's position and the adversary's follow, or `not challenged` when pass two wrote
+  no line for the entry; when they differ, both are kept and no side is picked. A claim
+  that is `not assessed` is listed with that mark only: no class, fields, or adversary
+  position.
 - Raised tickets: each `scope` claim, with whether the bundle introduced it, whether the
   fix is inside the bundle's repos, cost, the recommendation (`include` or `defer`) and
   its reason, the handoff's ranking, and whether the facts and the recommendation
-  differ from the handoff, each stated on its own. The adversary's position follows.
+  differ from the handoff, each stated on its own. The adversary's position follows, or
+  `not challenged`. A `scope` claim that is `not assessed` is listed with that mark only.
 - Other decisions: each decision the change made or needs that is not a `decision`
   claim: the recommendation, the reason, and a reversibility class (`reversible`,
   `hard to reverse`, or `contract change`). A named owner, from the tickets or threads
@@ -143,7 +146,8 @@ audit or acts on the finding by hand. Every approved live access is logged here.
 
 Every numbered claim from `claims.md` with its kind (`code`, `decision`, `verification`,
 `scope`, or `status`), then `true`, `false`, or `not verified`, and the item id or
-evidence. `other` sentences are counted, not listed.
+evidence. `other` sentences are counted, not listed. A `decision` or `scope` claim with
+no pass-one entry is `not verified`, with the reason "not assessed".
 
 A `verification` claim is `true, reproduced` only when the audit reproduced the stated
 result itself, `false, contradicted` only with counter-evidence, and otherwise
@@ -166,6 +170,9 @@ session.
 - Swaps: every swap, with role, scope, from, to, and reason (including Codex swaps).
 - Failed scopes and the files, rules, or questions they left unreviewed, naming the
   last byte offset of a digest that ended `status: failed at byte <offset>`.
+- Each `decision` or `scope` claim that is `not assessed` (the pass-one report has no
+  entry for it), and each entry that is `not challenged` because pass two wrote no line
+  for it. Neither fails a scope or changes the verdict counts.
 - Each bundle whose base refresh the user declined ("base: local ref, refresh
   declined" in the brief): the base commit list and overlap set are as of that ref.
 - Stage 6: whether the mandatory ids were requested in batches (`batched`) and, from

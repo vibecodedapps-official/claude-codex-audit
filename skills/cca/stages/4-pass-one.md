@@ -102,8 +102,10 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
       say none). The `consumed:` list names each digest and map read, with its hash.
       Check coverage too: the report's `## Decisions` names every `decision` claim
       assigned to the scope, and a report from a scope that holds `hygiene` claims has
-      a `## Scope` that names every `scope` claim assigned to it. A report that misses
-      one failed, and follows the auditor ladder of sub-step 3.
+      a `## Scope` that names every `scope` claim assigned to it. A miss does not fail
+      the scope: the entry was never written, so record the claim as `not assessed`
+      in the stage entry. Stage 8 lists it in the coverage disclosure and gives it the
+      verdict `not verified`, with the reason "not assessed".
 
 8. **Reconciliation barrier.** Once stages 2 and 3 each have status `complete`,
    `failed`, or `not_applicable` in `stages.json`, compute the barrier for each scope
@@ -162,5 +164,5 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
 12. **Write the stage 4 entry last,** once the check has passed, per the preamble
     (temporary file beside `stages.json`, then rename): status, inputs (including each
     consumed digest and map hash), outputs (every `scope/` and `pass1/` file, and each
-    `.pre-topup.md` copy), agents, swaps, failed scopes with reasons, and each `_test`
-    fault applied.
+    `.pre-topup.md` copy), agents, swaps, failed scopes with reasons, each claim
+    recorded as `not assessed`, and each `_test` fault applied.

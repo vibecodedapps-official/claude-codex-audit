@@ -104,13 +104,16 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
          `needs <owner>`, `default taken`, or `evidenced`), the three dimensions
          (resolution, authority, evidence) from the auditor's `## Decisions` entry, its
          reversibility class, the recommendation, and the owner, then the auditor's
-         position and the adversary's, from `## Decisions challenged`. When they
-         differ, both are kept and neither is picked.
+         position and the adversary's, from `## Decisions challenged`, or the mark
+         `not challenged` when that entry has no line. When they differ, both are kept
+         and neither is picked. A claim the stage 4 entry records as `not assessed` is
+         listed with that mark only: no class, dimensions, or adversary position.
       2. Raised tickets: each `scope` claim, with the fields of the auditor's
          `## Scope` entry (introduced by the bundle, fix inside the bundle's repos,
          cost, recommendation, the handoff's ranking, whether the facts or the
          recommendation differ from the handoff) and the adversary's position from
-         `## Scope challenged`.
+         `## Scope challenged`, or `not challenged` when that entry has no line. A `scope`
+         claim recorded as `not assessed` is listed with that mark only.
       3. Other decisions: each decision the change made or needs that is not a
          `decision` claim, with the recommendation, the reason, and a reversibility
          class, `reversible`, `hard to reverse`, or `contract change`. A named owner
@@ -126,7 +129,8 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
       audit or acts on the finding by hand.
    10. Claims: every numbered claim in `claims.md` with its kind, then `true`, `false`,
        or `not verified`, and the finding or evidence, from the pass-one Claims lists as
-       revised by later verdicts. A claim no list covers is `not verified`. A
+       revised by later verdicts. A claim no list covers is `not verified`, and so is a claim
+       the stage 4 entry records as `not assessed`, with the reason "not assessed". A
        `verification` claim is `true, reproduced` only when the audit reproduced the
        stated result itself; `false, contradicted` only with counter-evidence; else
        `not verified, not reproduced`, with the reason. A claim that a
@@ -145,6 +149,9 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
        - at low tier, that one auditor covered the ticket, tests, and work-item hygiene;
        - failed scopes and scopes not run because the budget expired, naming the last
          byte offset of a digest that ended `status: failed at byte <offset>`;
+       - each `decision` or `scope` claim recorded as `not assessed` (the pass-one
+         report has no entry for it), and each entry recorded as `not challenged`
+         because pass two wrote no line for it;
        - each bundle whose base refresh was declined, from the brief's "base: local
          ref, refresh declined" line;
        - stage 6: whether the mandatory ids were requested in batches (`batched`) and,

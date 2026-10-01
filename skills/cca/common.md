@@ -236,6 +236,9 @@ none.
 
 Decision and scope entries are report items, not findings. They never enter `ledger/5.md`,
 `ledger/6.md`, or `ledger/7.md`, have no review gate, and never change the verdict counts.
+An entry the auditor did not write is `not assessed`, and one the adversary left without a
+line is `not challenged`; neither fails a scope. The agents still write every entry and
+line.
 When an entry shows a defect (a `stale deferral` or `needs <owner>` the bundle's work
 depends on, or a scope fact that ships a regression), file a separate Q4 finding and name it
 in the entry's `finding:` field. A defect the adversary finds first is a pass-two addition

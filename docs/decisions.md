@@ -268,7 +268,10 @@ agent-driven case `not run` until one runs.
   sections, never enter `ledger/5.md`, `ledger/6.md`, or `ledger/7.md`, have no review
   gate, and never change the verdict counts. When an entry shows a defect, the auditor
   files a separate Q4 finding, which goes through the gate like any other. This keeps the
-  review gate's meaning, and the verdict counts, unchanged.
+  review gate's meaning, and the verdict counts, unchanged. For the same reason a missing
+  entry or challenge line does not fail a scope: a missing auditor entry is recorded as
+  `not assessed` (verdict `not verified`, reason "not assessed"), and a missing adversary
+  line as `not challenged`. The completeness gate for `verification` claims is unchanged.
 - **Scope check (H4).** For a raised ticket, the hygiene scope states whether the bundle
   introduced the behavior, whether the fix lies inside the bundle's repos, and the cost,
   then include or defer. It records disagreement with the handoff on the facts and on the
