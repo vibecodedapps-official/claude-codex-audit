@@ -48,10 +48,11 @@
 # When the repository's core.ignorecase is true, the run directory is matched against the
 # top level, and against every path, without regard to case.
 #
-# check: refuses (exit 2) when <out prefix> equals the baseline or the ignored base
-# prefix, by name or as the same file (`-ef`, so other letters on a case-insensitive file
-# system do not pass), is not inside the run directory (a walk up from its directory to one
-# that is the same file as the run directory), or when a baseline file it needs is missing.
+# check: refuses (exit 2) when <out prefix> has a .. path component, equals the
+# baseline or the ignored base prefix, by name or as the same file (`-ef`, so other letters
+# on a case-insensitive file system do not pass), is not inside the run directory (a walk
+# up from its directory to one that is the same file as the run directory), or when a
+# baseline file it needs is missing.
 # Otherwise it runs snapshot into <out prefix>, then prints one line per difference, in
 # this order, each group sorted:
 #   blocked <status|stash|config|hashes|refs> <-|+> <line>
@@ -395,6 +396,12 @@ diff_lines() {
 
 # check <repo> <run dir> <baseline prefix> <ignored base prefix> <out prefix>
 check() {
+	# A .. component would let the path resolve to another place once its missing
+	# directories exist, past the identity check below. A . component cannot: it never
+	# changes the directory, so a relative prefix such as ./x stays allowed.
+	case "/$5/" in
+	*/../*) die "out prefix has a .. component: $5" ;;
+	esac
 	base=$3
 	ibase=$4
 	for n in status refs stash config hashes; do

@@ -28,6 +28,7 @@
 # 21 submodule not checked out: file added
 # 22 out prefix is the baseline in other letters  23 run directory in other letters
 # 24 out prefix on a UNC path, outside the run directory
+# 25 out prefix with a .. component
 #
 # Prints one line per mismatch, then `readonly test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -428,6 +429,22 @@ if [ -d '//localhost/c$' ]; then
 	fi
 	expect "case 24" 2 '' "readonly: out prefix is not inside the run directory: $unc\n"
 fi
+
+# 25. an out prefix with a .. component that resolves to the baseline once the missing
+# directory is created: refused before anything is written. Runs on every platform.
+case_id="case 25"
+fresh
+snap "$R/base"
+printf '%s\n' 'Second local edit.' >> "$A/README.md"
+h0=$(git hash-object --no-filters "$R/base.hashes")
+ro check "$A" "$R" "$R/base" "$R/base" "$R/missing/../base"
+expect "case 25" 2 '' "readonly: out prefix has a .. component: $R/missing/../base\n"
+[ "$(git hash-object --no-filters "$R/base.hashes")" = "$h0" ] || mismatch "case 25: the baseline was overwritten"
+[ ! -e "$R/missing" ] || mismatch "case 25: a directory was created"
+# A . component stays allowed, since it never changes the directory: the same edit through
+# $R/./c gives the ordinary result.
+ro check "$A" "$R" "$R/base" "$R/base" "$R/./c"
+expect "case 25, . component" 1 "blocked hashes + 44e925490cf5a75b8514640ac89751f80066380f README.md\nblocked hashes - 62bbbc5f8f323f1c372e43131e1d3ad8a214adeb README.md\n" ''
 
 if [ "$bad" -gt 0 ]; then
 	exit 1
