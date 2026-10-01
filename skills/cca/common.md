@@ -22,9 +22,12 @@ These hold for every stage, for the orchestrator and every agent.
    stashes, config, or remotes. "Audited repo" means every bundle, reference, and source
    of truth. Allowed writes: the run directory; cca's data directory (`runs.json`);
    codex-lite's own request and thread files in codex-lite's data directory, written
-   when cca calls it; and `git fetch` into remote-tracking refs, after the user approves
-   it once per run. Nothing else. An ignored file written by a check run that an agent
-   logged under its `runs:` heading is allowed and reported, never silently.
+   when cca calls it; `git fetch` into remote-tracking refs, after the user approves it
+   once per run; and, for a bundle with `head: working-tree`, the loose git objects that
+   `working-tree.sh build` writes in the repo's object store (stage 1 step 1c, and resume
+   step 3 when it rebuilds the head), which the report discloses. Nothing else. An ignored
+   file written by a check run that an agent logged under its `runs:` heading is allowed
+   and reported, never silently.
 2. **Prevention and detection.** Agent tool lists exclude Edit and NotebookEdit. An
    agent with Bash runs only these commands: `git show`, `git log`,
    `git diff <base>...<head>`, `git grep`, `git ls-files`, `rg`, `ls`,
@@ -33,20 +36,23 @@ These hold for every stage, for the orchestrator and every agent.
    line-numbering stage for a digester's byte range, and, when a question needs a run in
    a directly read tree, the repo's test or lint commands, which may write ignored build
    output. A diff always names two commits: a working-tree `git diff` refreshes the index
-   even with `--no-optional-locks`, so it is never run. The orchestrator's `git status`
-   runs as `git -C <repo> --no-optional-locks status ...`, and the snapshot script sets
-   `GIT_OPTIONAL_LOCKS=0`, so no status check rewrites the index. This is instruction,
-   not enforcement: nothing blocks Bash mechanically. The orchestrator snapshots every audited repo in
-   stage 1 and compares after every stage. A change to tracked files, untracked
-   non-ignored files, refs, the index, stashes, or config, including an added or deleted
-   file, stops the run `blocked`, unless an approved fetch caused it. A change among
-   ignored files that no logged run accounts for stops it too. Not detected: an ignored
-   file replaced with one of the same size and a restored modification time, changes
-   inside `.git/` other than refs, stashes, and config, a change to a nested repository's
-   refs other than its HEAD, its stashes, or its config, a change inside a repository that
-   sits in an ignored directory, such as a linked worktree, other than an entry added or
-   removed at its top level, and changes outside the audited repos. The user should not
-   edit audited repos during a run, since their own edits trip the check too.
+   even with `--no-optional-locks`, so it is never run. In a bundle with
+   `head: working-tree`, `git grep` always names the head sha, since a plain `git grep` or
+   an `rg` over `git ls-files` would miss the untracked files that are part of the head.
+   The orchestrator's `git status` runs as `git -C <repo> --no-optional-locks status ...`,
+   and the snapshot script sets `GIT_OPTIONAL_LOCKS=0`, so no status check rewrites the
+   index. This is instruction, not enforcement: nothing blocks Bash mechanically. The
+   orchestrator snapshots every audited repo in stage 1 and compares after every stage. A
+   change to tracked files, untracked non-ignored files, refs, the index, stashes, or
+   config, including an added or deleted file, stops the run `blocked`, unless an approved
+   fetch caused it. A change among ignored files that no logged run accounts for stops it
+   too. Not detected: an ignored file replaced with one of the same size and a restored
+   modification time, changes inside `.git/` other than refs, stashes, and config, a
+   change to a nested repository's refs other than its HEAD, its stashes, or its config, a
+   change inside a repository that sits in an ignored directory, such as a linked
+   worktree, other than an entry added or removed at its top level, and changes outside
+   the audited repos. The user should not edit audited repos during a run, since their own
+   edits trip the check too.
 3. **No model, agent, or tool names** in anything external: commit messages, PR or
    ticket text, and drafted comments. The report is internal and may name them.
 4. **No advisor tool**, in the orchestrator or any agent.
@@ -95,7 +101,15 @@ and the sha it is pinned at.
   changes): search with `git -C <repo> grep <pattern> <sha>`, or with `rg` over the
   files `git -C <repo> ls-files` lists. Never search the working tree with a plain `rg`,
   which also sees untracked and ignored files. Do not follow a symlink outside the
-  repo. A citation to an untracked, ignored, or outside path is invalid evidence.
+  repo. A citation to an untracked, ignored, or outside path is invalid evidence, except
+  as the next item says.
+- **Working-tree bundle** (`head: working-tree`; the brief's mode is
+  `direct (working tree)`): the head is a commit built from the working tree, with no
+  ref, so it holds the modified files and the untracked files that are not ignored.
+  Search it only with `git -C <repo> grep <pattern> <head sha>`, never with `rg` over
+  `git ls-files`, which misses the untracked files. The files the brief lists as
+  untracked at audit time are part of the head and valid evidence, cited at the head sha
+  as `repo@sha:path:line`; an ignored or outside path is still invalid.
 - **Exported tree** (`<run dir>/trees/<name>/`): tracked files only, at the pinned sha.
   A symlink is a regular file holding its target; do not resolve it. Submodules are
   listed in the brief and absent. Git LFS files are their pointer files. Cite as

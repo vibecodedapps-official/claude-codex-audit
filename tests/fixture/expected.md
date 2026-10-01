@@ -7,14 +7,15 @@ changes only with a recorded reason: change `build.sh` and this file in the same
 and say why in the commit body.
 
 `sh tests/fixture/verify.sh <manifest path> [name]` checks the key literals below against
-a built fixture with git commands (commit ids, the two-dot and three-dot diffs, the skipped
-test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule, the legacy ids, the
-CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and `solo-dirty`, that the
-five handoff files exist, the handoff's hash and each verdicts file's heading hash below,
-and that `handoff.sh claims` gives the claim count per kind below; and, for `tokens`, its
-commit ids and messages, files, exports, and the `ticket_token` lines of its manifests)
-and prints one line per mismatch. CI runs it after each build. Its expected values are
-copies of the literals here, so a change to one changes the other.
+a built fixture with git commands (commit ids, the two-dot and three-dot diffs, the
+skipped test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule, the
+legacy ids, the CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and
+`solo-dirty`, that the five handoff files and `manifest-working-tree.json` exist, the
+handoff's hash and each verdicts file's heading hash below, and that `handoff.sh claims`
+gives the claim count per kind below; and, for `tokens`, its commit ids and messages,
+files, exports, and the `ticket_token` lines of its manifests) and prints one line per
+mismatch. CI runs it after each build. Its expected values are copies of the literals
+here, so a change to one changes the other.
 
 The builder fixes the git identity (`fixture <fixture@example.invalid>`), the commit
 dates (`2026-09-01 10:<n>:00 +0000`, one minute per commit in build order), and turns off
@@ -35,6 +36,7 @@ on Ubuntu with dash, gawk, and mawk).
 | `$F/session-summary.md` | The claims file |
 | `$F/manifest-handoff.json` | `manifest.json` with `"claims": ["./handoff.md"]` |
 | `$F/manifest-scratch.json` | `manifest.json` with `"scratch": "./app/.test-output"` added |
+| `$F/manifest-working-tree.json` | `manifest.json` with `"head": "working-tree"` in the bundle; outside every repo, so no commit id changes |
 | `$F/handoff.md` | The handoff, in the format of `skills/cca/handoff.md` (see "Handoff" below) |
 | `$F/claims-verdicts.md` | A return-trip file for `$F/handoff.md`, its heading carrying the handoff's hash (see "Verdicts" below) |
 | `$F/claims-verdicts-stale.md` | The same lines, its heading carrying a stale hash |
@@ -153,6 +155,16 @@ Expected audit outcomes, each only when the stage that judges it completes:
   `bd5d5e1e67a1fc55adeaa1452920245b1d368f7f` already appends without an id check, and
   `facts disagree with the handoff: yes`. The recommendation itself is not asserted.
 - With `manifest-scratch.json`, the run directory lands under `app/.test-output/cca/`.
+- With `manifest-working-tree.json`, stage 1 builds the head from the working tree
+  (`working-tree.sh build $F/app`, with `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1`):
+  head `1fcf8c53acc3f6e064fcb29ec0a05963b4949f2a`, parent
+  `0c23936980b254c4abd489d3ecfd296f5e7bc0db`, tree
+  `44cdf018ff3489bd74ad79d5cd4e74b76ff56773`, and one untracked file,
+  `notes/deactivate-draft.txt`. The brief lists that file as untracked at audit time and
+  maps the app as `direct (working tree)`; `.git/index` is unchanged at the end, and
+  Coverage discloses the object writes, that the head has no ref, and the untracked
+  file. The file is part of the head, so citing it at the head sha is valid evidence
+  here, unlike in an audit of `manifest.json`.
 
 ### Verdicts
 
@@ -256,6 +268,9 @@ Everything in `solo`, then the changes below. Commits from `solo` keep their ids
   `.test-output/results.txt`, or deleting `.test-output/results.txt`, between two
   stages ends the run `blocked` and names the path.
 - After a clean stage, `baseline/1-check.md` lists no ignored-file differences.
+- With `manifest-working-tree.json`, the run stops before stage 1 with
+  `bundle app: head working-tree needs feature checked out, found scratch-branch`,
+  since the checkout is on `scratch-branch`, not `feature`.
 
 ### Traps that must not appear
 

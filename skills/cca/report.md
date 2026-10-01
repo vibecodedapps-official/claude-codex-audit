@@ -39,6 +39,9 @@ bundles: <bundle> <repo> <head sha> against <base> <base sha> (merge-base <sha>)
 generated: <time>
 ```
 
+For a `head: working-tree` bundle, `<head sha>` is followed by
+`(working tree on <parent sha>)`, the built commit and the `HEAD` it sits on.
+
 ### 1. Verdict
 
 `not ready`, `merge after fixes`, or `ready to merge`; in a `partial` run,
@@ -175,6 +178,9 @@ session.
   for it. Neither fails a scope or changes the verdict counts.
 - Each bundle whose base refresh the user declined ("base: local ref, refresh
   declined" in the brief): the base commit list and overlap set are as of that ref.
+- Each `head: working-tree` bundle: the loose objects `working-tree.sh build` wrote to
+  the repo's object store (an allowed write), that the head commit has no ref and
+  `git gc` may prune it after its prune window, and the files untracked at audit time.
 - Stage 6: whether the mandatory ids were requested in batches (`batched`) and, from
   `missing_positions`, every mandatory id left without a position (those Codex was
   asked for and left unanswered after the follow-up, and those of a fallback batch

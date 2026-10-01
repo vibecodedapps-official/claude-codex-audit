@@ -154,6 +154,10 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
          because pass two wrote no line for it;
        - each bundle whose base refresh was declined, from the brief's "base: local
          ref, refresh declined" line;
+       - each `head: working-tree` bundle: the loose objects `working-tree.sh build`
+         wrote to the repo's object store (an allowed write), that the head commit has
+         no ref and `git gc` may prune it after its prune window, and the files
+         untracked at audit time (from the brief);
        - stage 6: whether the mandatory ids were requested in batches (`batched`) and,
          from `missing_positions`, every mandatory id left without a position (those
          Codex was asked for and left unanswered after the follow-up, and those of a

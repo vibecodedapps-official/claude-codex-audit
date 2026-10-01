@@ -511,6 +511,17 @@ EOF
   "scratch": "./app/.test-output"
 }
 EOF
+	# Outside every repo too: the solo manifest with the bundle's head built from the
+	# working tree.
+	put manifest-working-tree.json <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main", "head": "working-tree",
+      "tickets": ["file:./exports/APP-1.md"] }
+  ],
+  "claims": ["./session-summary.md"]
+}
+EOF
 	put handoff.md <<'EOF'
 ---
 cca-handoff: 1

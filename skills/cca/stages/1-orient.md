@@ -6,7 +6,8 @@ sections C and D say. Their labels are fixed, but they run in this order: A, B, 
 D4 (the run directory exists before any PR is read), C, then D5 to D7. Steps 1 to 10
 follow the stage's rule numbers. Order matters: the read-only baseline (step 1b) is
 taken right after the approved fetch, before any export or other stage 1 work, so
-everything after it is checked.
+everything after it is checked. A bundle with `head: working-tree` has its head built in
+step 1c, right after the baseline, for the same reason.
 
 ## A. Normalize the inputs
 
@@ -46,6 +47,9 @@ everything after it is checked.
      `<id>: write it as github:owner/repo#n or file:<path>`.
    - `ticket_token`: an optional bundle key. A string becomes a one-element list. The
      saved manifest keeps the list; step 8.1 reads it for the bundle's exported tickets.
+   - `head`: an optional bundle key, kept in the saved manifest. Its only value is
+     `working-tree`, which makes the bundle's head a commit built from the repo's working
+     tree (step 1c). It is a manifest key only, with no flag. A.4 validates it.
    - `sources_of_truth`: when the manifest lists it, it replaces the default order.
      Otherwise the default order is: legacy source code, then a guidelines corpus
      (each only when supplied, as a reference named `legacy` or a source entry), then
@@ -74,7 +78,14 @@ everything after it is checked.
    base is rejected: stop with `bundle <name>: no base`. A bundle whose `ticket_token`
    is not a string or a non-empty array of strings, or has an entry that does not hold
    `{n}` exactly once and at least one other character, is rejected: stop with
-   `bundle <name>: ticket_token must hold {n} once`.
+   `bundle <name>: ticket_token must hold {n} once`. A bundle whose `head` is anything but
+   `working-tree` is rejected: stop with `bundle <name>: head must be working-tree`. A
+   `working-tree` bundle needs a `branch`, or a PR whose `headRefName` names it, and that
+   branch must be checked out: `git -C <repo> rev-parse --abbrev-ref HEAD` (which prints
+   `HEAD` for a detached head) equals it. Otherwise stop before stage 1:
+   `bundle <name>: head working-tree needs <branch> checked out, found <x>`. With a
+   manifest `branch` the check runs here; for a GitHub PR bundle without one it runs in
+   section C, step 3, against `headRefName`.
 5. Select each audited repo's remote once (bundles, references, and sources of truth);
    every `<remote>` below is this one. For every GitHub PR bundle, however it was
    declared, it is the remote whose URL names the PR's owner and repo
@@ -157,7 +168,11 @@ A claims file may be a handoff, written in the format of
    when one was approved); step 3 resolves it. The PR's `baseRefOid` is GitHub's cached
    base at the PR's last sync, not the live branch tip, so it is never the pinned
    base; the brief records it for information only, as the base as GitHub last
-   evaluated it.
+   evaluated it. For a bundle with `head: working-tree`, the head is instead the commit
+   step 1c builds, and step 1a fetches no head for it. For a GitHub PR, `headRefOid` is
+   recorded for information only, and the brief says so when it differs from the local
+   `HEAD`. The checked-out branch check of A.4 runs here for a bundle that has no
+   manifest `branch`, against `headRefName`.
 
 ## D. Run directory, run id, and state files
 
@@ -259,6 +274,9 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
      remote and resolve the ref as `<remote>/<branch>` from then on, since the fetch
      never writes a local branch.
 
+   A bundle with `head: working-tree` takes no head fetch, and the stale-head test does
+   not apply to it: its head does not exist until step 1c. Its base fetch is as above.
+
    Every ref that resolves under another name is recorded as one mapping line in the
    brief's Read paths: `<ref as given> -> <remote>/<branch>`,
    `<ref as given> -> <remote>/tags/<name>`, or `<sha> -> <remote>/cca/<sha>`. Resume
@@ -285,6 +303,21 @@ b. Take the read-only baseline now, before any other work. For each audited repo
    `.hashes`, and `.ignored`. A repo that appears in more than one role is snapshotted
    once. A non-zero exit ends the run `blocked`, since the boundary cannot be checked;
    show the script's message.
+c. For each bundle with `head: working-tree`, build its head now, right after the
+   baseline, so the stage's read-only check covers any edit made between the baseline
+   and the build. Run
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh build <repo>` with the
+   resolved absolute script path. It builds a commit from the working tree in a
+   temporary index, so the repo's index, refs, and files are untouched; its only writes
+   to the repo are git objects. Exit 0 prints, on stdout, `head <sha>`, `parent <sha>`,
+   `tree <sha>`, and one `untracked <path>` line per untracked file that is not ignored;
+   keep all four. The head commit has no ref, and the same working tree and `HEAD` give
+   the same sha. Exit 1 is a refusal (a missing `HEAD` commit, a sparse checkout,
+   skip-worktree or assume-unchanged paths, unmerged paths, a dirty submodule or an
+   untracked nested repository, a Git LFS or program filter, or a path git prints
+   quoted): the script writes one line per reason on stderr, before it writes anything;
+   end the run `blocked` and show those lines. Exit 2 (usage, not a work tree, or a git
+   step failed; one line on stderr) ends the run `blocked` the same way.
 
 ### 2. Forge data
 
@@ -341,7 +374,9 @@ For each bundle, record:
   resolves to, for a GitHub PR `<remote>/<baseRefName>`, always with
   `git -C <repo> rev-parse <ref>^{commit}` after step 1a (and its fetch, when one was
   approved), never the PR's `baseRefOid`). Wherever the steps below write `<base>` and
-  `<head>`, use these shas;
+  `<head>`, use these shas. For a bundle with `head: working-tree`, the head is the
+  `head` sha step 1c printed, and its `parent` and `tree` shas are recorded too (step
+  10.6 puts them in the stage 1 inputs);
 - merge-base sha: `git -C <repo> merge-base <base> <head>`;
 - commits on the base since the merge-base: `git -C <repo> log --oneline <head>..<base>`;
 - files changed on both sides since the merge-base: the intersection of
@@ -377,7 +412,12 @@ pinned sha, decide how agents read it:
    `git -C <repo> --no-optional-locks status --porcelain --untracked-files=no` is empty,
    and `git -C <repo> ls-files -v` shows no path flagged `S`, `h`, or `s` (skip-worktree
    or assume-unchanged). Agents read the
-   checkout and search per the direct-read rules in `common.md`.
+   checkout and search per the direct-read rules in `common.md`. A bundle with
+   `head: working-tree` is direct when `git -C <repo> rev-parse HEAD` is the `parent`
+   sha step 1c printed and no path is flagged `S`, `h`, or `s`; its modified and
+   untracked files are part of the head, so the status condition does not apply. Its
+   mode in the brief is `direct (working tree)`, and agents search it with
+   `git -C <repo> grep <pattern> <head sha>` (`common.md`).
 2. **Export**: otherwise. First size it: the sum of blob sizes from
    `git -C <repo> ls-tree -r -l --full-tree <sha>`. Over 1 GB (1,073,741,824 bytes),
    ask the user first and record the answer in `approvals` with kind
@@ -413,10 +453,11 @@ pinned sha, decide how agents read it:
    the network or write outside the run directory), and never check out, switch, or
    add a worktree.
 
-The brief maps each name to the path agents must read, the sha, and the mode
-(`direct`, `export`, or `git show`). An export holds tracked files only, so no test or lint
-command runs in an export, whether or not it needs installed dependencies; a check run
-is done only in a directly read tree, and otherwise the question is marked "not run".
+The brief maps each name to the path agents must read, the sha, and the mode (`direct`,
+`direct (working tree)`, `export`, or `git show`). An export holds tracked files only, so
+no test or lint command runs in an export, whether or not it needs installed dependencies;
+a check run is done only in a directly read tree, and otherwise the question is marked
+"not run".
 
 Classify each source of truth with a `path` for stages 2 and 3: count the tracked files
 at the pinned sha by extension; when more than half are documents (`.md`, `.mdx`,
@@ -520,6 +561,10 @@ Write the `unticketed` and `cross-cutting` sections only when they have at least
 file. Every changed file appears in at least one group. The tests, work-item hygiene, and
 cross-bundle interaction specialists of stage 4 are scopes, not groups.
 
+A `head: working-tree` bundle's head commit, `cca: working tree`, names no ticket. In a
+bundle with more than one ticket, a file that only that commit changes is matched to a
+ticket by name (rule 2) or goes to `unticketed`. The brief says so.
+
 ### 9. Claim assignment
 
 Append ` -> <target>` to every `claim` line in `claims.md`:
@@ -554,25 +599,27 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
    a document corpus, stage 3 when at least one is a code base. Record both in the
    brief.
 3. **`audit-brief.md`**, with these sections: Scope (bundles, repos, PRs, tickets);
-   Tier and reason; Bundles (head, base, merge-base, base commits since the
-   merge-base, files changed on both sides, stack, the `ticket_token` patterns when the
-   bundle has them; the head sha is recorded as `headRefOid` for a GitHub PR, and the
-   pinned base sha is the local sha of `<remote>/<baseRefName>`; for a GitHub PR also
-   `baseRefOid`, labeled "base as GitHub last evaluated it", for information only; resume
-   compares the head and the pinned base); Combined state; Sources of truth (the order
+   Tier and reason; Bundles (head, base, merge-base, base commits since the merge-base,
+   files changed on both sides, stack, the `ticket_token` patterns when the bundle has
+   them; the head sha is recorded as `headRefOid` for a GitHub PR, and the pinned base sha
+   is the local sha of `<remote>/<baseRefName>`; for a GitHub PR also `baseRefOid`,
+   labeled "base as GitHub last evaluated it", for information only; resume compares the
+   head and the pinned base; a `head: working-tree` bundle also gets its `parent` sha, its
+   `tree` sha, that the head is a built commit with no ref, the files "untracked at audit
+   time" one per line (part of the head, but possibly left out of the user's own commit),
+   the groups note of step 8, and for a GitHub PR the `headRefOid` and, when it differs
+   from the local `HEAD`, a line saying so); Combined state; Sources of truth (the order
    used, each with its sha and class, and whether it replaced the default); References
-   (each with its sha); Read paths (name, path, sha, mode; plus each ref mapping line
-   from step 1a); Export
-   notes (symlinks with targets, submodules, LFS pointers, skipped paths, declined
-   exports); Forge (queried or not, per bundle; "not in export" keys); Questions; Stage
-   applicability; Run directory (its path, and whether it is inside the session's
-   repository);
-   Test injection (the `_test` key, when present); Handoff (each handoff file with its
-   hash and that it passed `handoff.sh check`, its claim counts by kind, the bundle and
-   ticket mapping notes of section B, and the commit notes of step 8; "none" when no
-   claims file is a handoff); Claims (a statement that every claim is assigned to a
-   scope that stage 4 schedules, with the count per kind and per target);
-   Corrections (filled in stage 5).
+   (each with its sha); Read paths (name, path, sha, mode; plus each ref mapping line from
+   step 1a); Export notes (symlinks with targets, submodules, LFS pointers, skipped paths,
+   declined exports); Forge (queried or not, per bundle; "not in export" keys); Questions;
+   Stage applicability; Run directory (its path, and whether it is inside the session's
+   repository); Test injection (the `_test` key, when present); Handoff (each handoff file
+   with its hash and that it passed `handoff.sh check`, its claim counts by kind, the
+   bundle and ticket mapping notes of section B, and the commit notes of step 8; "none"
+   when no claims file is a handoff); Claims (a statement that every claim is assigned to
+   a scope that stage 4 schedules, with the count per kind and per target); Corrections
+   (filled in stage 5).
 4. **`common.md`**: read the template `${CLAUDE_PLUGIN_ROOT}/skills/cca/common.md` with
    the Read tool and write the copy to `common.md` in the run directory with the Write
    tool (not `cp`), filling its header: run id, run directory, tier, and the question
@@ -585,8 +632,9 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
    `trees/<name>.export.sh`, and `baseline/1-check.md`. Its inputs are those D7
    recorded plus each bundle's head, base, and merge-base sha (the pinned base is the
    local sha of the base ref; `baseRefOid` is recorded beside it for a GitHub PR, for
-   information only), the pinned sha of every reference and source of truth, and
-   `forge_hashes` (step 2).
+   information only), `head_parent` and `head_tree` for each `head: working-tree`
+   bundle, the pinned sha of every reference and source of truth, and `forge_hashes`
+   (step 2).
 7. Print the stage boundary line. With `budget: 0`, or `_test`
    `expire_budget_after_stage: 1`, the budget has now expired: go to stage 8. Otherwise
    start stages 2, 3, and 4 together.

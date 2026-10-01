@@ -41,7 +41,18 @@ a finished one.
    remote-tracking ref `<remote>/<baseRefName>` resolves to (`<remote>` selected as
    `1-orient.md` A5 does for a PR bundle, from the `url` in `pr.json.new`); the PR's
    `baseRefOid` is not compared, since it is GitHub's cached value. For any other
-   bundle, the shas its `branch` and `base` refs resolve to. Then:
+   bundle, the shas its `branch` and `base` refs resolve to. A bundle with
+   `head: working-tree` has no ref for its head, so its head is rebuilt, and the sha
+   printed is the current head: create `<run dir>/tmp/` and run
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh snapshot <repo> <run dir> <run dir>/tmp/wt-<name>`,
+   then `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh build <repo>` as
+   `1-orient.md` step 1c does, then
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh check <repo> <run dir> <run dir>/tmp/wt-<name> <run dir>/tmp/wt-<name> <run dir>/tmp/wt-<name>-check`
+   (resolved absolute script paths). A `blocked` line (exit 1) or exit 2 from the check
+   stops resume, so the build cannot leave a change that the baseline of step 7 would
+   absorb. A refusal from the build (exit 1, for example a merge now in progress) or
+   exit 2 stops resume with the script's lines. An unchanged working tree and `HEAD`
+   give the recorded sha and rewrite any pruned objects before an agent launches. Then:
    - A changed head: stop and ask whether to restart from stage 1, showing each
      bundle's recorded and current shas. On yes, the first stage to rerun is 1: skip
      steps 4 and 5 and go to step 6. On no,
@@ -98,8 +109,10 @@ a finished one.
    - stage 1, when any tree `audit-brief.md` maps as `direct` fails a direct-read
      condition now: `git -C <repo> rev-parse HEAD` is not the pinned sha,
      `git -C <repo> --no-optional-locks status --porcelain --untracked-files=no` is not
-     empty, or `git -C <repo> ls-files -v` shows a path flagged `S`, `h`, or `s`.
-     Rerunning stage 1 re-exports it.
+     empty, or `git -C <repo> ls-files -v` shows a path flagged `S`, `h`, or `s`. For a
+     tree the brief maps as `direct (working tree)`, the condition is instead that
+     `git -C <repo> rev-parse HEAD` is the recorded `head_parent` and no path is flagged
+     `S`, `h`, or `s`. Rerunning stage 1 re-exports it.
    A `not_applicable` stage whose inputs have not changed is reused. When the first
    stage to rerun is not 1, or nothing needs a rerun, remove every
    `forge/<bundle>/pr.json.new` now. When nothing needs a rerun and no `--from` was

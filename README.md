@@ -192,6 +192,10 @@ are relative to the manifest's directory.
   ticket's `id`, in place of the bare `id`, so a bare-number id matches `#4567` but not
   `build 4567 passed`. The boundary rule applies outside the whole token, so `#{n}` does
   not match `AB#4567`; list `AB#{n}` too for that. GitHub tickets keep their own rule.
+  A bundle may add `"head": "working-tree"` (a manifest key only; its one value) to audit
+  uncommitted work. The bundle's branch must be checked out, and stage 1 builds a commit
+  from the working tree, with the modified files and the untracked files that are not
+  ignored, as the bundle's head. See Read-only boundary.
 - **`references`.** Read-only repos consulted only when a question needs them, each with
   a `name`, a `path`, and a `ref`. Each is pinned to the sha its `ref` resolves to in
   stage 1.
@@ -442,6 +446,18 @@ nothing is written to the repo. Symlinks are exported as placeholder files holdi
 target, and submodules are listed, not exported. An export over 1 GB is asked about
 first.
 
+A bundle with `head: working-tree` writes one more thing to its repo: the loose git
+objects of a commit that `skills/cca/scripts/working-tree.sh build` makes from the
+working tree in a temporary index. The repo's index, refs, and files are not touched, and
+the commit has no ref, so `git gc` may prune it after its prune window; the report's
+Coverage says so, and lists the files untracked at audit time. The script refuses
+(exit 1, before it writes anything) a repo with no `HEAD` commit, a sparse checkout,
+skip-worktree or assume-unchanged paths, unmerged paths, a submodule with changes, an
+untracked nested repository, a Git LFS or program filter, or a path git prints quoted.
+The same working tree and `HEAD` give the same commit sha, so `/cca:resume` rebuilds the
+head and does not ask to restart. Agents search such a tree with
+`git grep <pattern> <head sha>`.
+
 Role agents' tool lists exclude Edit and NotebookEdit. Each agent has Write, limited by
 instruction to its own output file in the run directory; the read-only check after every
 stage, described below, is the guard that detects a change to an audited repo and stops
@@ -527,7 +543,10 @@ its sentinel. Only an input it could not open goes inline, in the one follow-up,
 asks you to confirm. Approval is bound to the run, the revision, and the items; if the
 report changed since, act stops. Each affected checkout must be on the bundle's branch
 with no uncommitted changes; act never stashes or resets. New commits on the branch that
-act did not make are shown as drift before it goes on.
+act did not make are shown as drift before it goes on. For a `head: working-tree` bundle,
+drift means the committed tree differs from the audited tree, since the audited head is
+not on any branch; commit ancestry does not apply, so committing the audited working tree
+as is, or amending its message, is not drift.
 
 Act runs the repo's required checks first as a baseline, then makes one local commit per
 ticket per repo (or per item with `--per-item`), rerunning the checks for each and asking

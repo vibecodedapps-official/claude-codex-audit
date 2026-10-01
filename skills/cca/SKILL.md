@@ -49,14 +49,13 @@ each stage is in its stage file; read that file at the start of the stage, as th
 stage sections below say.
 
 The `allowed-tools` list above pre-approves read commands only. Export, snapshot,
-state-file, and probe commands (such as the export script, `rm -rf` and `mkdir` in
-the run directory, `stat`, `find`, `sha256sum`, `jq`, `awk`, `mv -f`, `wc -c`,
-`codex --version`, and the `sh` runs of the three scripts in
-`${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`: `readonly.sh`, `handoff.sh`, and
-`work-items.sh`) follow the session's permission mode; tell the user once, before
-stage 1, that they may prompt. `git fetch` (with its `git ls-remote --tags` check),
-every act write, and live-data access are not pre-approved, and you also ask for them
-in words first.
+state-file, and probe commands (such as the export script, `rm -rf` and `mkdir` in the run
+directory, `stat`, `find`, `sha256sum`, `jq`, `awk`, `mv -f`, `wc -c`, `codex --version`,
+and the `sh` runs of the four scripts in `${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`:
+`readonly.sh`, `handoff.sh`, `work-items.sh`, and `working-tree.sh`) follow the session's
+permission mode; tell the user once, before stage 1, that they may prompt. `git fetch`
+(with its `git ls-remote --tags` check), every act write, and live-data access are not
+pre-approved, and you also ask for them in words first.
 
 `${CLAUDE_PLUGIN_DATA}` below is cca's data directory, and `${CLAUDE_PLUGIN_ROOT}` is
 the plugin's own directory, where the stage files and templates live. Use each path
@@ -109,7 +108,9 @@ mean, in addition:
    `${CLAUDE_PLUGIN_DATA}/runs.json`. You never run `git checkout`, `git switch`,
    `git reset`, `git stash`, `git worktree`, `git archive`, `git checkout-index`, or any
    command that writes to an audited repo, and you run `git fetch` only after the
-   approval in stage 1.
+   approval in stage 1. The one other write is `working-tree.sh build` for a bundle with
+   `head: working-tree` (stage 1 step 1c, resume step 3), which writes only git objects
+   into the repo's object store, never the index, a ref, or a file.
 3. You call Codex only through the Skill tool, `codex-lite:ask`, with
    `--model <full id>` and `--timeout <seconds>`, plus `--resume <thread id>` for the
    one allowed follow-up. You never run the `codex` CLI except `codex --version`.
