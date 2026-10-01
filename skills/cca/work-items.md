@@ -64,7 +64,8 @@ With `jq`, it checks that:
 - every line parses as one JSON object;
 - the common keys and the operation's fields are present, with the right types;
 - ids run `W1` upward with no gap;
-- every placeholder rule above holds;
+- every placeholder rule above holds, and `set_pr_description` targets a PR forge id, not
+  a placeholder;
 - `run` equals the run id in the first heading of the report body;
 - every `C<n>` in `items` is an item heading `#### C<n>: ` in the report body;
 - every `claim <n>` in `items` is a `claim` line in `claims.md`.

@@ -94,6 +94,7 @@ edit "unknown claim" "work-items b.jsonl:3: unknown claim 'claim 3'" '3s|"items"
 edit "malformed item" "work-items b.jsonl:3: item 'x' is not C<n> or claim <n>" '3s|"items":\["C2"\]|"items":["x"]|'
 edit "wrong run" "work-items b.jsonl:4: run 'other' does not match the report run id '2026-09-01-0900'" '4s|"run":"2026-09-01-0900"|"run":"other"|'
 edit "create with a wrong target" "work-items b.jsonl:1: target '\$new:other' must be '\$new:follow-up'" '1s|"target":"\$new:follow-up"|"target":"$new:other"|'
+edit "set_pr_description on a placeholder" "work-items b.jsonl:8: set_pr_description target '\$new:follow-up' must be a PR forge id, not a placeholder" '8s|"target":"owner/repo#7"|"target":"$new:follow-up"|'
 
 # A second create with the same key, a placeholder used before its create, and a bad
 # target_url, each as its own small file.

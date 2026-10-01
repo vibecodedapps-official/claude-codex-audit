@@ -7,10 +7,11 @@
 # The format is defined in skills/cca/work-items.md. With jq, this checks that every
 # line is one JSON object; that the common keys and the fields of its op are present
 # with the right types; that ids run W1 upward with no gap; that every $new:<key>
-# placeholder names a create on an earlier line and create keys are unique; that run
-# equals the run id in the report body's first heading ("# cca audit report:
-# <run-id>"); that every C<n> in items is an item heading "#### C<n>: " in the report
-# body; and that every "claim <n>" is a claim line in claims.md.
+# placeholder names a create on an earlier line and create keys are unique; that
+# set_pr_description targets a PR forge id, not a placeholder; that run equals the run
+# id in the report body's first heading ("# cca audit report: <run-id>"); that every
+# C<n> in items is an item heading "#### C<n>: " in the report body; and that every
+# "claim <n>" is a claim line in claims.md.
 #
 # Prints "work-items: ok" and exits 0, or one line per error, "work-items
 # <file>:<line>: <message>", and exits 1. Exits 2 on a usage error or an unreadable
@@ -116,7 +117,11 @@ def op_errs($o; $s):
 	elif $op == "set_state" then fstr($o; "value")
 	elif $op == "add_link" then
 		fstr($o; "link_type") + fstr($o; "to") + newref($o.to; $s.creates; "to")
-	elif $op == "add_comment" or $op == "set_description" or $op == "set_acceptance_criteria" or $op == "set_pr_description" then
+	elif $op == "set_pr_description" then
+		fstr($o; "text")
+		+ (if ($o.target | type) == "string" and ($o.target | startswith("$new:"))
+			then ["set_pr_description target '\($o.target)' must be a PR forge id, not a placeholder"] else [] end)
+	elif $op == "add_comment" or $op == "set_description" or $op == "set_acceptance_criteria" then
 		fstr($o; "text")
 	else ["unknown op '\($op)'"] end;
 
