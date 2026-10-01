@@ -481,7 +481,9 @@ function process(s,   k, nm) {
 function cl(kind, ref, b, t, l, text) {
 	if (length(text) > CLAIM_MAX)
 		err(l, "claim text is " length(text) " bytes, over the " CLAIM_MAX "-byte cap")
-	OUT[++nout] = sprintf("%s\t%s\t%s\t%s\t%s\t%s", kind, ref, b, t, l, text)
+	# Concatenation, not sprintf: mawk caps a sprintf result at 8192 bytes, and a claim over
+	# the cap must still reach the error above rather than abort awk.
+	OUT[++nout] = kind "\t" ref "\t" b "\t" t "\t" l "\t" text
 }
 
 function ftext(s, i, id) {
