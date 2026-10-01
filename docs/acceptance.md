@@ -105,7 +105,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 |---|---|---|---|
 | M5-a | `full`, after a complete run: editing the claims file and resuming reruns stages 1 to 8 and marks the old outputs superseded | not run | needs a live multi-agent audit run |
 | M5-b | `--from 5` reruns stages 5 to 8, reuses stages 1 to 4, and marks `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` superseded | not run | needs a live multi-agent audit run |
-| M5-c | Moving the app's branch head makes resume stop and ask | not run | needs a live multi-agent audit run |
+| M5-c | Moving the app's branch head (or its base so the merge base changes) makes resume stop and ask; a base that moves with the merge base unchanged does not stop it and is recorded as `base moved` | not run | needs a live multi-agent audit run |
 | M5-d | `--from 6` reruns stages 6 to 8, reuses `ledger/5.md` unchanged, and marks `ledger/6.md` and `ledger/7.md` superseded | not run | needs a live multi-agent audit run |
 
 ## M6: act

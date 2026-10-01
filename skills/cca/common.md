@@ -187,6 +187,11 @@ Every agent:
 4. Ends the file with the line `status: complete`, as its last line.
 5. Returns only the output path and one line of status.
 
+The merger alone may add an optional `opened:` heading, before `consumed:`, listing
+each ledger file or section it opened (the path and the reason, one per line). It is not a
+`runs:` entry, since the merger has no shell and `runs:` stays command, directory, and
+exit status, or `none`.
+
 A file without `status: complete` as its last line is a failed output, whatever the
 agent returned.
 

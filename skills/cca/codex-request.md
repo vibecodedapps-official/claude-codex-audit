@@ -85,9 +85,13 @@ An input you could not open is listed as "not read: <path>".
 
 ## Asks, in this order
 
-1. For every finding at severity blocker or high: your verdict (agree, disagree, or
-   change severity), with your own evidence, not the auditor's.
-2. For every finding pass two downgraded or dropped: your position, with evidence.
+1. For each finding at severity blocker or high: your verdict (agree, disagree, or
+   change severity), with your own evidence, not the auditor's; <"for these ids: <id
+   list>" when stage 6 split the mandatory set (more than 60 ids), else "for every
+   such finding">.
+2. For each finding pass two downgraded or dropped: your position, with evidence;
+   <"for these ids: <id list>" when stage 6 split the mandatory set (more than 60
+   ids), else "for every such finding">.
 3. Dropped findings you would restore, each with the reason and evidence.
 4. Up to ten findings no reviewer raised, each in the finding schema from common.md,
    with ids X1, X2, and so on, and the line "- origin: codex".
@@ -117,4 +121,6 @@ it covered do not pass the review gate on its account, and the run ends `partial
 With `_test` `drop_ack`, treat the named input's acknowledgment as missing in the first
 `times` answers. Stage 6 also checks that the answer gives a position for every
 blocker or high finding and every pass-two downgrade or drop (asks 1 and 2); one still
-missing after the one follow-up fails the stage the same way.
+missing after the one follow-up fails the stage the same way. The ids checked are
+every mandatory id when the set was not split, else the ids listed in the "for these
+ids" slots of asks 1 and 2 in the request and the follow-up.

@@ -62,10 +62,12 @@ by size has `<group>-<k>` parts), and `converged.md`.
    | `codex` | the late adversary gave a verdict | provisional (always at low) |
    | `late` | never | provisional |
 
-   "Stage 6 saw it" means stage 6 is `complete` and the finding was in the request. When
-   stage 6 failed, no finding passes the gate on its account. A finding whose stage 5
-   scope failed has no stage 5 verdict. A `dropped` verdict still counts as a challenge;
-   the disposition decides what happens to it.
+   "Stage 6 saw it" means stage 6 is `complete`, the finding was in the request, and
+   `ledger/6.md` does not list its id as `not requested`; every id listed as `not
+   requested` stays provisional even when stage 6 is complete. When stage 6 failed, no
+   finding passes the gate on its account. A finding whose stage 5 scope failed has no
+   stage 5 verdict. A `dropped` verdict still counts as a challenge; the disposition
+   decides what happens to it.
 
    Write `gate.md`: one line per ledger id, `<id>: counts | provisional; <reason>`.
 
@@ -112,23 +114,30 @@ by size has `<group>-<k>` parts), and `converged.md`.
       whose finding id belongs to the group (step 7.1), each section prefixed with the
       pointer line `source: ledger/<n>.md, section <finding id>`, then the group's
       lines from `gate.md`. When a slice exceeds 450,000 bytes (`wc -c`), or
-      `_test.ledger_split_bytes` when set, split the group into `<group>-1`,
-      `<group>-2`, ... by finding id order, with slices `ledger/slices/<group>-1.md`,
+      `_test.ledger_split_bytes` when set, split the group into parts `<group>-1`,
+      `<group>-2`, ... with slices `ledger/slices/<group>-1.md`,
       `ledger/slices/<group>-2.md`, ... and one merger each; the final merger treats
-      them as one group.
+      them as one group. Fill the parts greedily in finding id order: a part closes
+      when adding the next id's sections (with its pointer lines and its `gate.md`
+      line) would take it over the threshold, and that id starts the next part. A
+      single id whose sections alone exceed the threshold forms a part of its own,
+      marked `over threshold` in its slice header and in the stage entry. Every id
+      lands in exactly one part, so the split ends and gives the same parts each time.
    3. Launch one merger per group (per part), prompt: the paths of `audit-brief.md`,
       `common.md`, its slice, and the output path `converged/<group>.md` (or
       `converged/<group>-<k>.md` for a part), and nothing else. The merger reads the
       slice and may open a full ledger file only to settle a suspected duplicate inside
-      its own slice, and it then says so under `runs:`. Each item holds: the item,
-      sources, each position's severity and label, disposition, gate, absorbed ledger
-      ids, and a ledger section pointer. No `C<n>` ids yet. Each file ends with
-      `status: complete`.
+      its own slice; it records each file it opened, with the reason, under its own
+      `opened:` heading, not under `runs:` (which stays as `common.md`'s output
+      contract defines it). Each item holds: the item, sources, each position's
+      severity and label, disposition, gate, absorbed ledger ids, and a ledger section
+      pointer. No `C<n>` ids yet. Each file ends with `status: complete`.
    4. Launch the final merger with the paths of `audit-brief.md`, `common.md`, every
       `converged/<group>.md` (every part of a split group), the ledger files, and
       `gate.md`, and the output path `converged.md`. It assigns `C<n>` ids, merges
       items that are the same defect across groups, and opens a ledger section only to
-      settle a suspected cross-group duplicate.
+      settle a suspected cross-group duplicate, recording it under `opened:` as in
+      step 7.3.
 
 8. **The orchestrator checks the merge against the ledger:**
    - every finding id in `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` appears in the
@@ -161,6 +170,6 @@ by size has `<group>-<k>` parts), and `converged.md`.
 12. **Write the stage 7 entry last,** once the check has passed, per the preamble:
     status, inputs, outputs, agents with tokens labeled "task notification,
     subagent_tokens; scope not documented", swaps, the mode (normal or split) with the
-    byte total and the threshold used, `"converged_check": "pass"` or `"fail"` from
-    step 8 (absent when no merge was attempted), failed scopes with coverage loss, and
-    each `_test` fault applied.
+    byte total and the threshold used, each part marked `over threshold` (step 7.2),
+    `"converged_check": "pass"` or `"fail"` from step 8 (absent when no merge was
+    attempted), failed scopes with coverage loss, and each `_test` fault applied.

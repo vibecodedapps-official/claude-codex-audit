@@ -51,21 +51,23 @@ Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md
       high, every pass-two downgrade or drop, dropped findings to restore including
       dismissed ones, up to ten new findings, severity recalibration, a non-binding
       merge verdict per bundle), within the 3,000-word answer cap and two quoted lines
-      per citation. Asks 1 and 2 list only the first batch when step 4.3 batches. When
-      the run directory is inside the session's repository root (step 5), it names each
-      copy by its path relative to that root; otherwise by its absolute path, which only
-      the fallback uses.
+      per citation. Asks 1 and 2 each end with the template's id slot: when step 4.3
+      splits the mandatory set, `for these ids: <first batch>`; otherwise `for every
+      such finding`. When the run directory is inside the session's repository root
+      (step 5), it names each copy by its path relative to that root; otherwise by its
+      absolute path, which only the fallback uses.
    3. **Mandatory id set.** From `ledger/5.md`, collect every finding id at severity
       blocker or high, and every finding id that pass two downgraded or dropped. Asks 1
       and 2 require a position for each. When the set has more than 60 ids, it may not
       fit the 3,000-word answer cap: split asks 1 and 2 in id order into a first batch
       (the first 60 ids) and a second batch (the rest). The request carries the first
-      batch; the second batch goes in the one follow-up (step 8), which is only possible
-      when Codex fills the role. Record `batched: true` in the stage entry. When the
-      second batch is itself over 60 ids, or the fallback fills the role (it has no
-      follow-up), the ids beyond the batches the run can send are listed in
-      `ledger/6.md` as `not requested`, so they stay provisional. The mandatory set for
-      the checks in steps 8, 10, and 11 is the ids actually requested.
+      batch; the second batch goes in the one follow-up (step 8), a Codex follow-up.
+      `batched: true` goes in the stage entry only when a Codex follow-up carries the
+      second batch. With the fallback (it has no follow-up), `batched` is false and
+      every mandatory id past the first batch is listed in `ledger/6.md` as `not
+      requested`. The same holds for any id past a second batch of 60 ids. Ids listed
+      as `not requested` stay provisional. The mandatory set for the checks in steps 8,
+      10, and 11 is the ids actually requested.
 
 5. **Choose the form.** Find the session's repository root with
    `git rev-parse --show-toplevel` in the session's directory. codex-lite runs Codex
@@ -135,15 +137,17 @@ Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md
      unacknowledged inputs in inline form (full content under their path and sentinel
      headers) with a request to acknowledge them and revise any answer that depended on
      them; the mandatory ids without a position, with a request for their positions;
-     and the second batch of asks 1 and 2 when `batched`. Apply the inline cap to this
-     follow-up. Over it, first drop the diffs from it and re-measure as in step 5
-     (record `inline_reduced: true`); a dropped diff no longer needs acknowledgment, and
-     the follow-up gives its three-dot regeneration command in its place, as in step 5.
-     Still over the cap, the follow-up is not sent and stage 6 fails as below. With no
-     thread id, send it as a fresh call carrying the whole request in the form step 5
-     chose (path form: the same `Read <path>` instruction; inline form: the whole inline
-     text), plus the follow-up's asks. Handle its status as in step 7, except that a
-     swap is replaced by stage 6 failing, since the first answer already exists.
+     and the second batch of asks 1 and 2, ending each ask with `for these ids: <the
+     second batch's id list>`, when step 4.3 left one for Codex (then `batched` is
+     true). Apply the inline cap to this follow-up. Over it, first drop the diffs from
+     it and re-measure as in step 5 (record `inline_reduced: true`); a dropped diff no
+     longer needs acknowledgment, and the follow-up gives its three-dot regeneration
+     command in its place, as in step 5. Still over the cap, the follow-up is not
+     sent and stage 6 fails as below. With no thread id, send it as a fresh call
+     carrying the whole request in the form step 5 chose (path form: the same `Read
+     <path>` instruction; inline form: the whole inline text), plus the follow-up's
+     asks. Handle its status as in step 7, except that a swap is replaced by stage 6
+     failing, since the first answer already exists.
    - Still unacknowledged after the follow-up: stage 6 fails. Keep the answer, list the
      unacknowledged inputs in `ledger/6.md` and the stage entry, naming as one possible
      cause that the inline text was altered in transit through the Skill argument, and mark in
@@ -158,16 +162,17 @@ Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md
    `--- follow-up, thread <id> ---`.
 
 10. **Check the mandatory positions, then write `ledger/6.md` once.** Before writing,
-    take the mandatory id set from step 4.3 (computed from `ledger/5.md`) and compare it
-    with the finding ids the answer, with any follow-up appended, addresses with a
-    position. For Codex this is a check after the fact: the follow-up for missing
-    positions was already sent in step 8, and step 10 sends none. A mandatory id still
-    without a position in the answer with the follow-up appended fails stage 6: keep the
-    answer, list the ids in `ledger/6.md` and under `missing_positions` in the stage
-    entry, and mark in `ledger/6.md` that no finding passes the review gate on
-    stage 6's account. For the fallback, a mandatory id without a position fails the
-    attempt (the ladder in step 11). "seen, no position" applies only to ids outside the
-    mandatory set.
+    take the mandatory id set from step 4.3 (computed from `ledger/5.md`; every
+    mandatory id when the set was not split, else the ids listed in the "for these ids"
+    slots of the request and the follow-up) and compare it with the finding ids the
+    answer, with any follow-up appended, addresses with a position. For Codex this is a
+    check after the fact: the follow-up for missing positions was already sent in step
+    8, and step 10 sends none. A mandatory id still without a position in the answer
+    with the follow-up appended fails stage 6: keep the answer, list the ids in
+    `ledger/6.md` and under `missing_positions` in the stage entry, and mark in
+    `ledger/6.md` that no finding passes the review gate on stage 6's account. For the
+    fallback, a mandatory id without a position fails the attempt (the ladder in step
+    11). "seen, no position" applies only to ids outside the mandatory set.
 
     `ledger/6.md` holds, in this order:
     - who filled the role: `codex <model>` with the thread id, or `cca:adversary`
@@ -212,9 +217,10 @@ Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md
     above (relaunch on opus, then stage 6 failed). No follow-up call exists for the
     fallback. When stage 6 fails for this reason, list the unacknowledged inputs in
     `ledger/6.md` and the stage entry as step 8's last bullet says, and the ids without
-    a position under `missing_positions`. When both checks pass, write `ledger/6.md`
-    from its answer as in step 10. Its additions also take `origin: codex` and ids
-    `X<n>`, since they come from the second opinion.
+    a position under `missing_positions`. With the fallback `batched` is false, and
+    every mandatory id past the first batch is `not requested` (step 4.3). When both
+    checks pass, write `ledger/6.md` from its answer as in step 10. Its additions also
+    take `origin: codex` and ids `X<n>`, since they come from the second opinion.
 
 12. **Stage completion.** Stage 6 is `complete` when an answer from Codex or the
     fallback is saved, every input is acknowledged by whoever filled the role, every
@@ -249,6 +255,7 @@ Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md
     "not reported".
 
     `missing_positions` lists the mandatory ids still without a position at stage end;
-    `batched` is true when asks 1 and 2 were split across the request and the follow-up;
+    `batched` is true only when a Codex follow-up carried the second batch of asks 1 and
+    2; with the fallback it is false;
     `inline_reduced` is true when the inline request or the follow-up was reduced by
     dropping diffs.

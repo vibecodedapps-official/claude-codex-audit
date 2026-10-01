@@ -87,10 +87,13 @@ states the merged, normalized manifest before stage 1 and saves it in the run di
 `--from <stage>` takes a stage number from 1 to 8. Resume reruns from the earlier of
 `--from` and the first stage that is incomplete or whose inputs changed, reruns every
 stage after it, and marks their old outputs superseded. Approvals you gave are not asked
-again. If any bundle's head or base has moved since the run started, resume stops and
-asks whether to restart from stage 1. Resume also re-queries the forge data the brief
-used; a difference invalidates stage 1, and if the forge cannot be queried, resume
-stops.
+again. If any bundle's head has moved since the run started, or its base has moved so
+that the merge base changed, resume stops and asks whether to restart from stage 1. A
+base that moved with the merge base unchanged does not stop it: the old base sha is kept
+for every diff and the move is recorded as `base moved` in the report. Resume also
+re-queries the forge data the brief used; a difference invalidates stage 1, and if the
+forge cannot be queried, resume stops. A run directory with `manifest.json` but no
+`stages.json` reruns from stage 1; one without `manifest.json` is unrecoverable.
 
 ### `/cca:act`
 

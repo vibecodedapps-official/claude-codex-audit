@@ -48,7 +48,7 @@ Outputs: `report.md`.
    or `not_applicable` in `stages.json`. `partial` when any of them failed, is
    `running`, is missing, or the budget expired. The state is final only after step 9
    writes stage 8 `complete`; if step 8's read-only check fails, the run is `blocked`,
-   as step 8 says. (`blocked` never reaches this step.)
+   as step 8 says.
 
 4. **Count before deciding.** For each item whose gate is `counts`, find its counted
    severity, then write the counts into the report so a reader can check the verdict:
@@ -109,7 +109,11 @@ Outputs: `report.md`.
        - at low tier, that one auditor covered the ticket, tests, and work-item hygiene;
        - failed scopes and scopes not run because the budget expired;
        - every file stage 2 split by byte range, from the stage 2 entry's `split_files`:
-         the source, the path, its size, and its ranges (digested as separate chunks);
+         the source, the path, its size, each range, and the chunk id (`digest-N`) that
+         covered it with that chunk's status;
+       - each bundle whose base sha moved on resume while its merge base stayed the same
+         (`base moved`, the stage entries' `base_moved` key): the recorded and the
+         current base sha, noting that the recorded base sha was kept for every diff;
        - unanswered questions and departures from the stage plan;
        - map corrections not applied, from `ledger/5.md`;
        - when exports were used, that the forge was not queried;

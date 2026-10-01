@@ -122,19 +122,26 @@ Choices made while building 0.1.0 where the design left room.
 
 - B1: fetches are explicit and tag-free into remote-tracking refs only, with no
   `--prune`; the pinned shas are verified after the fetch and the commands are recorded
-  in the approval.
+  in the approval; the fetch also covers tags (to `refs/remotes/<remote>/tags/<name>`)
+  and shas (to `refs/remotes/<remote>/cca/<sha>`) from each repo's selected remote.
 - B2: a bundle's base is pinned by the PR's `baseRefOid`, and a stale base is handled
-  like a stale head; resume compares both.
-- B3: raw `gh` output is saved beside the rendered forge files and hashed in
-  `forge_hashes`; resume re-queries and compares, and a `gh` failure stops resume.
+  like a stale head; resume stops only for a changed head or a changed merge base, and
+  a moved base sha with the same merge base is recorded as `base moved` while the
+  recorded base sha is kept for every diff.
+- B3: each `gh` call is made once, projected to fixed fields (viewer-dependent fields
+  would otherwise invalidate stage 1 under another login), saved beside the rendered
+  forge files, and hashed in `forge_hashes`; resume re-runs the same commands and
+  compares, and a `gh` failure stops resume.
 - B4: resume reads `manifest.json` and `stages.json` first and reruns from stage 1 when
-  stage 1 is missing, running, or has no brief.
+  stage 1 is missing, running, or has no brief, or when `stages.json` is missing; only
+  a missing `manifest.json` is unrecoverable.
 - B5: stage 6 requires a position for every mandatory id and batches the asks across
-  the request and the one follow-up above 60 ids.
+  the request and the one follow-up above 60 ids; with the fallback there is no
+  follow-up, so ids past the first batch are `not requested` and stay provisional.
 - C1: a text file over 450,000 bytes is split into byte-range chunks, listed in
   `split_files` and in the report's Coverage.
 - C2: split-mode group mergers read a per-group slice under `ledger/slices/`, not the
-  whole ledger files.
+  whole ledger files; a ledger file or section a merger opens is recorded under `opened:`.
 - C3: an over-cap Codex request is reduced by dropping diffs before the swap, recorded
   as `inline_reduced`.
 
