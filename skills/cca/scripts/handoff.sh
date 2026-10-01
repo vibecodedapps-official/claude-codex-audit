@@ -17,7 +17,7 @@
 # unreadable file exit 2.
 #
 # A UTF-8 byte order mark at the start of line 1 is ignored.
-# A claim text over 8000 bytes is a rule failure, since a claim is read as one line.
+# A claim line over 8000 bytes is a rule failure, since a claim is read as one line.
 #
 # POSIX sh plus awk; the awk program uses only features that mawk and gawk both accept.
 set -u
@@ -476,14 +476,16 @@ function process(s,   k, nm) {
 	err(ln, "unrecognized line")
 }
 
-# cl(...): add one claim to the output and check its text against the cap, so the checks
-# and the printed claims come from the same pass.
-function cl(kind, ref, b, t, l, text) {
-	if (length(text) > CLAIM_MAX)
-		err(l, "claim text is " length(text) " bytes, over the " CLAIM_MAX "-byte cap")
+# cl(...): add one claim to the output and check its whole line, the six fields joined by
+# tabs as printed, against the cap, so the checks and the printed claims come from the
+# same pass. The ids and bundle names in the other fields count as well as the text.
+function cl(kind, ref, b, t, l, text,   row) {
 	# Concatenation, not sprintf: mawk caps a sprintf result at 8192 bytes, and a claim over
-	# the cap must still reach the error above rather than abort awk.
-	OUT[++nout] = kind "\t" ref "\t" b "\t" t "\t" l "\t" text
+	# the cap must still reach the error below rather than abort awk.
+	row = kind "\t" ref "\t" b "\t" t "\t" l "\t" text
+	if (length(row) > CLAIM_MAX)
+		err(l, "claim is " length(row) " bytes, over the " CLAIM_MAX "-byte cap")
+	OUT[++nout] = row
 }
 
 function ftext(s, i, id) {
@@ -535,7 +537,7 @@ function print_commits(   i, j, nc) {
 
 BEGIN {
 	file = ENVIRON["HANDOFF_FILE"]
-	CLAIM_MAX = 8000   # the most bytes a claim text may hold; a claim is read as one line
+	CLAIM_MAX = 8000   # the most bytes a claim line may hold; a claim is read as one line
 	nsec[1] = "Bundles"
 	nsec[2] = "Tickets"
 	nsec[3] = "Decisions"

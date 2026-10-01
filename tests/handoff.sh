@@ -270,29 +270,45 @@ broken "same commit at two sha lengths" "handoff b.md:24: duplicate commit entry
 set_line "$v" "$tmp/b.md" 19 "- bundles: app, app"
 broken "bundle named twice" "handoff b.md:19: duplicate bundle 'app' in bundles"
 
-# A claim is read as one line, so its text is capped at 8000 bytes: an error, never a
-# truncation. The long values are fixed-length runs; the byte counts below are literals.
+# A claim is read as one line, so the whole claim line, all six fields joined by tabs, is
+# capped at 8000 bytes: an error, never a truncation. The long values are fixed-length
+# runs; the byte counts below are literals, each worked out from the field widths.
 pad() { head -c "$1" /dev/zero | tr '\000' a; }
 
+# D1's claim: kind 'decision' 8, ref 'decisions/D1' 12, bundle 'app' 3, ticket 'APP-1' 5,
+# line '31' 2, text 8309 (346 for the fixture plus the 8000-byte reason replacing a
+# 37-byte one), 5 tabs: 8 + 12 + 3 + 5 + 2 + 8309 + 5 = 8344.
 set_line "$v" "$tmp/b.md" 37 "  - rejected: keep the row and set a status; why: $(pad 8000)"
-cap_d1="handoff b.md:31: claim text is 8309 bytes, over the 8000-byte cap"
+cap_d1="handoff b.md:31: claim is 8344 bytes, over the 8000-byte cap"
 broken "decision claim over the cap" "$cap_d1"
 run "claims decision claim over the cap" 1 "$cap_d1" claims b.md
 run "commits decision claim over the cap" 1 "$cap_d1" commits b.md
 
-set_line "$v" "$tmp/b.md" 20 "- problem: $(pad 8001)"
-cap_p="handoff b.md:14: claim text is 8001 bytes, over the 8000-byte cap"
+# The problem claim: kind 'code' 4, ref 'tickets/APP-1/problem' 21, bundle 3, ticket 5,
+# line '14' 2, 5 tabs: 40 bytes besides the text. A text of 7961 makes 8001.
+set_line "$v" "$tmp/b.md" 20 "- problem: $(pad 7961)"
+cap_p="handoff b.md:14: claim is 8001 bytes, over the 8000-byte cap"
 broken "problem over the cap" "$cap_p"
 run "claims problem over the cap" 1 "$cap_p" claims b.md
 run "commits problem over the cap" 1 "$cap_p" commits b.md
 
-set_line "$v" "$tmp/b.md" 20 "- problem: $(pad 8000)"
+# A text of 7960 makes the line exactly 8000.
+set_line "$v" "$tmp/b.md" 20 "- problem: $(pad 7960)"
 run "check problem at the cap" 0 "handoff: ok" check b.md
 run "commits problem at the cap" 0 "$commits_exp" commits b.md
 if out=$(cd "$tmp" && sh "$hs" claims b.md 2>&1); then st=0; else st=$?; fi
 [ "$st" = 0 ] || fail "claims problem at the cap: exit $st"
-[ "$(printf '%s\n' "$out" | awk -F"$tab" 'NR == 2 { print length($6) }')" = 8000 ] ||
-	fail "claims problem at the cap: text is not 8000 bytes"
+[ "$(printf '%s\n' "$out" | awk 'NR == 2 { print length($0) }')" = 8000 ] ||
+	fail "claims problem at the cap: the claim line is not 8000 bytes"
+
+# A long id reaches the ref field. D followed by 7700 ones is an id of 7701 bytes, so the
+# ref 'decisions/<id>' is 10 + 7701 = 7711; the line is 8 + 7711 + 3 + 5 + 2 + 346 + 5 =
+# 8080, with the fixture's own 346-byte text.
+set_line "$v" "$tmp/b.md" 31 "### D$(pad 7700 | tr a 1)"
+cap_id="handoff b.md:31: claim is 8080 bytes, over the 8000-byte cap"
+broken "decision id over the cap" "$cap_id"
+run "claims decision id over the cap" 1 "$cap_id" claims b.md
+run "commits decision id over the cap" 1 "$cap_id" commits b.md
 
 # Two errors in one file, reported in line order.
 set_line "$v" "$tmp/b1.md" 23 "  - app 9c5f7: add the status column migration so every row has a status."

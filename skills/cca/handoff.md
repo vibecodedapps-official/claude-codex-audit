@@ -131,10 +131,11 @@ generated: <ISO 8601 time>
     `checkpoint (recommended option taken)`.
 12. Blank lines are allowed anywhere. Any other line that fits none of the shapes above is
     an error.
-13. A claim's text, the sixth field `claims` prints, is at most 8,000 bytes. A claim is read
-    as one line, and a reader cannot page within a line, so a longer one is an error, never
-    a truncation. A decision's claim joins its keys (decision, rationale, options,
-    decided_by, recorded_at, status), so long options count against the cap.
+13. A claim line, all six fields `claims` prints joined by tabs, is at most 8,000 bytes. A
+    claim is read as one line, and a reader cannot page within a line, so a longer one is
+    an error, never a truncation. The ids and bundle names in the other fields count, so a
+    long id counts against the cap. A decision's claim joins its keys (decision, rationale,
+    options, decided_by, recorded_at, status), so long options count too.
 
 ## Writing a handoff
 
