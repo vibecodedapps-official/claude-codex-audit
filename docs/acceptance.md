@@ -27,7 +27,7 @@ preexisting untracked `notes/` entry, and HEAD stayed on `feature`.
 | M0-c | `/cca:audit <solo manifest>` reaches stage 1 and stops with "not implemented" | superseded: stage 1 is implemented | The "not implemented" stub no longer exists; M0-c' replaces it |
 | M0-c' | `/cca:audit <solo manifest> --budget 0 --no-codex` reaches stage 1 and ends `partial` | pass | The budget-0 run: stage 1 ran, stage 8 wrote the report, the run ended `partial` with verdict `audit incomplete` and printed `/cca:resume 2026-09-30-2007-app-app-1`; `stages.json` has entries 1 and 8 `complete`, 2 and 3 not applicable, and entries for stages 4 to 7 marked as not run because the budget expired, in a free-text status the orchestrator improvised. The skill now standardizes this as status `failed` with the reason "not run: budget expired", so later runs differ in that detail |
 | M0-d | A probe settles the five architecture decisions; answers go in the decisions record | pass | Settled by documentation probe and session observation; answers in `docs/decisions.md` |
-| M0-e | `tests/lint.sh` passes, and fails when an agent file lists Edit | pass | `sh tests/lint.sh` printed `lint: ok`, exit 0; with `  - Edit` added to the tools list of `agents/auditor.md` in a copy of the tree, it printed `lint: agents/auditor.md:6: mentions Edit or NotebookEdit`, exit 1 |
+| M0-e | `tests/lint.sh` passes, and fails when an agent file lists Edit | pass | `sh tests/lint.sh` printed `lint: ok`, exit 0; with `  - Edit` added as the first entry under `tools:` of `agents/auditor.md` in a copy of the tree, it printed two lines, `lint: agents/auditor.md: tool not allowed: Edit (allowed: Read, Grep, Glob, Bash, Write)` and `lint: agents/auditor.md:6: mentions Edit or NotebookEdit`, exit 1 |
 
 ## Fixture builds
 
@@ -79,7 +79,8 @@ and on Ubuntu with dash, with identical commit ids on both.
 | M3-e | `_test` drops one acknowledgment twice: stage 6 fails, and the run ends `partial` with `audit incomplete` | not run | needs a live multi-agent audit run |
 | M3-f | `_test` fails the fallback twice, with `--no-codex`: Fable fails, Opus fails, and stage 6 fails | not run | needs a live multi-agent audit run |
 | M3-g | `--codex-timeout 0` is rejected in one line; the stage 6 entry records timeout `1200` at low, and `3600` with `--codex-timeout 3600` | not run | needs a live multi-agent audit run |
-| M3-h | `_test` sets the inline cap to 1,000 bytes, run directory outside the session's repo: stage 6 swaps with the reason "request too large for inline form", and the run ends `reported` | not run | needs a live multi-agent audit run |
+| M3-h | `_test` sets the inline cap to 1,000 bytes, run directory outside the session's repo: stage 6 first drops only the diffs of bundles whose repo is the session's repository and re-measures (the stage 6 entry records `inline_reduced: true`; a diff of any other repo is never dropped, and with none droppable it swaps directly), then, still over the cap, swaps with the reason "request too large for inline form", and the run ends `reported` | not run | needs a live multi-agent audit run |
+| M3-i | A run with more than 60 mandatory ids: Codex gets the first batch in the request and at most 60 positions in its one follow-up (missing first-batch ids first), and every id neither carries goes to the fallback in batches of at most 60, one launch per batch (`second-opinion-<k>`), recorded as a partial swap with the reason "mandatory ids beyond the Codex request and follow-up"; with `--no-codex`, one fallback launch per batch (`second-opinion-<k>`); the stage 6 entry records `batched: true` and no mandatory id is left without a request | not run | needs a live multi-agent audit run |
 
 ## M4: sources and scale
 
@@ -95,8 +96,8 @@ and on Ubuntu with dash, with identical commit ids on both.
 | M4-h | The `convention` contested finding is `contested` and counted at its lower severity | not run | needs a live multi-agent audit run |
 | M4-i | `_test` expires the budget when stage 3 completes: no stage from 4 on launches new agents, stage 8 runs, and the run ends `partial` | not run | needs a live multi-agent audit run |
 | M4-j | The file touched by three tickets is in `cross-cutting` and noted in each former group; a manifest `groups` key of two entries yields exactly those two plus `unticketed` | not run | needs a live multi-agent audit run |
-| M4-k | `_test` plants a wrong line in the legacy map: `domain/legacy-map.r2.md` has a corrections header, a top-up writes `pass2/<group>-topup.md` with `origin: topup`, the `pass1/` file is unchanged, and the finding is `provisional` until the late adversary clears it | not run | needs a live multi-agent audit run |
-| M4-l | `_test` sets the ledger split threshold to 1,000 bytes: `converged/` has one file per group, and `converged.md` maps every ledger id | not run | needs a live multi-agent audit run |
+| M4-k | `_test` plants a wrong line in the legacy map: `domain/legacy-source-map.r2.md` has a corrections header, a top-up writes `pass2/<group>-topup.md` with `origin: topup`, the `pass1/` file is unchanged, and the finding is `provisional` until the late adversary clears it | not run | needs a live multi-agent audit run |
+| M4-l | `_test` sets the ledger split threshold to 1,000 bytes: `converged/` has one file per group, or one per part `<group>-<k>` for a group whose slice exceeds the threshold, `ledger/slices/` holds the matching slices, and `converged.md` maps every ledger id | not run | needs a live multi-agent audit run |
 | M4-m | The `verified fact` contested finding is counted at its higher severity | not run | needs a live multi-agent audit run |
 
 ## M5: resume
@@ -105,7 +106,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 |---|---|---|---|
 | M5-a | `full`, after a complete run: editing the claims file and resuming reruns stages 1 to 8 and marks the old outputs superseded | not run | needs a live multi-agent audit run |
 | M5-b | `--from 5` reruns stages 5 to 8, reuses stages 1 to 4, and marks `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` superseded | not run | needs a live multi-agent audit run |
-| M5-c | Moving the app's branch head makes resume stop and ask | not run | needs a live multi-agent audit run |
+| M5-c | Moving the app's branch head, or its base branch, makes resume stop and ask whether to restart from stage 1; answering no changes nothing | not run | needs a live multi-agent audit run |
 | M5-d | `--from 6` reruns stages 6 to 8, reuses `ledger/5.md` unchanged, and marks `ledger/6.md` and `ledger/7.md` superseded | not run | needs a live multi-agent audit run |
 
 ## M6: act
@@ -146,7 +147,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 | Stage 4 and the barrier | M2, M4 | M2-a, M4-d | not run |
 | Stage 5 and the ledger | M2 | M2-a, M2-b | not run |
 | Map corrections and top-ups | M4 | M4-k | not run |
-| Stage 6 and the call contract | M3 | M3-a to M3-f | not run |
+| Stage 6 and the call contract | M3 | M3-a to M3-f, M3-i | not run |
 | Codex request shape and timeout | M3 | M3-g | not run |
 | Merger size and inline cap | M3, M4 | M3-h, M4-l | not run |
 | Stage 7, late adversary, review gate | M2, M4 | M2-c, M4-g, M4-h, M4-m | not run |

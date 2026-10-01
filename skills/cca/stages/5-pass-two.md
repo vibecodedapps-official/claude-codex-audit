@@ -111,7 +111,11 @@ corrected map, `pass2/<group>-topup.md` per map-correction top-up, and `ledger/5
    After the finding sections, add per scope its attacked Verified OK items with
    results and its coverage gaps, then a section "Map corrections applied" (each
    `.r2.md` file and its lines) and a section "Map corrections not applied" (each
-   rejected or one-round correction with its reason).
+   rejected or one-round correction with its reason). Each of these parts sits under
+   its own `## ` heading that is not a finding id, so that the last finding section,
+   which runs to the next `## ` line, never takes it in:
+   `## Verified OK challenged: <scope>`, `## Coverage gaps: <scope>`,
+   `## Map corrections applied`, and `## Map corrections not applied`.
 
 7. **Stage completion.** Stage 5 is `complete` when every pass-one report got a complete
    pass two, every top-up succeeded, and `ledger/5.md` is written; otherwise `failed`,

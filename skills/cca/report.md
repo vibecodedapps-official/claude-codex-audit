@@ -130,7 +130,17 @@ item id or evidence. `other` sentences are counted, not listed.
   `not run: budget expired`, with the reason.
 - Swaps: every swap, with role, scope, from, to, and reason (including Codex swaps and
   "request too large for inline form").
-- Failed scopes and the files, rules, or questions they left unreviewed.
+- Failed scopes and the files, rules, or questions they left unreviewed, naming the
+  last byte offset of a digest that ended `status: failed at byte <offset>`.
+- Each bundle whose base refresh the user declined ("base: local ref, refresh
+  declined" in the brief): the base commit list and overlap set are as of that ref.
+- Stage 6: whether the mandatory ids were requested in batches (`batched`) and, from
+  `missing_positions`, every mandatory id left without a position (those Codex was
+  asked for and left unanswered after the follow-up, and those of a fallback batch
+  that failed). A partial swap, the fallback answering the ids Codex was not asked
+  for, is listed as a swap with its scope.
+- Corpus files stage 2 split by byte range: the source, the path, its size, each
+  range, and the chunk id (`digest-N`) that covered it with that chunk's status.
 - Unanswered questions, and questions marked "not run".
 - Departures from the original stage plan (for example, the low tier's single auditor
   covering tests and work-item hygiene).

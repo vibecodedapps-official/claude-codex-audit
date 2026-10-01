@@ -20,10 +20,11 @@ Tested on Claude Code 2.1.284.
 ## Requirements
 
 - Claude Code with plugin agents and the Agent tool's `model` option.
-- `git`. Each audited repo is a local clone.
-- For GitHub bundles, `gh` authenticated. For any other forge, or without a forge CLI,
-  supply ticket and thread text as exported files (see Exported forge files); the report
-  then says the forge was not queried.
+- `git` 2.29 or later (the fetch commands use an empty `--refmap=`). Each audited repo
+  is a local clone.
+- For GitHub bundles, `gh` authenticated and `jq`. For any other forge, or without a
+  forge CLI, supply ticket and thread text as exported files (see Exported forge
+  files); the report then says the forge was not queried.
 - Optional: the Codex CLI and the `codex-lite` plugin, 0.7.0 or later, for the second
   opinion. codex-lite runs Codex from the session's repository root, with no network
   access. For Codex to read the run directory by path, start the session in the primary
@@ -86,9 +87,17 @@ states the merged, normalized manifest before stage 1 and saves it in the run di
 
 `--from <stage>` takes a stage number from 1 to 8. Resume reruns from the earlier of
 `--from` and the first stage that is incomplete or whose inputs changed, reruns every
-stage after it, and marks their old outputs superseded. Approvals you gave are not asked
-again. If any bundle's head has moved since the run started, resume stops and asks
-whether to restart from stage 1.
+stage after it, and marks their old outputs superseded. Approvals you gave are not
+asked again, except that a fetch approval covers only the commands it listed (an
+approval for a bare name covers either candidate refspec for it); other fetch
+commands are asked again. If any bundle's head or base has moved since the run
+started, resume stops and asks whether to restart from stage 1, since the brief's base
+commit list and overlap set depend on the base tip. A GitHub PR's base is the local
+`<remote>/<base branch>` ref, which stage 1 always asks to refresh, not GitHub's cached
+`baseRefOid`. Resume also re-queries the forge data the
+brief used; a difference invalidates stage 1, and if the forge cannot be queried,
+resume stops. A run directory with `manifest.json` but no `stages.json` reruns from
+stage 1; one without `manifest.json` is unrecoverable.
 
 ### `/cca:act`
 
@@ -199,7 +208,9 @@ four. A line `extends: default` keeps the four and adds yours.
 5. **Pass two.** A fresh adversary per pass-one report opens every citation, looks for
    counter-evidence, and rules on each finding.
 6. **Second opinion.** Codex, or the fallback, reviews every finding, including dropped
-   ones, and may restore findings or add new ones.
+   ones, and may restore findings or add new ones. Every blocker, high, and
+   downgraded or dropped finding must get a position, in batches of at most 60 ids
+   (Codex takes two batches; the fallback takes any further ones).
 7. **Converge.** A late adversary challenges late additions (at medium and high), then
    a merger folds the ledger into one item per distinct defect, `C1`, `C2`, and so on.
 8. **Report.** The verdict and the report, written from what is on disk.
@@ -279,8 +290,10 @@ During `/cca:audit` and `/cca:resume`, nothing changes an audited repo's tracked
 untracked non-ignored files, the index, branches, tags, stashes, config, or remotes. An
 audited repo is every bundle, reference, and source of truth. The only writes are the
 run directory, `runs.json`, codex-lite's own request and thread files in its data
-directory, and `git fetch` into remote-tracking refs after you approve it once per run.
-An ignored file written by a check run that an agent logged is allowed and reported.
+directory, and an explicit `git fetch --no-tags --refmap=` into remote-tracking refs after you
+approve the listed commands (a remote configured with `remote.<name>.prune` may also
+delete stale remote-tracking refs). An ignored file written by a check run that an
+agent logged is allowed and reported.
 
 When a repo's checkout is not at the audited sha, or has changes, cca exports the exact
 tree into the run directory from git objects, so no checkout filter or attribute runs and
@@ -316,7 +329,8 @@ The second opinion (stage 6) goes to Codex through codex-lite when the Codex CLI
 codex-lite are installed. Without them, with `--no-codex`, or when a Codex call is
 refused, times out, fails twice, or would need an inline request over 450,000 bytes,
 the role is swapped to a fresh `cca:adversary` agent on Fable, else Opus, given the same
-request. The swap is named in the report. Stage 6 always runs.
+request (one launch per batch of at most 60 mandatory ids). The swap is named in the
+report. Stage 6 always runs.
 
 cca never runs the `codex` CLI itself, except `codex --version` to check it is there.
 Codex runs from the session's repository, so when the run directory is outside it, the

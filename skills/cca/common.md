@@ -28,17 +28,19 @@ These hold for every stage, for the orchestrator and every agent.
 2. **Prevention and detection.** Agent tool lists exclude Edit and NotebookEdit. An
    agent with Bash runs only these commands: `git show`, `git log`, `git diff`,
    `git grep`, `git ls-files`, `rg`, `ls`, `git hash-object --no-filters` (never `-w`)
-   for the `consumed:` hashes, and, when a question needs a run, the repo's
-   test or lint commands, which may write ignored build output. This is instruction,
-   not enforcement: nothing blocks Bash mechanically. The orchestrator snapshots every
-   audited repo in stage 1 and compares after every stage. A change to tracked files,
-   untracked non-ignored files, refs, the index, stashes, or config, including an added
-   or deleted file, stops the run `blocked`, unless an approved fetch caused it. A
-   change among ignored files that no logged run accounts for stops it too. Not
-   detected: an ignored file replaced with one of the same size and a restored
-   modification time, changes inside `.git/` other than refs, stashes, and config, and
-   changes outside the audited repos. The user should not edit audited repos during a
-   run, since their own edits trip the check too.
+   for the `consumed:` hashes, `cat` of an exported file with `tail -c`, `head -c`,
+   `wc -c`, `sed '$d'`, and one `awk` line-numbering stage for a digester's byte range,
+   and, when a question needs a run, the repo's test or lint commands, which may write
+   ignored build output. This is instruction, not enforcement: nothing blocks Bash
+   mechanically. The orchestrator snapshots every audited repo in stage 1 and compares
+   after every stage. A change to tracked files, untracked non-ignored files, refs, the
+   index, stashes, or config, including an added or deleted file, stops the run
+   `blocked`, unless an approved fetch caused it. A change among ignored files that no
+   logged run accounts for stops it too. Not detected: an ignored file replaced with
+   one of the same size and a restored modification time, changes inside `.git/` other
+   than refs, stashes, and config, and changes outside the audited repos. The user
+   should not edit audited repos during a run, since their own edits trip the check
+   too.
 3. **No model, agent, or tool names** in anything external: commit messages, PR or
    ticket text, and drafted comments. The report is internal and may name them.
 4. **No advisor tool**, in the orchestrator or any agent.
@@ -185,6 +187,11 @@ Every agent:
    `consumed: none` when there were none.
 4. Ends the file with the line `status: complete`, as its last line.
 5. Returns only the output path and one line of status.
+
+The merger alone may add an optional `opened:` heading, before `consumed:`, listing
+each ledger file or section it opened (the path and the reason, one per line). It is not a
+`runs:` entry, since the merger has no shell and `runs:` stays command, directory, and
+exit status, or `none`.
 
 A file without `status: complete` as its last line is a failed output, whatever the
 agent returned.

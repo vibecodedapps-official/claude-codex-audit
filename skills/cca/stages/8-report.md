@@ -43,9 +43,12 @@ Outputs: `report.md`.
    absorbed, so every reported item can be named to `/cca:act`. Every finding not yet
    through the review gate is marked provisional.
 
-3. **Decide the terminal state.** `reported` when every applicable stage is `complete`
-   in `stages.json`. `partial` when any stage failed or the budget expired. (`blocked`
-   never reaches this step.)
+3. **Decide the terminal state** from stages 1 to 7 only; stage 8's own entry is
+   `running` at this point. `reported` when every applicable stage 1 to 7 is `complete`
+   or `not_applicable` in `stages.json`. `partial` when any of them failed, is
+   `running`, is missing, or the budget expired. The state is final only after step 9
+   writes stage 8 `complete`; if step 8's read-only check fails, the run is `blocked`,
+   as step 8 says.
 
 4. **Count before deciding.** For each item whose gate is `counts`, find its counted
    severity, then write the counts into the report so a reader can check the verdict:
@@ -104,7 +107,18 @@ Outputs: `report.md`.
        - every swap by name, with the requested model for each agent (the report says
          "requested", not "used");
        - at low tier, that one auditor covered the ticket, tests, and work-item hygiene;
-       - failed scopes and scopes not run because the budget expired;
+       - failed scopes and scopes not run because the budget expired, naming the last
+         byte offset of a digest that ended `status: failed at byte <offset>`;
+       - each bundle whose base refresh was declined, from the brief's "base: local
+         ref, refresh declined" line;
+       - stage 6: whether the mandatory ids were requested in batches (`batched`) and,
+         from `missing_positions`, every mandatory id left without a position (those
+         Codex was asked for and left unanswered after the follow-up, and those of a
+         fallback batch that failed); a partial swap (the fallback answering the ids
+         Codex was not asked for) is listed as a swap with its scope;
+       - every file stage 2 split by byte range, from the stage 2 entry's `split_files`:
+         the source, the path, its size, each range, and the chunk id (`digest-N`) that
+         covered it with that chunk's status;
        - unanswered questions and departures from the stage plan;
        - map corrections not applied, from `ledger/5.md`;
        - when exports were used, that the forge was not queried;

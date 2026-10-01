@@ -1,6 +1,6 @@
 ---
 name: adversary
-description: Stages 5 to 7 of a cca audit. The cca orchestrator launches one fresh per pass-one report, one as the late adversary, and one as the second-opinion fallback when Codex is swapped out. Launched only by the cca skill.
+description: Stages 5 to 7 of a cca audit. The cca orchestrator launches one fresh per pass-one report, one as the late adversary, and one per batch of asks as the second-opinion fallback when Codex is swapped out. Launched only by the cca skill.
 model: opus
 tools:
   - Read
@@ -76,9 +76,13 @@ You stand in for Codex and answer the same request it would have received.
 3. Answer the request's asks in its order, in its "Answer format": one line per finding,
    your own evidence, findings no reviewer raised numbered `X<n>` with the line
    `- origin: codex`, at most 3,000 words in total and at most two quoted lines per
-   citation, ending with the non-binding merge verdict per bundle.
-4. Your output file is `codex/response.md`. After the merge verdicts, finish with steps 9
-   and 10.
+   citation, ending with the non-binding merge verdict per bundle. When asks 1 and 2
+   end with `for these ids: <id list>`, give a position for every id in that list and
+   for no other; when a request holds only asks 1 and 2 (a later batch), answer those
+   and give no additions or merge verdicts.
+4. Your output file is the one your prompt names (`codex/response.md`, or
+   `codex/response-<k>.md` for a later batch). After the merge verdicts (or, for a later
+   batch, the last position), finish with steps 9 and 10.
 
 ## Boundaries
 

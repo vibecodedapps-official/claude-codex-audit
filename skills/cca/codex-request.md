@@ -38,10 +38,11 @@ stage 6 entry's `sentinels` map, so the acknowledgment check can compare them.
 - **By path.** When the run directory is inside the session's repository, the request
   names each input copy by its path relative to that repository's root, and Codex
   opens them.
-- **Inline.** When the run directory is outside the session's repository, and in the
-  retry after a missing acknowledgment, the request carries the full content of every
-  input copy, each under a header with its run-directory path, sentinel line first,
-  diffs included, so it names no file Codex must open:
+- **Inline.** When the run directory is outside the session's repository, the request
+  carries the full content of every input copy, each under a header with its
+  run-directory path, sentinel line first, diffs included, so it names no file Codex
+  must open. The retry after a missing acknowledgment carries only the unacknowledged
+  inputs in the same form, as stage 6 step 8 describes:
 
   ```
   ===== input: codex/inputs/<run-relative path> =====
@@ -51,8 +52,14 @@ stage 6 entry's `sentinels` map, so the acknowledgment check can compare them.
   ```
 
   When the inline request would exceed 450,000 bytes (or `_test` `inline_cap_bytes`),
-  it is not sent. Stage 6 is swapped to the fallback, which reads the inputs by path,
-  with the reason `request too large for inline form`.
+  the diffs of the bundles whose repo is the session's repository, the one codex-lite
+  runs Codex from, are dropped from it first and it is measured again. The diff of a
+  bundle in any other repo is never dropped, since Codex cannot reach that repo. A
+  dropped diff is no longer an input or acknowledged; the request gives, per bundle
+  whose diff was dropped, the command to regenerate it from the shas in the brief,
+  `git -C <repo> diff <base>...<head>`. If it is still over, or no diff can be
+  dropped, it is not sent. Stage 6 is swapped to the fallback, which reads the inputs
+  by path, with the reason `request too large for inline form`.
 
 ## Request
 
@@ -82,9 +89,13 @@ An input you could not open is listed as "not read: <path>".
 
 ## Asks, in this order
 
-1. For every finding at severity blocker or high: your verdict (agree, disagree, or
-   change severity), with your own evidence, not the auditor's.
-2. For every finding pass two downgraded or dropped: your position, with evidence.
+1. For each finding at severity blocker or high: your verdict (agree, disagree, or
+   change severity), with your own evidence, not the auditor's; <"for these ids: <id
+   list>" when stage 6 split the mandatory set (more than 60 ids), else "for every
+   such finding">.
+2. For each finding pass two downgraded or dropped: your position, with evidence;
+   <"for these ids: <id list>" when stage 6 split the mandatory set (more than 60
+   ids), else "for every such finding">.
 3. Dropped findings you would restore, each with the reason and evidence.
 4. Up to ten findings no reviewer raised, each in the finding schema from common.md,
    with ids X1, X2, and so on, and the line "- origin: codex".
@@ -112,4 +123,13 @@ A sentinel not quoted exactly means access to that input is not confirmed. Retry
 in the inline form. If any input is still unacknowledged, stage 6 fails: the findings
 it covered do not pass the review gate on its account, and the run ends `partial`.
 With `_test` `drop_ack`, treat the named input's acknowledgment as missing in the first
-`times` answers.
+`times` answers. Stage 6 also checks that the answer gives a position for every
+blocker or high finding and every pass-two downgrade or drop (asks 1 and 2); one still
+missing after the one follow-up fails the stage the same way. The ids checked are
+every mandatory id: when the set was split into batches of at most 60, the request
+carries the first batch and the follow-up at most 60 positions (missing first-batch
+ids first, then second-batch ids), every id neither carries being answered by the
+fallback in batches of at most 60, one launch each; without Codex the fallback is
+launched once per batch. Each request has its own ids in the "for these ids" slot.
+A request for a batch after the first, which only the fallback receives, keeps the
+inputs, the acknowledgments, and asks 1 and 2 alone.
