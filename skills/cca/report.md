@@ -131,6 +131,7 @@ item id or evidence. `other` sentences are counted, not listed.
 - Swaps: every swap, with role, scope, from, to, and reason (including Codex swaps and
   "request too large for inline form").
 - Failed scopes and the files, rules, or questions they left unreviewed.
+- Corpus files stage 2 split by byte range, with each range and its digest.
 - Unanswered questions, and questions marked "not run".
 - Departures from the original stage plan (for example, the low tier's single auditor
   covering tests and work-item hygiene).

@@ -6,7 +6,8 @@ run's `common.md` apply throughout.
 Inputs: `ledger/5.md`, `ledger/6.md`, `audit-brief.md`, `common.md`.
 
 Outputs: `late/adversary.md` (medium and high), `ledger/7.md`, `gate.md`,
-`converged/<group>.md` (split mode only), and `converged.md`.
+`ledger/slices/<group>.md` and `converged/<group>.md` (split mode only; a group split
+by size has `<group>-<k>` parts), and `converged.md`.
 
 ## Steps
 
@@ -105,14 +106,27 @@ Outputs: `late/adversary.md` (medium and high), `ledger/7.md`, `gate.md`,
    1. Assign each ledger id to a group: the scope in its id for `pass1`, `pass2`, and
       `topup` findings; for `codex` and `late` findings, the group whose files their
       recommended change or evidence names, else `ungrouped`.
-   2. Launch one merger per group, prompt: the paths of `audit-brief.md`, `common.md`,
-      the three ledger files, and `gate.md`, the group's ledger ids, and the output path
-      `converged/<group>.md`. Each item holds: the item, sources, each position's
-      severity and label, disposition, gate, absorbed ledger ids, and a ledger section
-      pointer. No `C<n>` ids yet. Each file ends with `status: complete`.
-   3. Launch the final merger with the paths of `audit-brief.md`, `common.md`, every
-      `converged/<group>.md`, the ledger files, and `gate.md`, and the output path
-      `converged.md`. It assigns `C<n>` ids, merges
+   2. Write one slice per group, `ledger/slices/<group>.md`, before launching its
+      merger (slices are not under `converged/`, which holds one file per group). The
+      slice holds every section of `ledger/5.md`, `ledger/6.md`, and `ledger/7.md`
+      whose finding id belongs to the group (step 7.1), each section prefixed with the
+      pointer line `source: ledger/<n>.md, section <finding id>`, then the group's
+      lines from `gate.md`. When a slice exceeds 450,000 bytes (`wc -c`), or
+      `_test.ledger_split_bytes` when set, split the group into `<group>-1`,
+      `<group>-2`, ... by finding id order, with slices `ledger/slices/<group>-1.md`,
+      `ledger/slices/<group>-2.md`, ... and one merger each; the final merger treats
+      them as one group.
+   3. Launch one merger per group (per part), prompt: the paths of `audit-brief.md`,
+      `common.md`, its slice, and the output path `converged/<group>.md` (or
+      `converged/<group>-<k>.md` for a part), and nothing else. The merger reads the
+      slice and may open a full ledger file only to settle a suspected duplicate inside
+      its own slice, and it then says so under `runs:`. Each item holds: the item,
+      sources, each position's severity and label, disposition, gate, absorbed ledger
+      ids, and a ledger section pointer. No `C<n>` ids yet. Each file ends with
+      `status: complete`.
+   4. Launch the final merger with the paths of `audit-brief.md`, `common.md`, every
+      `converged/<group>.md` (every part of a split group), the ledger files, and
+      `gate.md`, and the output path `converged.md`. It assigns `C<n>` ids, merges
       items that are the same defect across groups, and opens a ledger section only to
       settle a suspected cross-group duplicate.
 
@@ -130,10 +144,10 @@ Outputs: `late/adversary.md` (medium and high), `ledger/7.md`, `gate.md`,
 9. **Merger failure.** A merger failed when it returned an error, its file lacks
    `status: complete`, or the check in step 8 fails. A `_test.fail` entry with
    `role: merger` and scope `any`, `converged`, or the group applies. Ladder: first
-   failure, the orchestrator merges itself, following step 6 or 7 and writing the same
-   files, recorded as a swap (role merger, from `cca:merger` to the orchestrator); a
-   second failure (the orchestrator's merge fails the check) fails stage 7, and stage 8
-   writes the report from the ledger.
+   failure, the orchestrator merges itself, following step 6 or 7 (in split mode from
+   the same slices) and writing the same files, recorded as a swap (role merger, from
+   `cca:merger` to the orchestrator); a second failure (the orchestrator's merge fails
+   the check) fails stage 7, and stage 8 writes the report from the ledger.
 
 10. **Stage completion.** Stage 7 is `complete` when `ledger/7.md`, `gate.md`, and
     `converged.md` are written and pass the check, and the late adversary (at medium and

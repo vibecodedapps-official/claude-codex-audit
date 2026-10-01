@@ -28,7 +28,8 @@ These hold for every stage, for the orchestrator and every agent.
 2. **Prevention and detection.** Agent tool lists exclude Edit and NotebookEdit. An
    agent with Bash runs only these commands: `git show`, `git log`, `git diff`,
    `git grep`, `git ls-files`, `rg`, `ls`, `git hash-object --no-filters` (never `-w`)
-   for the `consumed:` hashes, and, when a question needs a run, the repo's
+   for the `consumed:` hashes, `tail -c`, `head -c`, and `wc -c` for a digester's byte
+   range, and, when a question needs a run, the repo's
    test or lint commands, which may write ignored build output. This is instruction,
    not enforcement: nothing blocks Bash mechanically. The orchestrator snapshots every
    audited repo in stage 1 and compares after every stage. A change to tracked files,

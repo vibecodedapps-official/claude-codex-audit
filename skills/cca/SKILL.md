@@ -313,7 +313,8 @@ Coverage, and apply each field it has:
   accept its file, change one quoted answer's conclusion in `domain/<source>-map.md`
   to its opposite, keeping the quote, and record the line in the stage 3 entry as
   `test_planted`.
-- `ledger_split_bytes`: replaces the 450,000-byte ledger split threshold in stage 7.
+- `ledger_split_bytes`: replaces both 450,000-byte thresholds in stage 7, the
+  split-mode choice (step 5) and the per-group slice part split (step 7.2).
 - `inline_cap_bytes`: replaces the 450,000-byte inline request cap in stage 6.
 
 ### State files
@@ -362,17 +363,24 @@ with `mv -f`. Never edit either in place.
 2. Status is one of `running`, `complete`, `failed`, `not_applicable`, or
    `superseded`.
 3. `approvals` records each approval as `kind` (`fetch`, `live`, or
-   `export-over-1gb`), `target`, `decision`, and `time`.
+   `export-over-1gb`), `target`, `decision`, and `time`; a `fetch` approval also
+   records `commands`, the exact fetch commands approved.
 4. When a stage starts, write its entry as `running` with its inputs. When every
    output it lists exists and its read-only check has passed, write the entry with
    its final status. That write is the last act of the stage; `stages.json` is the only
    record of completion.
-5. Stage-specific keys: stages 2 and 3 record `output_hashes` (each digest or map
-   path and its hash, read by the stage 4 barrier) and `failed_scopes`; stage 3
-   records `test_planted` when `_test` planted a map error; stage 6 records
-   `codex_model` and `codex_timeout`, the values passed, and `sentinels`; stage 7
-   records `converged_check` (`pass` or `fail`, absent when no merge was attempted),
-   which stage 8 reads.
+5. Stage-specific keys: stage 1 `inputs` also records `forge_hashes` (each raw `gh`
+   output file under `forge/`, by run-relative path, and its hash, compared by resume)
+   and the `headRefOid` and `baseRefOid` of each GitHub PR bundle; stages 2 and 3
+   record `output_hashes` (each digest or map path and its hash, read by the stage 4
+   barrier) and `failed_scopes`; stage 2 also records `split_files` (each text file
+   split into byte-range chunks); stage 3 records `test_planted` when `_test` planted
+   a map error; stage 6 records `codex_model` and `codex_timeout`, the values passed,
+   `sentinels`, `missing_positions` (mandatory finding ids left without a position),
+   `batched` (asks split across the request and the follow-up), and `inline_reduced`
+   (diffs dropped to fit the inline cap); stage 7 lists the `ledger/slices/` files
+   among its outputs in split mode, and records `converged_check` (`pass` or `fail`,
+   absent when no merge was attempted), which stage 8 reads.
 
 ### Usage
 

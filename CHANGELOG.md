@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Fixed
+
+- Stage 6: the acknowledgment check applies to the fallback's answer too, not only
+  Codex's.
+- Stage 6: every blocker or high finding and every pass-two downgrade or drop needs a
+  position; missing ones get one follow-up, then fail the stage (`missing_positions`);
+  above 60 mandatory ids the asks are batched (`batched`).
+- Stage 6: a request over the inline cap is first reduced by dropping diffs
+  (`inline_reduced`) before the swap.
+- Stage 8: the terminal state is decided from stages 1 to 7 only.
+- Stage 1: fetches are explicit, tag-free, into remote-tracking refs only, verified by
+  sha, and recorded in the approval.
+- Stage 1: a bundle's base is pinned by the PR's `baseRefOid`; resume compares head and
+  base.
+- Stage 1: raw `gh` output is saved and hashed (`forge_hashes`); resume re-queries and
+  compares.
+- Resume: reads `manifest.json` and `stages.json` first and reruns from stage 1 when
+  stage 1 is missing, running, or has no brief.
+- Stage 2: a text file over 450,000 bytes is split into byte-range chunks
+  (`split_files`).
+- Stage 7: split-mode group mergers read per-group slices under `ledger/slices/`.
+- Docs: acceptance evidence for the fixture map path and the lint output for an agent
+  that lists Edit.
+
 ## 0.1.0 - 2026-09-30
 
 First release. Tested on Claude Code 2.1.284.

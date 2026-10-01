@@ -87,8 +87,10 @@ states the merged, normalized manifest before stage 1 and saves it in the run di
 `--from <stage>` takes a stage number from 1 to 8. Resume reruns from the earlier of
 `--from` and the first stage that is incomplete or whose inputs changed, reruns every
 stage after it, and marks their old outputs superseded. Approvals you gave are not asked
-again. If any bundle's head has moved since the run started, resume stops and asks
-whether to restart from stage 1.
+again. If any bundle's head or base has moved since the run started, resume stops and
+asks whether to restart from stage 1. Resume also re-queries the forge data the brief
+used; a difference invalidates stage 1, and if the forge cannot be queried, resume
+stops.
 
 ### `/cca:act`
 
@@ -279,7 +281,9 @@ During `/cca:audit` and `/cca:resume`, nothing changes an audited repo's tracked
 untracked non-ignored files, the index, branches, tags, stashes, config, or remotes. An
 audited repo is every bundle, reference, and source of truth. The only writes are the
 run directory, `runs.json`, codex-lite's own request and thread files in its data
-directory, and `git fetch` into remote-tracking refs after you approve it once per run.
+directory, and an explicit `git fetch --no-tags` into remote-tracking refs after you
+approve it once per run (a remote configured with `remote.<name>.prune` may also delete
+stale remote-tracking refs).
 An ignored file written by a check run that an agent logged is allowed and reported.
 
 When a repo's checkout is not at the audited sha, or has changes, cca exports the exact

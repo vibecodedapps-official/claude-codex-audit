@@ -111,8 +111,32 @@ Choices made while building 0.1.0 where the design left room.
   "not run: budget expired"; whether later runs follow it is not yet observed.
 - **Inline Codex requests (known limitation, 2026-10-01).** The inline request form
   travels as the Skill tool argument, and codex-lite rewrites it into its request file,
-  so a request near the 450,000-byte cap is slow and may be altered in transit. Keeping
-  the run directory inside the session's repository avoids the inline form.
+  so a request near the 450,000-byte cap is slow and may be altered in transit. A
+  request over the cap is first reduced by dropping the diffs (Codex can regenerate
+  them from the shas in the brief) and re-measured before the swap to the fallback.
+  Stage 6 also checks that the answer gives a position for every mandatory finding id
+  (every blocker or high finding and every pass-two downgrade or drop). Keeping the run
+  directory inside the session's repository avoids the inline form.
+
+## Round 4 review fixes (2026-10-01)
+
+- B1: fetches are explicit and tag-free into remote-tracking refs only, with no
+  `--prune`; the pinned shas are verified after the fetch and the commands are recorded
+  in the approval.
+- B2: a bundle's base is pinned by the PR's `baseRefOid`, and a stale base is handled
+  like a stale head; resume compares both.
+- B3: raw `gh` output is saved beside the rendered forge files and hashed in
+  `forge_hashes`; resume re-queries and compares, and a `gh` failure stops resume.
+- B4: resume reads `manifest.json` and `stages.json` first and reruns from stage 1 when
+  stage 1 is missing, running, or has no brief.
+- B5: stage 6 requires a position for every mandatory id and batches the asks across
+  the request and the one follow-up above 60 ids.
+- C1: a text file over 450,000 bytes is split into byte-range chunks, listed in
+  `split_files` and in the report's Coverage.
+- C2: split-mode group mergers read a per-group slice under `ledger/slices/`, not the
+  whole ledger files.
+- C3: an over-cap Codex request is reduced by dropping diffs before the swap, recorded
+  as `inline_reduced`.
 
 ## Deferred past 0.1
 

@@ -84,21 +84,24 @@ or JSON.
 ## C. Resolve PRs and check for disagreement
 
 1. For a `github:` PR, read it with
-   `gh pr view <n> -R <owner>/<repo> --json number,url,title,body,state,headRefName,headRefOid,baseRefName,reviews,comments,closingIssuesReferences`.
+   `gh pr view <n> -R <owner>/<repo> --json number,url,title,body,state,headRefName,headRefOid,baseRefName,baseRefOid,reviews,comments,closingIssuesReferences`.
    When `gh` is missing or not authenticated, stop and say the PR needs `gh` or an
    exported file.
 2. When the manifest gives a `branch` that is not the PR's `headRefName`, or a `base`
    that is not the PR's `baseRefName` (`origin/<name>` and `<name>` are equal), stop
    before stage 1 and show both values.
 3. The bundle's head is the PR's `headRefOid` for a GitHub PR, else the sha the
-   `branch` resolves to. Its base is the `base` ref, or `origin/<baseRefName>`.
+   `branch` resolves to. Its base ref is the `base` ref, or `origin/<baseRefName>`. Its
+   base sha is the PR's `baseRefOid` for a GitHub PR, else the sha the `base` ref
+   resolves to.
 
 ## D. Run directory, run id, and state files
 
 Under `/cca:resume` (first rerun stage 1), skip D1 to D4 and D6: reuse the existing
 run directory, run id, and `runs.json` entry. Do D5, since `manifest.json` is a
-stage 1 output. In D7, keep `approvals` and every stage's `superseded` records, and
-only rewrite the stage 1 entry as `running` with its inputs.
+stage 1 output. In D7, keep `approvals` and every stage's `superseded` records
+(including the move records resume made for stage 1 outputs when the stage 1 entry was
+missing), and only rewrite the stage 1 entry as `running` with its inputs.
 
 1. The **primary repo** is the session's repository if it is one of the bundles,
    otherwise the first bundle.
@@ -121,7 +124,7 @@ only rewrite the stage 1 entry as `running` with its inputs.
 7. Write `stages.json` with `plugin_version` `0.1.0`, empty `approvals`, and a stage 1
    entry with status `running` and inputs: the hashes of `manifest.json`, each claims
    file, the questions file, and every `file:` ticket or PR export, and
-   `plugin_version`. Step 10 adds the shas to the final entry.
+   `plugin_version`. Step 10 adds the shas and `forge_hashes` to the final entry.
 
 ## Steps
 
@@ -131,14 +134,30 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    are missing or stale: a ref is missing when
    `git -C <repo> rev-parse --verify <ref>^{commit}` fails; a bundle's head is stale
    when the PR's `headRefOid` is not the sha of any local ref, or is not present
-   (`git -C <repo> cat-file -e <sha>^{commit}` fails). When any are, ask the user once,
-   listing each repo, remote, and the refs involved, for approval to `git fetch`.
+   (`git -C <repo> cat-file -e <sha>^{commit}` fails); a GitHub PR bundle's base is
+   stale when the PR's `baseRefOid` is not the sha of `origin/<baseRefName>` locally, or
+   that ref is missing. When any are, ask the user once, listing each repo, remote, the
+   refs involved, and the exact fetch commands below, for approval to `git fetch`.
    Record the answer in `stages.json` `approvals` with kind `fetch`, target
-   `<repo name>:<remote>`, the decision, and the time, one entry per repo and remote.
-   On approval, run `git -C <repo> fetch <remote>` for each. On decline, a bundle whose
-   head or base still does not resolve stops the run `blocked` with the reason. Under
-   `/cca:resume`, an approval already recorded in `stages.json` is not asked again,
-   and a fetch with no recorded approval is asked once, as above.
+   `<repo name>:<remote>`, the decision, the time, and `commands`, the exact fetch
+   commands run, one entry per repo and remote.
+   On approval, run only these fetches, which take no tags and write remote-tracking
+   refs only:
+   - for a GitHub PR bundle whose head is missing or stale:
+     `git -C <repo> fetch --no-tags <remote> +refs/pull/<n>/head:refs/remotes/<remote>/pr/<n>/head`
+   - for a GitHub PR bundle whose base is missing or stale:
+     `git -C <repo> fetch --no-tags <remote> +refs/heads/<baseRefName>:refs/remotes/<remote>/<baseRefName>`
+   - for any other missing ref `<name>`:
+     `git -C <repo> fetch --no-tags <remote> +refs/heads/<name>:refs/remotes/<remote>/<name>`
+
+   A remote configured with `remote.<name>.prune` may also delete stale remote-tracking
+   refs; `--prune` is never added, and this is accepted as part of the approved fetch.
+   After fetching, verify with `git -C <repo> cat-file -e <sha>^{commit}` that each
+   pinned head sha, and for a GitHub PR the base sha (`baseRefOid`), exists; if one does
+   not, stop `blocked` naming the sha. On decline, a bundle whose head or base still
+   does not resolve stops the run `blocked` with the reason. Under `/cca:resume`, an
+   approval already recorded in `stages.json` is not asked again, and a fetch with no
+   recorded approval is asked once, as above.
 b. Take the read-only baseline now, before any other work:
    1. Create `baseline/marker` (an empty file) in the run directory.
    2. For each audited repo `<name>`, write:
@@ -168,15 +187,33 @@ For each bundle, save under `forge/<bundle>/`:
   comments. For a GitHub issue, `gh issue view <n> -R <owner>/<repo> --json number,url,title,body,state,comments,labels`.
   For an export, copy its content.
 
-Every saved file starts with a provenance block: the source (`gh`, or the export's
+Every saved `.md` file starts with a provenance block: the source (`gh`, or the export's
 `source`, `exported_by`, and `exported_at`), and the time it was read. When no forge
 was queried for a bundle, the brief says so.
+
+For a GitHub PR or issue, also save each `gh` command's raw output, unchanged and by
+shell redirect (not through the rendered file), beside the rendered files:
+
+- `forge/<bundle>/pr.json`: the `gh pr view` command of section C, run again with its
+  output redirected. When its `headRefOid` or `baseRefOid` differs from what section C
+  read, stop `blocked` naming the PR, as step 1a does for a pinned sha that is missing.
+- `forge/<bundle>/pr-threads.json`: the paginated `gh api` comments call above.
+- `forge/<bundle>/<ticket>.json`: the `gh issue view` call above, one per ticket.
+
+Render the `.md` files from these. Hash each raw file with
+`git hash-object --no-filters <file>`. Step 10 records the hashes in the stage 1
+entry's inputs as `forge_hashes`, a map from run-relative path (such as
+`forge/<bundle>/pr.json`) to hash. Exports (`file:` tickets and PRs) have no raw `.json`
+file and no entry in `forge_hashes`; their content hashes are in D7.
 
 ### 3. Shas
 
 For each bundle, record:
 
-- head sha (from step C3) and base sha (`git -C <repo> rev-parse <base>^{commit}`);
+- head sha and base sha (both from step C3: for a GitHub PR the PR's `headRefOid` and
+  `baseRefOid`, else what the `branch` and `base` refs resolve to with
+  `git -C <repo> rev-parse <ref>^{commit}`). Wherever the steps below write `<base>`
+  and `<head>`, use these shas;
 - merge-base sha: `git -C <repo> merge-base <base> <head>`;
 - commits on the base since the merge-base: `git -C <repo> log --oneline <head>..<base>`;
 - files changed on both sides since the merge-base: the intersection of
@@ -346,15 +383,16 @@ scope that stage 4 schedules; reassign any that does not by rule 2.
    brief.
 3. **`audit-brief.md`**, with these sections: Scope (bundles, repos, PRs, tickets);
    Tier and reason; Bundles (head, base, merge-base, base commits since the
-   merge-base, files changed on both sides, stack); Combined state; Sources of truth
-   (the order used, each with its sha and class, and whether it replaced the default);
-   References (each with its sha); Read paths (name, path, sha, mode); Export notes
-   (symlinks with targets, submodules, LFS pointers, skipped paths, declined exports);
-   Forge (queried or not, per bundle; "not in export" keys); Questions; Stage
-   applicability; Run directory (its path, and whether it is inside the session's
-   repository: a run directory inside it avoids the inline form of the Codex request);
-   Test injection (the `_test` key, when present); Claims (a statement that every
-   claim is assigned to a scope that stage 4 schedules, with the count per group);
+   merge-base, files changed on both sides, stack; the head and base shas are recorded
+   as `headRefOid` and `baseRefOid` for a GitHub PR, which resume compares); Combined
+   state; Sources of truth (the order used, each with its sha and class, and whether it
+   replaced the default); References (each with its sha); Read paths (name, path, sha,
+   mode); Export notes (symlinks with targets, submodules, LFS pointers, skipped paths,
+   declined exports); Forge (queried or not, per bundle; "not in export" keys);
+   Questions; Stage applicability; Run directory (its path, and whether it is inside the
+   session's repository: a run directory inside it avoids the inline form of the Codex
+   request); Test injection (the `_test` key, when present); Claims (a statement that
+   every claim is assigned to a scope that stage 4 schedules, with the count per group);
    Corrections (filled in stage 5).
 4. **`common.md`**: read the template `${CLAUDE_PLUGIN_ROOT}/skills/cca/common.md` with
    the Read tool and write the copy to `common.md` in the run directory with the Write
@@ -366,8 +404,9 @@ scope that stage 4 schedules; reassign any that does not by rule 2.
    `audit-brief.md`, `common.md`, `claims.md`, `groups.md`, every `diffs/` file, every
    `forge/` file, every `trees/<name>/` export with its `trees/<name>.lstree` and
    `trees/<name>.export.sh`, and `baseline/1-check.md`. Its inputs are those D7
-   recorded plus each bundle's head, base, and merge-base sha and the pinned sha of
-   every reference and source of truth.
+   recorded plus each bundle's head, base, and merge-base sha (`headRefOid` and
+   `baseRefOid` for a GitHub PR), the pinned sha of every reference and source of
+   truth, and `forge_hashes` (step 2).
 7. Print the stage boundary line. With `budget: 0`, or `_test`
    `expire_budget_after_stage: 1`, the budget has now expired: go to stage 8. Otherwise
    start stages 2, 3, and 4 together.

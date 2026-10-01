@@ -51,8 +51,11 @@ stage 6 entry's `sentinels` map, so the acknowledgment check can compare them.
   ```
 
   When the inline request would exceed 450,000 bytes (or `_test` `inline_cap_bytes`),
-  it is not sent. Stage 6 is swapped to the fallback, which reads the inputs by path,
-  with the reason `request too large for inline form`.
+  the diffs are dropped from it first and it is measured again. A dropped diff is no
+  longer an input or acknowledged; the request gives, per bundle, the command to
+  regenerate it from the shas in the brief, `git -C <repo> diff <base>...<head>`. If it
+  is still over, it is not sent. Stage 6 is swapped to the fallback, which reads the
+  inputs by path, with the reason `request too large for inline form`.
 
 ## Request
 
@@ -112,4 +115,6 @@ A sentinel not quoted exactly means access to that input is not confirmed. Retry
 in the inline form. If any input is still unacknowledged, stage 6 fails: the findings
 it covered do not pass the review gate on its account, and the run ends `partial`.
 With `_test` `drop_ack`, treat the named input's acknowledgment as missing in the first
-`times` answers.
+`times` answers. Stage 6 also checks that the answer gives a position for every
+blocker or high finding and every pass-two downgrade or drop (asks 1 and 2); one still
+missing after the one follow-up fails the stage the same way.

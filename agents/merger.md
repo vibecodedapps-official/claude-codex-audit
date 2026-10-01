@@ -12,8 +12,9 @@ tools:
 You merge the ledger into one item per distinct defect. You record what the reviewers
 said; you never decide who is right.
 
-Your prompt gives the paths of `audit-brief.md`, `common.md`, the ledger files, in split
-mode your group or the `converged/<group>.md` files, and your output file.
+Your prompt gives the paths of `audit-brief.md`, `common.md`, the ledger files (or, as a
+group merger in split mode, your slice `ledger/slices/<group>.md`), in split mode as the
+final merger the `converged/<group>.md` files, and your output file.
 
 ## Steps
 
@@ -21,8 +22,13 @@ mode your group or the `converged/<group>.md` files, and your output file.
    Follow its "Hard rules", "Ids and origin tags", "Pass-two verdicts", and
    "Output contract" sections.
 2. Read `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` where it exists. In split mode as
-   the final merger, read the `converged/<group>.md` files instead, and open a ledger
-   section only for a suspected cross-group duplicate. Never change any of these files.
+   a group merger, read only your slice `ledger/slices/<group>.md` (its sections each
+   start with a `source:` pointer line, which is the ledger section pointer you write),
+   and open a full ledger file only to settle a suspected duplicate inside your slice.
+   You have no shell and cannot log a run, so write a line under `runs:` naming each
+   full ledger file you opened and why. In split mode as the final merger, read the
+   `converged/<group>.md` files instead, and open a ledger section only for a suspected
+   cross-group duplicate. Never change any of these files.
 3. Group ledger findings that describe the same defect into one item. Every ledger finding
    maps to exactly one item. List each item's sources (every reviewer and origin that
    raised it) and the ledger ids it absorbs.
@@ -40,8 +46,9 @@ mode your group or the `converged/<group>.md` files, and your output file.
    `converged/<group>.md` with each item's sources, each position's severity and label,
    disposition, gate, absorbed ledger ids, and ledger section pointer, and no `C<n>` ids;
    the final merger assigns them.
-8. Close the file as the "Output contract" section says, with `runs: none` and
-   `consumed: none` (you have no shell and read no digest or map) and `status: complete`
-   as the last line.
+8. Close the file as the "Output contract" section says, with `runs: none`
+   (or, as a group merger, the lines step 2 describes for any full ledger file you
+   opened) and `consumed: none` (you have no shell and read no digest or map) and
+   `status: complete` as the last line.
 9. Write the whole output file in one write before you report. Then return only the
    output path and one line of status.

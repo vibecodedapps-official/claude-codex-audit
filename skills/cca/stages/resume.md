@@ -9,23 +9,37 @@ a finished one.
 1. **Find the run.** Read `${CLAUDE_PLUGIN_DATA}/runs.json` and take the entry whose
    `run_id` is the invocation's `run-id`. When there is none, or its `path` no longer
    exists, stop with one line saying so. The run directory is that `path`.
-2. **Recover state.** Read, in the run directory, `manifest.json`, `stages.json`,
-   `audit-brief.md`, and `common.md`. Every approval in `stages.json` `approvals`
-   stands: do not ask for it again. A stage whose status is `running` counts as
-   incomplete, since its agents belonged to an earlier session; it is rerun, and
-   nothing waits for its old agents.
-3. **Head sha check.** For each bundle, resolve its head as stage 1 did (a GitHub PR's
-   `headRefOid` from `gh pr view`, else the sha its `branch` resolves to) and compare
-   it with the head sha stage 1 recorded in `audit-brief.md`. If any bundle's head sha
-   has changed, stop and ask whether to restart from stage 1, showing each bundle's
-   recorded and current sha. On yes, the first stage to rerun is 1. On no, stop and
-   change nothing.
+2. **Recover state.** Read, in the run directory, `manifest.json` and `stages.json`
+   only. If either is missing, stop with one line saying the run directory is
+   unrecoverable. Every approval in `stages.json` `approvals` stands: do not ask for it
+   again. A stage whose status is `running` counts as incomplete, since its agents
+   belonged to an earlier session; it is rerun, and nothing waits for its old agents.
+   If the stage 1 entry is missing, is `running`, or `audit-brief.md` does not exist,
+   the first stage to rerun is 1: skip steps 3 to 5, then run steps 6 to 9 with stage 1
+   as the first rerun stage (step 6 supersedes any stage 1 outputs that exist; step 9
+   continues with stage 1 as `1-orient.md` section D describes for resume, reusing the
+   run directory, run id, `runs.json` entry, and approvals). Only when stage 1 is
+   `complete` and `audit-brief.md` exists, also read `audit-brief.md` and `common.md`,
+   and run steps 3, 4, and 5.
+3. **Head and base sha check.** For each bundle, resolve its head and base as stage 1
+   did (a GitHub PR's `headRefOid` and `baseRefOid` from `gh pr view`, else the shas its
+   `branch` and `base` refs resolve to) and compare each with the head and base sha
+   stage 1 recorded in `audit-brief.md`. If any bundle's head or base sha has changed,
+   stop and ask whether to restart from stage 1, showing each bundle's recorded and
+   current shas. On yes, the first stage to rerun is 1. On no, stop and change nothing.
 4. **Recompute input hashes.** For each stage entry, recompute every input it records,
    the same way it was recorded:
    - stage 1: the manifest (the file named in `manifest.json`'s `source` key, merged
      again with the recorded prompt inputs and flags and normalized, then compared with
      `manifest.json`), each claims file, the questions file, the content hash of
      every `file:` ticket or PR export, and `plugin_version`;
+   - the stage 1 `forge_hashes`: re-run each `gh` command that wrote a path in the map
+     (`1-orient.md` step 2: `pr.json`, `pr-threads.json`, `<ticket>.json`) exactly as
+     stage 1 ran it, with the same owner, repo, number, and fields, into a temporary
+     file in the run directory, hash it with `git hash-object --no-filters`, compare it
+     with the recorded hash, and remove the temporary file. A difference invalidates
+     stage 1. A `gh` failure during the re-query stops resume with one line, since the
+     brief's evidence cannot be confirmed current;
    - each bundle's head, base, and merge-base sha and the pinned sha of every
      reference and source of truth, by resolving each again as stage 1 did; a changed
      one invalidates stage 1;
@@ -56,6 +70,11 @@ a finished one.
       `ledger/7.md`, each with its stage.
    2. Rewrite its entry with status `superseded` and, in its `superseded` list, one
       record per moved output: `path`, `moved_to`, and `time`.
+   When the first rerun stage is 1 and its entry is missing or `running`, supersede
+   the stage 1 outputs that exist (those `1-orient.md` step 10.6 lists) the same way.
+   With no entry to rewrite, keep the move records (`path`, `moved_to`, `time`) and put
+   them in the `superseded` list of the new stage 1 entry when stage 1 writes it
+   (`1-orient.md` section D, step D7).
    Stages before the first rerun stage keep their entries and outputs unchanged and
    are reused as they are.
 7. **Baseline.** When the first rerun stage is 1, stage 1 takes the baseline again. Otherwise, retake it now, before
