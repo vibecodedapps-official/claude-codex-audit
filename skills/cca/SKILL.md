@@ -444,9 +444,11 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/6-second-opinion.md` when stage 5 
 builds the Codex request from `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`, calls
 `codex-lite:ask`, handles status and swaps, and writes `ledger/6.md`. Every mandatory
 finding id is requested in a run where stage 6 completes: in batches of at most 60,
-the first in the request and the second in the one Codex follow-up (any batch after
-the second goes to the fallback, one launch each, a partial swap), or one fallback
-launch per batch. A batch past the second no longer fails the stage by itself.
+the first in the Codex request, at most 60 positions in the one Codex follow-up
+(missing first-batch ids first, then second-batch ids), and every id neither carries
+in fallback batches of at most 60, one launch each, a partial swap; without Codex, one
+fallback launch per batch. A fallback batch fails the stage only when it fails after
+the ladder.
 
 ## Stage 7: converge
 

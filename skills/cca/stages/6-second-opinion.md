@@ -15,7 +15,7 @@ files).
 Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md`,
 `codex/request-inline.md` when the inline form is built, and, when the fallback answers
 several batches, `codex/request-<k>.md` and `codex/response-<k>.md` for each batch `<k>`
-it answers (from 2, or from 3 when Codex answered the first two).
+it answers, numbered from 2 (step 9).
 
 ## Steps
 
@@ -71,7 +71,8 @@ it answers (from 2, or from 3 when Codex answered the first two).
         any further batch) goes to the fallback (step 11), in batches of at
         most 60, one `cca:adversary` launch per batch with scope `second-opinion-<k>`,
         each with its own `codex/request-<k>.md` (built as in the next bullet),
-        launched after Codex's follow-up answer is saved (step 9). It is recorded as a
+        launched in step 8 once the follow-up is composed and before the follow-up call
+        is made (step 9 gives the numbering). It is recorded as a
         partial swap: role second opinion, scope those batches, from Codex `<model>` to
         `cca:adversary`, reason "mandatory ids beyond the Codex request and follow-up".
         These batches fail stage 6 only when one of them fails after the ladder (step
@@ -160,7 +161,10 @@ it answers (from 2, or from 3 when Codex answered the first two).
      `for these ids: <id list>`: the first batch's ids still without a position, then
      the second batch's ids in order as far as 60 allows (step 4.3; `batched` is then
      true). Second-batch ids that do not fit are not asked here; step 4.3 sends them to
-     the fallback. Apply the inline cap to this follow-up. Over it, first drop the diffs of
+     the fallback: launch those fallback batches now, before this follow-up call
+     (step 11, numbered as step 9 says), so they run while Codex answers and a budget
+     that expires during the call still lets them finish. Apply the inline cap to this
+     follow-up. Over it, first drop the diffs of
      session-repository bundles from it and re-measure as in step 5 (record
      `inline_reduced: true`; the diff of a bundle in another repo is never dropped); a
      dropped diff no longer needs acknowledgment, and the follow-up gives its three-dot

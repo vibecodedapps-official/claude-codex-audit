@@ -203,8 +203,12 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    - for a GitHub PR bundle whose head is missing or stale:
      `git -C <repo> fetch --no-tags --refmap= <remote> +refs/pull/<n>/head:refs/remotes/<remote>/pr/<n>/head`
    - for a GitHub PR bundle, always, and for any bundle whose `base` is a
-     remote-tracking ref `<remote>/<baseRefName>`:
-     `git -C <repo> fetch --no-tags --refmap= <remote> +refs/heads/<baseRefName>:refs/remotes/<remote>/<baseRefName>`
+     remote-tracking ref `<base remote>/<baseRefName>`, where `<base remote>` is the
+     remote the ref itself names (a configured remote of the repo, whether or not it
+     is the selected one, present ref or not), else the selected remote:
+     `git -C <repo> fetch --no-tags --refmap= <base remote> +refs/heads/<baseRefName>:refs/remotes/<base remote>/<baseRefName>`
+     (a second remote is listed in the same question with target
+     `<repo name>:<base remote>`)
    - for a missing ref that is a 40-hex sha:
      `git -C <repo> fetch --no-tags --refmap= <remote> +<sha>:refs/remotes/<remote>/cca/<sha>`;
      when the remote refuses (not every server serves arbitrary shas), stop `blocked`
