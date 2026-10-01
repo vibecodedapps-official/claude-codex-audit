@@ -135,9 +135,9 @@ by size has `<group>-<k>` parts), and `converged.md`.
    4. Launch the final merger with the paths of `audit-brief.md`, `common.md`, every
       `converged/<group>.md` (every part of a split group), the ledger files, and
       `gate.md`, and the output path `converged.md`. It assigns `C<n>` ids, merges
-      items that are the same defect across groups, and opens a ledger section only to
-      settle a suspected cross-group duplicate, recording it under `opened:` as in
-      step 7.3.
+      items that are the same defect across groups or across the parts of one group,
+      and opens a ledger section only to settle a suspected cross-group or cross-part
+      duplicate, recording it under `opened:` as in step 7.3.
 
 8. **The orchestrator checks the merge against the ledger:**
    - every finding id in `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` appears in the

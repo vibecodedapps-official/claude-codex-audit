@@ -28,8 +28,9 @@ final merger the `converged/<group>.md` files, and your output file.
    You have no shell and cannot log a run, so write each full ledger file you opened
    under an `opened:` heading, one per line: the path and the reason. Never put it
    under `runs:`. In split mode as the final merger, read the `converged/<group>.md`
-   files instead, and open a ledger section only for a suspected cross-group duplicate,
-   recording it under `opened:` the same way. Never change any of these files.
+   files instead, and open a ledger section only for a suspected duplicate across
+   groups or across the parts of one group, recording it under `opened:` the same way.
+   Never change any of these files.
 3. Group ledger findings that describe the same defect into one item. Every ledger finding
    maps to exactly one item. List each item's sources (every reviewer and origin that
    raised it) and the ledger ids it absorbs.

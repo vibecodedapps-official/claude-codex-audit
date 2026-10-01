@@ -160,7 +160,7 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    `<repo name>:<remote>`, the decision, the time, and `commands`, the exact fetch
    commands actually run, one entry per repo and remote.
    For each missing bare name, the question lists the check
-   `git ls-remote --tags <remote> refs/tags/<name>` (a printed line means it is a
+   `git -C <repo> ls-remote --tags <remote> refs/tags/<name>` (a printed line means it is a
    tag) and both candidate fetch commands: the tag refspec if it is a tag, the branch
    refspec otherwise. Nothing contacts a remote before approval; on approval, run the
    `ls-remote` check first, then the matching fetch.
