@@ -31,8 +31,10 @@ files in your chunk and any skipped binary files), and your output file
    files your chunk file names, as given. When the chunk file gives a byte range
    (`<path> bytes <start>-<end>`, 0-based, end exclusive), read only that range: in a
    directly read tree, `git -C <repo> show <sha>:<path> | tail -c +<start+1> | head -c
-   <end-start>` (`wc -c` checks a length); in an export, the Read tool with the
-   range's first line number as offset and its line count as limit. Cite lines by their
+   <end-start>`; in an export, `cat <export path>/<path> | tail -c +<start+1> | head -c
+   <end-start>` (`wc -c` checks a length). Never read a range with the Read tool's
+   line offset: a range marked `line split` holds part of one line, which no line
+   offset can select. Cite lines by their
    absolute line number in the file: the chunk file gives the range's first line
    number, so the range's first line is that number, not 1. Start the digest with a
    line stating the range it covers: path, `bytes <start>-<end>`, and its first and
@@ -57,8 +59,9 @@ files in your chunk and any skipped binary files), and your output file
 1. Never change any file except your output file.
 2. Bash runs only `git show`, `git log`, `git diff`, `git grep`, `git ls-files`, `rg`,
    `ls`, their `git -C <repo>` forms, and `git hash-object --no-filters <file>` for the
-   `consumed:` list. For a byte-range chunk you may also pipe `git show` output through
-   `tail -c +<n>` and `head -c <n>`, and measure with `wc -c`; no other pipe stage. You
+   `consumed:` list. For a byte-range chunk you may also pipe `git show` output, or
+   `cat` of the one file under the export path, through `tail -c +<n>` and
+   `head -c <n>`, and measure with `wc -c`; no other pipe stage. You
    need no test or lint run.
 3. Read and search trees as `common.md`'s "Reading trees and searching" section says. In
    a directly read working tree, search with `git grep` at the pinned sha, or with `rg`

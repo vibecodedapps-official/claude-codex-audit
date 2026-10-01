@@ -147,14 +147,18 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
      `git -C <repo> fetch --no-tags <remote> +refs/pull/<n>/head:refs/remotes/<remote>/pr/<n>/head`
    - for a GitHub PR bundle whose base is missing or stale:
      `git -C <repo> fetch --no-tags <remote> +refs/heads/<baseRefName>:refs/remotes/<remote>/<baseRefName>`
-   - for any other missing ref `<name>`:
-     `git -C <repo> fetch --no-tags <remote> +refs/heads/<name>:refs/remotes/<remote>/<name>`
+   - for any other missing ref: when the ref is `<remote>/<branch>`, split it there and
+     run `git -C <repo> fetch --no-tags <remote> +refs/heads/<branch>:refs/remotes/<remote>/<branch>`;
+     when it is a bare `<branch>`, fetch the same refspec from the repo's selected
+     remote and resolve the ref as `<remote>/<branch>` from then on, since the fetch
+     never writes a local branch.
 
    A remote configured with `remote.<name>.prune` may also delete stale remote-tracking
    refs; `--prune` is never added, and this is accepted as part of the approved fetch.
    After fetching, verify with `git -C <repo> cat-file -e <sha>^{commit}` that each
-   pinned head sha, and for a GitHub PR the base sha (`baseRefOid`), exists; if one does
-   not, stop `blocked` naming the sha. On decline, a bundle whose head or base still
+   pinned head sha, and for a GitHub PR the base sha (`baseRefOid`), exists, and with
+   `git -C <repo> rev-parse --verify <ref>^{commit}` that every other fetched ref now
+   resolves; if one does not, stop `blocked` naming the sha or ref. On decline, a bundle whose head or base still
    does not resolve stops the run `blocked` with the reason. Under `/cca:resume`, an
    approval already recorded in `stages.json` is not asked again, and a fetch with no
    recorded approval is asked once, as above.

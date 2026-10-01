@@ -42,8 +42,9 @@ auditors cite the original document at its pinned sha, never the digest.
       the file list has the one entry `<path> bytes <start>-<end>`, and the file also
       gives the range's first line number (the count of LF in bytes 0 to `start`, plus
       1: `<file> | head -c <start> | wc -l`, plus 1), its line count
-      (`<file> | tail -c +<start+1> | head -c <end-start> | wc -l`), and the file's
-      total size.
+      (`<file> | tail -c +<start+1> | head -c <end-start> | wc -l`, plus 1 when the
+      range's last byte is not an LF, so an unterminated final line counts), and the
+      file's total size.
    The chunk's scope id is `digest-N`. Keep the list of files split by range, with
    each file's ranges, for the stage 2 entry (step 6.2).
 4. **Launch.** Queue one `cca:digester` per chunk (SKILL.md, Queue and Agent launch
