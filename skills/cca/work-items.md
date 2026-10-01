@@ -38,6 +38,10 @@ report is hashed, and a resume that rewrites the report supersedes the file with
 | `set_acceptance_criteria` | `text` | forge id or `$new:<key>` |
 | `set_pr_description` | `text` | PR forge id |
 
+The keys of `fields`, and `set_field`'s `field`, are the forge's own field names as the
+forge or its export writes them. The adapter maps them to its API, including fields that
+differ by work item type.
+
 ## Targets and placeholders
 
 - A forge id is `owner/repo#n` for GitHub, or the export's `id` for an exported ticket or

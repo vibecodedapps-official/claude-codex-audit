@@ -299,12 +299,13 @@ does not seed the next session.
 
 Stage 8 also writes `work-items.jsonl`: one JSON object per operation, ids `W1`, `W2`, and
 so on, for a forge adapter or a person to apply. An operation can create a ticket
-(`$new:<key>` is a placeholder for an id that does not exist yet), set a field or state,
-add a link or comment, or set a description, acceptance criteria, or PR description. The
-format is in `skills/cca/work-items.md`. `sh skills/cca/scripts/work-items.sh check` (it
-needs `jq`) validates the file against the report body and `claims.md` before the report is
-hashed, and the result goes in the report's Coverage. cca 0.2 writes and validates the
-plan. No adapter ships, and `/cca:act` applies none of it.
+(`$new:<key>` is a placeholder for an id that does not exist yet), set a field (by the
+forge's own field name) or state, add a link or comment, or set a description,
+acceptance criteria, or PR description. The format is in `skills/cca/work-items.md`.
+`sh skills/cca/scripts/work-items.sh check` (it needs `jq`) validates the file against
+the report body and `claims.md` before the report is hashed, and the result goes in the
+report's Coverage. cca 0.2 writes and validates the plan. No adapter ships, and
+`/cca:act` applies none of it.
 
 ## Stages
 
