@@ -196,10 +196,10 @@ record above is unchanged.
 |---|---|---|---|
 | V2-a | `sh tests/lint.sh` passes | pass | 2026-10-01, Windows 11, Git Bash: printed `lint: ok`, exit 0 |
 | V2-b | `sh tests/readonly.sh` passes on its twelve cases | pass | 2026-10-01, Windows 11, Git Bash: printed `readonly test: ok`, exit 0; `RO_SH=dash dash tests/readonly.sh`, which runs the script itself under dash, printed the same, exit 0 |
-| V2-c | `sh tests/handoff.sh` passes | pass | 2026-10-01, Windows 11, Git Bash (gawk): `sh tests/handoff.sh` and `dash tests/handoff.sh` each printed `handoff test: ok`, exit 0. mawk was not available locally; CI runs it (V2-f) |
+| V2-c | `sh tests/handoff.sh` passes | pass | 2026-10-01, Windows 11, Git Bash (gawk): `sh tests/handoff.sh` and `dash tests/handoff.sh` each printed `handoff test: ok`, exit 0. mawk and BSD awk ran in CI (V2-f) |
 | V2-d | `sh tests/work-items.sh` passes | pass | 2026-10-01, Windows 11, Git Bash, jq 1.8.2: `sh tests/work-items.sh` and `dash tests/work-items.sh` each printed `work-items test: ok`, exit 0 |
 | V2-e | `sh tests/fixture/build.sh` then `sh tests/fixture/verify.sh` pass for `solo`, `solo-dirty`, and `full` | pass | 2026-10-01, Windows 11, Git Bash: each build exited 0 and printed its manifest path; the three verifies printed `verify solo: ok`, `verify solo-dirty: ok`, and `verify full: ok`, exit 0 |
-| V2-f | The CI `scripts` job passes on Linux, macOS, and Windows, and the existing job still passes | not run | to be filled from the pull request's checks |
+| V2-f | The CI `scripts` job passes on Linux, macOS, and Windows, and the existing job still passes | pass | 2026-10-01, GitHub Actions run 36829701310 on commit `bab6657`: `checks` and `scripts` on ubuntu-latest, macos-latest, and windows-latest all passed. On Linux the default `awk` was `/usr/bin/gawk`, and the mawk step (`mawk 1.3.4 20240123`) printed `handoff test: ok` and `readonly test: ok`. macOS ran the tests with its BSD awk and `stat` |
 
 ## Agent-driven cases
 
