@@ -378,7 +378,7 @@ function commit_entry(e, kk,   i, b, r, j, sha, text) {
 	CL[ci, kk] = ln
 }
 
-function verified_entry(e, kk,   i, stmt, chk) {
+function verified_entry(e, kk,   i, stmt, chk, rest, nm, ec) {
 	i = index(e, "; check: ")
 	if (i == 0) {
 		if (length(e) >= 8 && substr(e, length(e) - 7) == "; check:") err(ln, "verified entry has an empty check")
@@ -389,6 +389,20 @@ function verified_entry(e, kk,   i, stmt, chk) {
 	chk = trim(substr(e, i + 9))
 	if (stmt == "") err(ln, "verified entry has an empty statement")
 	if (chk == "") err(ln, "verified entry has an empty check")
+	# An env tag: a check part starting "env:" is 'env: <name>; <check>', split at the first
+	# ";" after "env: ".
+	if (substr(chk, 1, 4) == "env:") {
+		rest = substr(chk, 6)
+		i = index(rest, ";")
+		if (substr(chk, 1, 5) != "env: " || i == 0) {
+			err(ln, "env tag must be 'env: <name>; <check>'")
+		} else {
+			nm = trim(substr(rest, 1, i - 1))
+			ec = trim(substr(rest, i + 1))
+			if (nm == "") err(ln, "env tag has an empty name")
+			if (ec == "") err(ln, "env tag has an empty check")
+		}
+	}
 	V[ci, kk] = e
 	VL[ci, kk] = ln
 }

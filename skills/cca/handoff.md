@@ -119,7 +119,9 @@ generated: <ISO 8601 time>
    ticket, two entries with the same bundle do not name the same commit: neither sha is a
    prefix of the other. One commit may appear under two tickets.
 7. A verified entry is split at the first `; check: `; both parts are not empty. The check
-   part says how the statement was checked, or `not recorded`.
+   part says how the statement was checked, or `not recorded`. A check part that starts
+   with `env:` is `env: <name>; <check>`, split at the first `;` after `env: `; the name
+   and the check are not empty.
 8. An options entry starts `chosen: ` or `rejected: `. A rejected entry is split at the
    first `; why: `, both parts not empty. At most one entry is `chosen:`. When `status` is
    `taken` or `default taken` and options are listed, exactly one is `chosen:`.
@@ -165,6 +167,9 @@ These rules are for the writer (`/cca:handoff`, or a person writing one by hand)
   marks it `true` only when it reproduces the result itself. When the statement depends
   on it, the check also names what it needs to give the same result: the directory it
   ran in, environment variables, services or accounts, and the environment it ran against.
+- Tag a check that ran against an environment the audit cannot reach, such as staging or
+  production, as `check: env: <name>; <check>`, for example
+  `check: env: staging; sh smoke.sh`.
 - No credentials, tokens, or secrets anywhere in the file.
 
 ## Claims
