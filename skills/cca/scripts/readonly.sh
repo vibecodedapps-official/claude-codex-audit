@@ -426,8 +426,10 @@ check() {
 			inside=1
 			break
 		fi
-		[ "$d" = / ] && break
-		d=$(dirname -- "$d") || die "cannot resolve $5"
+		p=$(dirname -- "$d") || die "cannot resolve $5"
+		# The top is where dirname stops moving: / for most paths, // for a UNC path.
+		[ "$p" = "$d" ] && break
+		d=$p
 	done
 	[ -n "$inside" ] || die "out prefix is not inside the run directory: $5"
 

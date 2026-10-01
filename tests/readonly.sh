@@ -27,6 +27,7 @@
 # 16 nested repo: edit and new file   20 stat-only change, index kept
 # 21 submodule not checked out: file added
 # 22 out prefix is the baseline in other letters  23 run directory in other letters
+# 24 out prefix on a UNC path, outside the run directory
 #
 # Prints one line per mismatch, then `readonly test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -408,6 +409,24 @@ if [ -e "$R/BASE.marker" ]; then
 	printf '%s\n' 'Second local edit.' >> "$A/README.md"
 	ro check "$A" "$RU" "$R/base" "$R/base" "$R/c"
 	expect "case 23" 1 "blocked hashes + $hash_edit README.md\nblocked hashes - $hash_orig README.md\n" ''
+fi
+
+# 24. an out prefix on a UNC path, outside the run directory: refused at once. The walk up
+# from it reaches //, whose dirname is // again, so it must stop there rather than loop.
+# Only a system that reaches the local C: drive as a UNC share runs it (Windows); a
+# regression would hang, so the call is bounded with `timeout` where it exists.
+case_id="case 24"
+if [ -d '//localhost/c$' ]; then
+	fresh
+	snap "$R/base"
+	unc='//localhost/c$/cca-readonly-test-unc/out'
+	if command -v timeout > /dev/null 2>&1; then
+		timeout 60 "$sh_bin" "$ro" check "$A" "$R" "$R/base" "$R/base" "$unc" > "$tmp/out" 2> "$tmp/err"
+		rc=$?
+	else
+		ro check "$A" "$R" "$R/base" "$R/base" "$unc"
+	fi
+	expect "case 24" 2 '' "readonly: out prefix is not inside the run directory: $unc\n"
 fi
 
 if [ "$bad" -gt 0 ]; then
