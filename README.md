@@ -469,6 +469,8 @@ What is not detected:
 - changes inside `.git/` other than refs, stashes, and config;
 - in a nested repository, a change to a ref other than its HEAD, to its stashes, or to its
   config;
+- a change inside a repository that sits in an ignored directory, such as a linked
+  worktree, other than an entry added or removed at its top level;
 - changes outside the audited repos.
 
 The report says so. Do not edit an audited repo during a run: your own edits trip the

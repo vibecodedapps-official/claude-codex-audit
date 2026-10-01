@@ -8,7 +8,8 @@
 # the exit status with literals. The run directory is outside the app repository, except
 # in cases 10 and 19. The script under test runs under `sh`, or under $RO_SH when set, for
 # example `RO_SH=dash sh tests/readonly.sh`. Cases 13 to 18 and 21 build their extra repos inline,
-# with a pinned identity and commit date, so their shas are literals.
+# with a pinned identity and commit date, so their shas are literals. Cases 26 and 27 add
+# a linked worktree to the fixture's app repo, whose files are those committed at its head.
 #
 # The literal hashes are the blob ids of the fixture's README.md (the committed line
 # plus `Local edit, not committed.`, then that plus `Second local edit.`). The sha in
@@ -29,6 +30,8 @@
 # 22 out prefix is the baseline in other letters  23 run directory in other letters
 # 24 out prefix on a UNC path, outside the run directory
 # 25 out prefix with a .. component
+# 26 a linked worktree as the repo
+# 27 a linked worktree in an ignored directory of the repo
 #
 # Prints one line per mismatch, then `readonly test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -445,6 +448,42 @@ expect "case 25" 2 '' "readonly: out prefix has a .. component: $R/missing/../ba
 # $R/./c gives the ordinary result.
 ro check "$A" "$R" "$R/base" "$R/base" "$R/./c"
 expect "case 25, . component" 1 "blocked hashes + 44e925490cf5a75b8514640ac89751f80066380f README.md\nblocked hashes - 62bbbc5f8f323f1c372e43131e1d3ad8a214adeb README.md\n" ''
+
+# 26. a linked worktree as the audited repo: no change is quiet, and a line appended to a
+# tracked file is blocked. The worktree is at the committed head, so its README.md is not
+# the fixture's edited one.
+case_id="case 26"
+fresh
+W=$root/wt26
+g -C "$A" worktree add -q --detach "$W" || mismatch "case 26: worktree add failed"
+ro snapshot "$W" "$R" "$R/base"
+[ "$rc" = 0 ] || mismatch "case 26: snapshot exit $rc: $(cat "$tmp/err")"
+ro check "$W" "$R" "$R/base" "$R/base" "$R/c"
+expect "case 26, no change" 0 '' ''
+printf '%s\n' 'Worktree edit.' >> "$W/README.md"
+ro check "$W" "$R" "$R/base" "$R/base" "$R/d"
+expect "case 26, edit" 1 "blocked hashes + 72ae0280a46747d20df228459aca358c42928b22 README.md\nblocked status + 1 .M N... 100644 100644 100644 36d7b792e8bbd0d467c1d17382cd9c2e4b5dbc24 36d7b792e8bbd0d467c1d17382cd9c2e4b5dbc24 README.md\n" ''
+
+# 27. a linked worktree inside an ignored directory of the audited repo. Git lists it as
+# one ignored directory, so .ignored holds one line for it. A change below its top level
+# is not detected, and an entry added at its top level shows as one ignored change. The
+# directory's mtime is set to an old time first, so that entry always changes it.
+case_id="case 27"
+fresh
+g -C "$A" worktree add -q --detach "$A/.test-output/wt" || mismatch "case 27: worktree add failed"
+touch -t 200001010000 "$A/.test-output/wt"
+snap "$R/base"
+[ "$(grep -c ' \.test-output/wt/$' "$R/base.ignored")" = 1 ] ||
+	mismatch "case 27: .ignored does not hold exactly one line for the worktree"
+[ "$(grep -c ' \.test-output/wt/.' "$R/base.ignored")" = 0 ] ||
+	mismatch "case 27: .ignored holds a line below the worktree"
+printf '%s\n' 'Worktree edit.' >> "$A/.test-output/wt/README.md"
+printf '%s\n' 'new' > "$A/.test-output/wt/src/new.txt"
+ro check "$A" "$R" "$R/base" "$R/base" "$R/c"
+expect "case 27, below the top level" 0 '' ''
+printf '%s\n' 'new' > "$A/.test-output/wt/new.txt"
+ro check "$A" "$R" "$R/base" "$R/base" "$R/d"
+expect "case 27, at the top level" 3 'ignored changed .test-output/wt/\n' ''
 
 if [ "$bad" -gt 0 ]; then
 	exit 1

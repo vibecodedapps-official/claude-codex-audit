@@ -45,6 +45,10 @@
 # no .git (a submodule that is not checked out), at any depth, is not inspected by git, so
 # every file under it, except any .git, is hashed in .hashes as untracked content, and a
 # touched file under it is not passed to `git check-ignore`.
+# A repository inside an ignored directory (for example, a linked worktree under an
+# ignored `.worktrees/`) is not a nested repository: git lists it as one ignored
+# directory, recorded in .ignored by its size and mtime, so only an entry added or
+# removed at its top level shows, as `ignored changed`.
 # When the repository's core.ignorecase is true, the run directory is matched against the
 # top level, and against every path, without regard to case.
 #

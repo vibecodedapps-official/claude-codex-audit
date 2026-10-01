@@ -168,7 +168,10 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
        - ignored-file differences accepted by each read-only check, and what the check
          does not detect: an ignored file replaced with one of the same size and a
          restored modification time, changes inside `.git/` other than refs, stashes,
-         and config, and changes outside the audited repos. When any
+         and config, a change to a nested repository's refs other than its HEAD, its
+         stashes, or its config, a change inside a repository that sits in an ignored
+         directory, such as a linked worktree, other than an entry added or removed at
+         its top level, and changes outside the audited repos. When any
          `baseline/<stage>-check.md` carries the note `note mtime precision: seconds`,
          say the ignored-file comparison used whole-second times, so a same-size rewrite
          within the same second was not detected;

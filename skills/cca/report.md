@@ -188,11 +188,13 @@ session.
 - Read-only check: each `baseline/<stage>-check.md` result, and every ignored file
   accepted, with the run that wrote it. Not detected by the check: an ignored file
   replaced with one of the same size and a restored modification time, changes inside
-  `.git/` other than refs, stashes, and config, and changes outside the audited
-  repos. When any check file carries the note `note mtime precision: seconds`, say
-  the ignored-file comparison used whole-second times, so a same-size rewrite within
-  the same second was not detected. A user's own edits to an audited repo during the run would also have tripped
-  the check.
+  `.git/` other than refs, stashes, and config, a change to a nested repository's refs
+  other than its HEAD, its stashes, or its config, a change inside a repository that
+  sits in an ignored directory, such as a linked worktree, other than an entry added or
+  removed at its top level, and changes outside the audited repos. When any check file
+  carries the note `note mtime precision: seconds`, say the ignored-file comparison used
+  whole-second times, so a same-size rewrite within the same second was not detected. A
+  user's own edits to an audited repo during the run would also have tripped the check.
 - Forge: which bundles were not queried, and exports' "not in export" keys.
 - Test injection: the `_test` key, when present.
 

@@ -43,9 +43,10 @@ These hold for every stage, for the orchestrator and every agent.
    ignored files that no logged run accounts for stops it too. Not detected: an ignored
    file replaced with one of the same size and a restored modification time, changes
    inside `.git/` other than refs, stashes, and config, a change to a nested repository's
-   refs other than its HEAD, its stashes, or its config, and changes outside the audited
-   repos. The user should not edit audited repos during a run, since their own edits trip
-   the check too.
+   refs other than its HEAD, its stashes, or its config, a change inside a repository that
+   sits in an ignored directory, such as a linked worktree, other than an entry added or
+   removed at its top level, and changes outside the audited repos. The user should not
+   edit audited repos during a run, since their own edits trip the check too.
 3. **No model, agent, or tool names** in anything external: commit messages, PR or
    ticket text, and drafted comments. The report is internal and may name them.
 4. **No advisor tool**, in the orchestrator or any agent.
