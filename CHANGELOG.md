@@ -14,7 +14,8 @@ session to the audit, with a return trip back. No full multi-agent audit has run
 - The handoff format (`skills/cca/handoff.md`) and `skills/cca/scripts/handoff.sh`, which
   detects, validates, and turns a handoff into typed claims and a commit list. A leading
   UTF-8 byte order mark is ignored, and a claim line over 8,000 bytes, ids included, is
-  an error, since a claim is read as one line.
+  an error, since a claim is read as one line. A section with no item and no `none` is an
+  error.
 - Typed claims, with kinds `code`, `decision`, `verification`, `scope`, and `status`.
   Prose claims files get a kind per sentence. A handoff's commit lists seed the review
   groups.
@@ -60,7 +61,9 @@ session to the audit, with a return trip back. No full multi-agent audit has run
   detected unless it adds or removes an entry at its top level, and the report says so.
 - The stage 1 ticket token rule now names the token for an exported ticket (its `id`),
   matches a GitHub `#n` only for an issue in the bundle's repo, and checks a boundary on
-  both sides, so `APP-1` matches neither `APP-1a` nor `XAPP-1`.
+  both sides, so `APP-1` matches neither `APP-1a` nor `XAPP-1`. Before a GitHub token the
+  character is also not `-`, `_`, `.`, or `/`, so `owner/app#12` does not match inside
+  `other-owner/app#12`.
 - No git command cca or its agents issue rewrites an audited repo's index: the check
   script sets `GIT_OPTIONAL_LOCKS=0`, the stages run `git status` with
   `--no-optional-locks`, and agents diff only between two commits, since a working-tree
