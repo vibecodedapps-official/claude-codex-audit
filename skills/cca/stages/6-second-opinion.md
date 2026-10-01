@@ -15,7 +15,7 @@ files).
 Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md`,
 `codex/request-inline.md` when the inline form is built, and, when the fallback answers
 several batches, `codex/request-<k>.md` and `codex/response-<k>.md` for each batch `<k>`
-from 2.
+it answers (from 2, or from 3 when Codex answered the first two).
 
 ## Steps
 
@@ -65,8 +65,13 @@ from 2.
       more than 60 ids, so when the set has more, split it in id order into batches of
       at most 60 ids; each batch is the id list in the slot of asks 1 and 2.
       - Codex: `codex/request.md` carries the first batch and the one follow-up (step
-        8) carries the second. A third batch cannot be requested: its ids stay without
-        a position, and step 10 fails stage 6 with them under `missing_positions`.
+        8) carries the second. Batches from the third on go to the fallback (step 11),
+        one `cca:adversary` launch per batch with scope `second-opinion-<k>`, each with
+        its own `codex/request-<k>.md` (built as in the next bullet), launched after
+        Codex's answer is saved (step 9). It is recorded as a partial swap: role second
+        opinion, scope those batches, from Codex `<model>` to `cca:adversary`, reason
+        "mandatory ids beyond two Codex batches". These batches fail stage 6 only when
+        one of them fails after the ladder (step 11).
       - Fallback (step 11): `cca:adversary` is launched once per batch, each launch
         with its own request, `codex/request.md` for the first batch and
         `codex/request-<k>.md` for batch `<k>` from 2, written at step 11. Each has
@@ -75,7 +80,7 @@ from 2.
         first request).
       - `batched` is true in the stage entry when more than one batch was requested
         (a Codex follow-up carried the second, or the fallback was launched for a
-        second batch), else false.
+        further batch), else false.
 
 5. **Choose the form.** Find the session's repository root with
    `git rev-parse --show-toplevel` in the session's directory. codex-lite runs Codex
@@ -93,17 +98,20 @@ from 2.
 
    **Inline cap.** Measure the inline request's size in bytes (`wc -c`). The cap is
    450,000 bytes, or `_test.inline_cap_bytes` when set. Over the cap, first reduce the
-   request by dropping the diffs (`codex/inputs/diffs/*.diff`; Codex can regenerate them
-   from the shas in the brief with the three-dot form the brief gives), re-write
-   `codex/request-inline.md` without them, and measure again; record
-   `inline_reduced: true` in the stage entry. A dropped diff is removed from the
+   request by dropping the diffs (`codex/inputs/diffs/*.diff`) of the bundles whose repo
+   is the session's repository, the one codex-lite runs Codex from, which can regenerate
+   them from the shas in the brief with the three-dot form the brief gives. The diff of
+   a bundle in any other repo is never dropped, since Codex cannot reach that repo.
+   Re-write `codex/request-inline.md` without the dropped diffs and measure again;
+   record `inline_reduced: true` in the stage entry. A dropped diff is removed from the
    request's input list, from its acknowledgment section, and from the set the step 8
-   check expects; in its place the request gives, per bundle, the command to regenerate
-   it, `git -C <repo> diff <base>...<head>` with the shas from the brief (the form
-   `1-orient.md` uses for `diffs/<bundle>.diff`). Still over the cap after that, the
-   request is not sent: swap to the fallback (step 11), which reads inputs by path, with
-   the reason "request too large for inline form". The brief already notes that a run
-   directory inside the session's repo avoids the inline form.
+   check expects; in its place the request gives, per bundle whose diff was dropped, the
+   command to regenerate it, `git -C <repo> diff <base>...<head>` with the shas from
+   the brief (the form `1-orient.md` uses for `diffs/<bundle>.diff`). Still over the cap
+   after that, or with no diff droppable, the request is not sent: swap to the fallback
+   (step 11), which reads inputs by path, with the reason "request too large for inline
+   form". The brief already notes that a run directory inside the session's repo avoids
+   the inline form.
 
 6. **Call Codex** with the Skill tool, skill `codex-lite:ask`, options first:
 
@@ -147,15 +155,19 @@ from 2.
      them; the mandatory ids without a position, with a request for their positions;
      and the second batch of asks 1 and 2, ending each ask with `for these ids: <the
      second batch's id list>`, when step 4.3 left one for Codex (then `batched` is
-     true). Apply the inline cap to this follow-up. Over it, first drop the diffs from
-     it and re-measure as in step 5 (record `inline_reduced: true`); a dropped diff no
-     longer needs acknowledgment, and the follow-up gives its three-dot regeneration
-     command in its place, as in step 5. Still over the cap, the follow-up is not
-     sent and stage 6 fails as below. With no thread id, send it as a fresh call that
+     true). Apply the inline cap to this follow-up. Over it, first drop the diffs of
+     session-repository bundles from it and re-measure as in step 5 (record
+     `inline_reduced: true`; the diff of a bundle in another repo is never dropped); a
+     dropped diff no longer needs acknowledgment, and the follow-up gives its three-dot
+     regeneration command in its place, as in step 5. Still over the cap, the follow-up
+     is not sent and stage 6 fails as below. With no thread id, send it as a fresh call that
      carries only the follow-up's asks (the unacknowledged inputs inline, the
-     missing positions, the second batch) plus `common.md` and `audit-brief.md` by
-     path (in the inline form, their copies inline, since Codex cannot open a path
-     outside its repository), not the whole request again. Handle its status as in
+     missing positions, the second batch) plus `common.md`, `audit-brief.md`, and
+     `ledger/5.md` by path (in the inline form, the copies of `common.md` and the
+     brief inline, and, in place of the whole ledger, the `ledger/5.md` section of
+     every id the follow-up asks about, since Codex cannot open a path outside its
+     repository and needs the finding text, not only its id), not the whole request
+     again. Handle its status as in
      step 7, except that a swap is replaced by stage 6 failing, since the first answer
      already exists.
    - Still unacknowledged after the follow-up: stage 6 fails. Keep the answer, list the
@@ -164,12 +176,14 @@ from 2.
      `ledger/6.md` that no finding passes the review gate on stage 6's account. The run
      will end `partial`.
 
-   There is at most one follow-up per run of stage 6. A mandatory position still missing
-   after it, including the ids of a third batch, is handled in step 10.
+   There is at most one follow-up per run of stage 6. A mandatory position of the first
+   two batches still missing after it is handled in step 10. Batches from the third on
+   are not part of the follow-up: step 11 launches them.
 
 9. **Save the answer verbatim** in `codex/response.md`: the codex-lite output as
    returned, unchanged. A follow-up's output is appended after a line
-   `--- follow-up, thread <id> ---`.
+   `--- follow-up, thread <id> ---`. When Codex answered and step 4.3 left batches from
+   the third on, launch them now, as step 11 says, and wait for them before step 10.
 
 10. **Check the mandatory positions, then write `ledger/6.md` once.** Before writing,
     take the ids step 10 requires, which are every mandatory id from step 4.3 (computed
@@ -178,18 +192,23 @@ from 2.
     position. When an id has a position in more than one place, the later one replaces
     the earlier; both stay in `codex/response.md`. For Codex this is a check after the
     fact: the follow-up for missing positions was already sent in step 8, and step 10
-    sends none. A mandatory id still without a position in the answer with the
-    follow-up appended fails stage 6: keep the answer, list the ids in
+    sends none. A mandatory id of the first two batches still without a position in the
+    answer with the follow-up appended fails stage 6: keep the answer, list the ids in
     `ledger/6.md` and under `missing_positions` in the stage entry, and mark in
     `ledger/6.md` that no finding passes the review gate on stage 6's account. For the
-    fallback, a mandatory id of that launch's batch without a position fails the
-    attempt (the ladder in step 11). "seen, no position" applies only to ids outside
-    the mandatory set.
+    fallback, whether it fills the role or only a batch from the third on, a mandatory
+    id of that launch's batch without a position fails the attempt (the ladder in step
+    11). "seen, no position" applies only to ids outside the mandatory set.
 
-    `ledger/6.md` holds, in this order:
+    `ledger/6.md` holds, in this order. Each part that is not a finding section sits
+    under its own `## ` heading that is not a finding id (the names are in brackets),
+    so that a finding section, which runs to the next `## ` heading, never takes it in
+    (stage 7 slices the file by those headings):
     - who filled the role: `codex <model>` with the thread id, or `cca:adversary`
-      (fallback) with its requested model, and any swap with its reason;
-    - the acknowledgment table: each input, its sentinel, acknowledged or not;
+      (fallback) with its requested model, and any swap, whole or partial (the batches
+      it covers), with its reason (`## Role`);
+    - the acknowledgment table: each input, its sentinel, acknowledged or not
+      (`## Acknowledgments`);
     - one section per `ledger/5.md` finding id the answer addresses:
 
       ```
@@ -199,27 +218,33 @@ from 2.
       - answer location: codex/response.md, <heading or line>
       ```
 
-    - Codex additions, each in the `common.md` schema with `origin: codex` and an id
-      `X<n>`. They are late additions;
+    - Codex additions, each in the `common.md` schema (heading `### X<n>: <title>`)
+      with `origin: codex` and an id `X<n>`. They are late additions;
     - the non-binding merge verdict per bundle, marked as such; it never replaces the
-      report's verdict rules;
+      report's verdict rules (`## Merge verdict (non-binding)`);
     - every `ledger/5.md` finding id the answer does not address and that is not
-      mandatory, listed as "seen, no position". A mandatory id is never listed so: with
-      no position it fails the stage, as above.
+      mandatory, listed as "seen, no position" (`## Seen, no position`). A mandatory
+      id is never listed so: with no position it fails the stage, as above;
+    - when stage 6 failed, the missing positions or unacknowledged inputs and the mark
+      that no finding passes the review gate on its account (`## Stage failure`).
 
 11. **Fallback.** Launch `cca:adversary` with the Agent tool, in the background, never as
-    a fork, with `model: fable`, once per batch of step 4.3 (first write
-    `codex/request-<k>.md` for each batch `<k>` from 2), all together. Each launch is a
-    separate agent in the stage entry, with scope `second-opinion-<k>` for batch `<k>`
-    (scope `second-opinion` when there is one batch). The prompt holds the paths of
-    `audit-brief.md`, `common.md`, and that batch's request (`codex/request.md` or
+    a fork, with `model: fable`, once per batch of step 4.3 that the fallback answers
+    (every batch when it fills the role; only the batches from the third on when Codex
+    answered the first two, a partial swap), all together, after first writing
+    `codex/request-<k>.md` for each batch `<k>` from 2. Each launch is a separate agent
+    in the stage entry, with scope `second-opinion-<k>` for batch `<k>` (scope
+    `second-opinion` when it fills the role with one batch). The prompt holds the paths
+    of `audit-brief.md`, `common.md`, and that batch's request (`codex/request.md` or
     `codex/request-<k>.md`, path form, which the fallback reads by path), with the
     instruction to answer the request as it asks, within its caps, and write the answer
     to `codex/response.md` (batch `<k>` from 2: `codex/response-<k>.md`) ending with
     `status: complete`. Record a swap (role second opinion, from Codex `<model>` to
-    `cca:adversary` on `fable`, reason). Once every batch has succeeded, append each
-    `codex/response-<k>.md` to `codex/response.md` after a line `--- batch <k> ---`.
-    The ladder applies to each launch on its own:
+    `cca:adversary` on `fable`, reason; for batches from the third on, the partial swap
+    of step 4.3 with its scope). Once every batch has succeeded, append each
+    `codex/response-<k>.md` to `codex/response.md` (after Codex's answer and follow-up,
+    in the partial case) after a line `--- batch <k> ---`. The ladder applies to each
+    launch on its own:
 
     | Failure | Action |
     |---|---|
@@ -237,8 +262,8 @@ from 2.
     fails the stage; the other launches still finish. No follow-up call exists for the
     fallback. When stage 6 fails for this reason, list the unacknowledged inputs in
     `ledger/6.md` and the stage entry as step 8's last bullet says, and the ids without
-    a position under `missing_positions`. With the fallback, `batched` is true when it
-    was launched for more than one batch (step 4.3), so every mandatory id is requested.
+    a position under `missing_positions`. `batched` is true when more than one batch was
+    requested (step 4.3), so every mandatory id is requested.
     When every batch passes both checks, write `ledger/6.md` from the answers as in
     step 10. Its additions also take `origin: codex` and ids `X<n>`, since they come
     from the second opinion; only the first batch's answer carries additions.
@@ -275,9 +300,11 @@ from 2.
     with `"called": false`. In `usage.md`, each Codex call has its wall-clock and tokens
     "not reported".
 
-    `missing_positions` lists the mandatory ids still without a position at stage end;
+    `missing_positions` lists the mandatory ids still without a position at stage end:
+    those of the first two Codex batches missing after the follow-up, and those of any
+    fallback batch that failed after the ladder;
     `batched` is true when more than one batch of asks 1 and 2 was requested, by a Codex
-    follow-up or by a second fallback launch (one agent per batch, scope
+    follow-up or by a further fallback launch (one agent per batch, scope
     `second-opinion-<k>`), else false;
     `inline_reduced` is true when the inline request or the follow-up was reduced by
     dropping diffs.

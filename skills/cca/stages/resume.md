@@ -18,10 +18,12 @@ a finished one.
    it again. A stage whose status is `running` counts as incomplete, since its agents
    belonged to an earlier session; it is rerun, and nothing waits for its old agents.
    If the stage 1 entry is missing, is `running`, or `audit-brief.md` does not exist,
-   the first stage to rerun is 1: skip steps 3 to 5, then run steps 6 to 9 with stage 1
-   as the first rerun stage (step 6 supersedes any stage 1 outputs that exist; step 9
-   continues with stage 1 as `1-orient.md` section D describes for resume, reusing the
-   run directory, run id, `runs.json` entry, and approvals). Stage 1 on this path
+   the first stage to rerun is 1: remove any pre-existing `forge/<bundle>/pr.json.new`,
+   so `1-orient.md` section C never reuses a file this invocation did not write; skip
+   steps 3 to 5, then run steps 6 to 9 with stage 1 as the first rerun stage (step 6
+   supersedes any stage 1 outputs that exist; step 9 continues with stage 1 as
+   `1-orient.md` section D describes for resume, reusing the run directory, run id,
+   `runs.json` entry, and approvals). Stage 1 on this path
    rebuilds its inputs from `manifest.json`'s `source` key merged with the prompt
    inputs and flags recorded in it, as step 4 does for hashing, and runs section A
    onward with those; the invocation block's `manifest: none` and `inputs: none` are
@@ -32,8 +34,11 @@ a finished one.
    `audit-brief.md`. Resolve every ref through the mapping lines in the brief's Read
    paths (`<ref as given> -> <remote>/...`) before `rev-parse`. For a GitHub PR, run
    the `gh pr view` command of `1-orient.md` step 2 once, with its output redirected
-   to `forge/<bundle>/pr.json.new`, and read `headRefOid` and `baseRefOid` from that
-   file with `jq`; step 4 projects the same file, with no second query. For any other
+   to `forge/<bundle>/pr.json.new`, and read `headRefOid` from that file with `jq`;
+   step 4 projects the same file, with no second query. Its base is the sha the local
+   remote-tracking ref `<remote>/<baseRefName>` resolves to (`<remote>` selected as
+   `1-orient.md` A5 does for a PR bundle, from the `url` in `pr.json.new`); the PR's
+   `baseRefOid` is not compared, since it is GitHub's cached value. For any other
    bundle, the shas its `branch` and `base` refs resolve to. Then:
    - A changed head: stop and ask whether to restart from stage 1, showing each
      bundle's recorded and current shas. On yes, the first stage to rerun is 1. On no,
@@ -41,11 +46,15 @@ a finished one.
    - A changed base sha alone does not stop or invalidate. Compare the merge base
      recorded in `audit-brief.md` with
      `git -C <repo> merge-base <current base sha> <recorded head sha>`. When they are
-     equal, continue: record the current base sha as `base moved` (stage entry key
-     `base_moved`, a map from bundle to the current base sha) in the first rerun
-     stage's entry and in the report's Coverage, and keep the recorded base sha for
-     every diff and every comparison. When they differ, or the current base sha is
-     not present locally (resume does not fetch), ask as for a changed head.
+     equal, continue and keep the moved base sha pending until step 5 has picked the
+     first rerun stage. When that stage is above 1 (stage 1 is reused), record the
+     current base sha as `base moved` (stage entry key `base_moved`, a map from bundle
+     to the current base sha) in the first rerun stage's entry and in the report's
+     Coverage, and keep the recorded base sha for every diff and every comparison.
+     When stage 1 reruns, drop it and record nothing: stage 1 re-pins the base from
+     the remote-tracking ref after its approved fetch, so nothing has moved. When they
+     differ, or the current base sha is not present locally (resume does not fetch),
+     ask as for a changed head.
    On a stop, remove every `forge/<bundle>/pr.json.new`. When stage 1 reruns, it keeps
    these files and reuses them (`1-orient.md` section C); otherwise step 5 removes
    them.
@@ -102,7 +111,9 @@ a finished one.
       one more than the highest number already under `superseded/`, keeping the
       run-relative path (so `ledger/5.md` goes to `superseded/<k>/ledger/5.md`).
       Stage 5's outputs include `ledger/5.md`, stage 6's `ledger/6.md`, and stage 7's
-      `ledger/7.md`, each with its stage.
+      `ledger/7.md`, each with its stage. Never move `manifest.json`, though stage 1
+      lists it as an output: the rerun stage 1 reads its `source` key, as the walk
+      path below does.
    2. Rewrite its entry with status `superseded` and, in its `superseded` list, one
       record per moved output: `path`, `moved_to`, and `time`.
    The files `forge/<bundle>/pr.json.new` that step 3 wrote are never moved; stage 1
@@ -114,7 +125,8 @@ a finished one.
    `audit-brief.md`, `common.md`, `claims.md`, `groups.md`, `diffs/`, `forge/`,
    `trees/`, `guidelines/`, `domain/`, `scope/`, `pass1/`, `pass2/`, `ledger/`,
    `codex/`, `late/`, `converged/`, `converged.md`, `gate.md`, `report.md`, `usage.md`,
-   and `baseline/`. `manifest.json`, `stages.json`, and `superseded/` are never moved.
+   `tmp/`, and `baseline/`. `manifest.json`, `stages.json`, and `superseded/` are
+   never moved.
    With no entry to rewrite, keep the move records (`path`, `moved_to`, `time`) and put
    them in the `superseded` list of the new stage 1 entry when stage 1 writes it
    (`1-orient.md` section D, step D7).
@@ -136,8 +148,9 @@ a finished one.
    stage 2 or 3 counts as satisfied for the barrier, and its recorded
    `output_hashes` are the final hashes. Rerun stages write new entries, each keeping
    the `superseded` list from step 6; the first rerun stage's entry also carries the
-   `base_moved` map when step 3 recorded one. When stage 1 reruns, it reuses this run's
-   directory, run id, `runs.json` entry, approvals, and superseded records, and only
-   rewrites the stage 1 entry as `running` (stage 1, section D).
+   `base_moved` map when step 3 recorded one (only when stage 1 is reused). When
+   stage 1 reruns, it reuses this run's directory, run id, `runs.json` entry,
+   approvals, and superseded records, and only rewrites the stage 1 entry as `running`
+   (stage 1, section D).
 10. **Report.** Stage 8 writes a new `report.md` with a new revision line. An approval
     given to `/cca:act` against the old revision no longer matches, by design.

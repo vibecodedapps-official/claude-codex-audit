@@ -79,8 +79,8 @@ and on Ubuntu with dash, with identical commit ids on both.
 | M3-e | `_test` drops one acknowledgment twice: stage 6 fails, and the run ends `partial` with `audit incomplete` | not run | needs a live multi-agent audit run |
 | M3-f | `_test` fails the fallback twice, with `--no-codex`: Fable fails, Opus fails, and stage 6 fails | not run | needs a live multi-agent audit run |
 | M3-g | `--codex-timeout 0` is rejected in one line; the stage 6 entry records timeout `1200` at low, and `3600` with `--codex-timeout 3600` | not run | needs a live multi-agent audit run |
-| M3-h | `_test` sets the inline cap to 1,000 bytes, run directory outside the session's repo: stage 6 first drops the diffs and re-measures (the stage 6 entry records `inline_reduced: true`), then swaps with the reason "request too large for inline form", and the run ends `reported` | not run | needs a live multi-agent audit run |
-| M3-i | A run with more than 60 mandatory ids: Codex gets the first batch in the request and the second in its one follow-up; with `--no-codex`, one fallback launch per batch (`second-opinion-<k>`); the stage 6 entry records `batched: true` and no mandatory id is left without a request | not run | needs a live multi-agent audit run |
+| M3-h | `_test` sets the inline cap to 1,000 bytes, run directory outside the session's repo: stage 6 first drops only the diffs of bundles whose repo is the session's repository and re-measures (the stage 6 entry records `inline_reduced: true`; a diff of any other repo is never dropped, and with none droppable it swaps directly), then, still over the cap, swaps with the reason "request too large for inline form", and the run ends `reported` | not run | needs a live multi-agent audit run |
+| M3-i | A run with more than 60 mandatory ids: Codex gets the first batch in the request and the second in its one follow-up, and any batch from the third on goes to the fallback, one launch per batch (`second-opinion-<k>`), recorded as a partial swap with the reason "mandatory ids beyond two Codex batches" (a third batch alone does not fail the stage); with `--no-codex`, one fallback launch per batch (`second-opinion-<k>`); the stage 6 entry records `batched: true` and no mandatory id is left without a request | not run | needs a live multi-agent audit run |
 
 ## M4: sources and scale
 
@@ -106,7 +106,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 |---|---|---|---|
 | M5-a | `full`, after a complete run: editing the claims file and resuming reruns stages 1 to 8 and marks the old outputs superseded | not run | needs a live multi-agent audit run |
 | M5-b | `--from 5` reruns stages 5 to 8, reuses stages 1 to 4, and marks `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` superseded | not run | needs a live multi-agent audit run |
-| M5-c | Moving the app's branch head (or its base so the merge base changes) makes resume stop and ask; a base that moves with the merge base unchanged does not stop it and is recorded as `base moved` | not run | needs a live multi-agent audit run |
+| M5-c | Moving the app's branch head (or its base so the merge base changes) makes resume stop and ask; a base that moves with the merge base unchanged does not stop it and is recorded as `base moved` only when stage 1 is reused (when stage 1 reruns it re-pins the base from the local remote-tracking ref and nothing is recorded) | not run | needs a live multi-agent audit run |
 | M5-d | `--from 6` reruns stages 6 to 8, reuses `ledger/5.md` unchanged, and marks `ledger/6.md` and `ledger/7.md` superseded | not run | needs a live multi-agent audit run |
 
 ## M6: act

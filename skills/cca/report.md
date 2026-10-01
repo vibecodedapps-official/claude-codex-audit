@@ -133,7 +133,10 @@ item id or evidence. `other` sentences are counted, not listed.
 - Failed scopes and the files, rules, or questions they left unreviewed, naming the
   last byte offset of a digest that ended `status: failed at byte <offset>`.
 - Stage 6: whether the mandatory ids were requested in batches (`batched`) and, from
-  `missing_positions`, every mandatory id left without a position.
+  `missing_positions`, every mandatory id left without a position (those of the first
+  two Codex batches still missing after the follow-up, and those of a fallback batch
+  that failed). A partial swap, the fallback answering the batches after Codex's first
+  two, is listed as a swap with its scope.
 - Corpus files stage 2 split by byte range: the source, the path, its size, each
   range, and the chunk id (`digest-N`) that covered it with that chunk's status.
 - Bundles whose base sha moved on resume while the merge base stayed the same

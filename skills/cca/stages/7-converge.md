@@ -48,7 +48,8 @@ by size has `<group>-<k>` parts), and `converged.md`.
    then its own additions in the `common.md` schema with `origin: late`, each marked
    provisional. At low, write one line: "No late adversary at low tier; late additions
    stay provisional." If the late adversary failed, say so and list the ids it would
-   have challenged.
+   have challenged, under a `## Late adversary failed` heading (so no finding section
+   runs on into it).
 
 4. **Review gate.** A finding counts when a reviewer other than its author has
    challenged it, and both a Claude adversary and the second opinion have seen it, in
@@ -113,16 +114,51 @@ by size has `<group>-<k>` parts), and `converged.md`.
       slice holds every section of `ledger/5.md`, `ledger/6.md`, and `ledger/7.md`
       whose finding id belongs to the group (step 7.1), each section prefixed with the
       pointer line `source: ledger/<n>.md, section <finding id>`, then the group's
-      lines from `gate.md`. When a slice exceeds 450,000 bytes (`wc -c`), or
-      `_test.ledger_split_bytes` when set, split the group into parts `<group>-1`,
-      `<group>-2`, ... with slices `ledger/slices/<group>-1.md`,
+      lines from `gate.md`. The shell writes the slice, never the model: the
+      orchestrator reads none of it, and no section passes through its own output. For
+      each id of the group (from the step 7.1 assignment, which covers every ledger id),
+      in finding id order, and for each ledger file `<n>` (5, 6, or 7) that has a
+      section for it, append by redirect the pointer line, then the section; after the
+      sections, the id's `gate.md` line. The two kinds of file are cut differently.
+      In `ledger/5.md`, a section is exactly `## <id>` and runs to the next `## ` line;
+      `### ` lines never start or stop one, because a section embeds the finding's own
+      `### <group>-F<n>: <title>` heading under `### Original`. In `ledger/6.md` and
+      `ledger/7.md`, a section starts at a line that is exactly `## <id>` or begins
+      `### <id>: ` (an addition in the `common.md` schema, such as `X<n>` or `L<n>`)
+      and runs to the next `## ` line or `### <word>: ` line, where `<word>` has no
+      space or colon; their sections embed no finding headings, and subheadings
+      without a colon stay inside. Every other part of a ledger file (the role, the
+      acknowledgments, the merge verdict, the "seen, no position" list, the map
+      corrections, a failure note) sits under a `## ` heading that is not a finding
+      id, which ends a section and is never extracted:
+
+      ```
+      # ledger/5.md
+      awk -v id=<id> '/^## /{p = ($0 == "## " id); if (p) f = 1} END{exit !f}' ledger/5.md &&
+        printf 'source: ledger/5.md, section <id>\n' >> <slice> &&
+        awk -v id=<id> '/^## /{p = ($0 == "## " id)} p' ledger/5.md >> <slice>
+      # ledger/6.md and ledger/7.md (<n> is 6 or 7)
+      awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1); if (p) f = 1} END{exit !f}' ledger/<n>.md &&
+        printf 'source: ledger/<n>.md, section <id>\n' >> <slice> &&
+        awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1)} p' ledger/<n>.md >> <slice>
+      # once per id, after its sections
+      awk -v id=<id> 'index($0, id ": ") == 1' gate.md >> <slice>
+      ```
+
+      When a slice exceeds 450,000
+      bytes (`wc -c`), or `_test.ledger_split_bytes` when set, split the group into
+      parts `<group>-1`, `<group>-2`, ... with slices `ledger/slices/<group>-1.md`,
       `ledger/slices/<group>-2.md`, ... and one merger each; the final merger treats
-      them as one group. Fill the parts greedily in finding id order: a part closes
-      when adding the next id's sections (with its pointer lines and its `gate.md`
-      line) would take it over the threshold, and that id starts the next part. A
-      single id whose sections alone exceed the threshold forms a part of its own,
-      marked `over threshold` in its slice header and in the stage entry. Every id
-      lands in exactly one part, so the split ends and gives the same parts each time.
+      them as one group. Fill the parts greedily in finding id order: build each id's
+      block (its sections with their pointer lines, then its `gate.md` line) by the
+      commands above into `<run dir>/tmp/block.md`, measure it with `wc -c`, and append
+      it to the open part with `cat` and a redirect; a part closes when adding the next
+      id's block would take it over the threshold, and that id starts the next part. A
+      single id whose block alone exceeds the threshold forms a part of its own, marked
+      `over threshold` in its slice header (a first line written by `printf`) and in
+      the stage entry. Every id lands in exactly one part, so the split ends and gives
+      the same parts each time. Remove `<run dir>/tmp/block.md` when the slices are
+      written.
    3. Launch one merger per group (per part), prompt: the paths of `audit-brief.md`,
       `common.md`, its slice, the three ledger files `ledger/5.md`, `ledger/6.md`, and
       `ledger/7.md` "for duplicate checks only", and the output path

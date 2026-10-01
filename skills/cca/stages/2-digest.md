@@ -30,13 +30,15 @@ auditors cite the original document at its pinned sha, never the digest.
       the file from `start` 0: when the rest of the file is 450,000 bytes or fewer,
       `end` is the file size; otherwise `end` is `start` plus the byte count up to and
       including the last LF within the next 450,000 bytes, so no line is split.
-      Materialize each such file once, by shell redirect, to
-      `<run dir>/tmp/<source slug>/<path>` (`git -C <repo> show <sha>:<path>` for a
-      directly read tree, or `cat trees/<name>/<path>` for an exported tree), and
-      compute every range boundary and line count from that copy, never through the
-      model's output. Below, `<file>` is that copy. The `tmp/` directory is run state,
-      never an input or output of a stage: remove the copy once the chunk files for its
-      ranges are written (3.4). Measure the count with
+      Compute every range boundary and line count from a file on disk, never through
+      the model's output. An exported tree's file is measured in place, at
+      `<run dir>/trees/<name>/<path>`, with no copy. For a directly read tree,
+      materialize the file once, by shell redirect (`git -C <repo> show <sha>:<path>
+      > <run dir>/tmp/<source slug>/<path>`), and measure that copy. Below, `<file>`
+      is the file measured. The `tmp/` directory is run state, never an input or output
+      of a stage: remove each copy once the chunk files for its ranges are written
+      (3.4), and remove `<run dir>/tmp/` on every exit of step 3, including a stop or
+      failure part way through. Measure the count with
       `tail -c +<start+1> <file> | head -c 450001 | sed '$d' | wc -c`. If that
       prints 0 (one line longer than the cap), cut at `start` plus 450,000 and mark
       the range `line split`. The next range starts at `end`.
@@ -49,8 +51,8 @@ auditors cite the original document at its pinned sha, never the digest.
       1: `head -c <start> <file> | wc -l`, plus 1), its line count
       (`tail -c +<start+1> <file> | head -c <end-start> | wc -l`, plus 1 when the
       range's last byte is not an LF, so an unterminated final line counts), and the
-      file's total size. Then remove the `tmp/<source slug>/` copy of each file whose
-      chunk files are all written.
+      file's total size. Then remove the `tmp/<source slug>/` copy, where one was made,
+      of each file whose chunk files are all written.
    The chunk's scope id is `digest-N`. Keep the list of files split by range, with
    each file's ranges, for the stage 2 entry (step 6.2).
 4. **Launch.** Queue one `cca:digester` per chunk (SKILL.md, Queue and Agent launch

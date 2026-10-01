@@ -9,28 +9,42 @@
 - Stage 6: every blocker or high finding and every pass-two downgrade or drop needs a
   position; missing ones get one follow-up, then fail the stage (`missing_positions`);
   above 60 mandatory ids the asks are batched (`batched`): Codex gets the second batch
-  in its one follow-up, a third fails the stage, and the fallback is launched once per
-  batch. Every mandatory id is requested in a run that completes.
-- Stage 6: a request over the inline cap is first reduced by dropping diffs
-  (`inline_reduced`) before the swap.
+  in its one follow-up, batches from the third on go to the fallback (one launch each,
+  a partial swap), and the fallback is launched once per batch without Codex. The
+  stage fails on such a batch only when it fails after the ladder. Every mandatory id
+  is requested in a run that completes.
+- Stage 6: a request over the inline cap is first reduced by dropping the diffs of
+  session-repository bundles (`inline_reduced`) before the swap; other repos' diffs
+  are never dropped.
 - Stage 8: the terminal state is decided from stages 1 to 7 only.
 - Stage 1: fetches are explicit, tag-free, into remote-tracking refs only, verified by
   sha, and recorded in the approval, which covers only its listed commands; a
   `<other remote>/<branch>` ref is fetched from that remote.
-- Stage 1: a bundle's base is pinned by the PR's `baseRefOid`; resume compares the head
-  and the merge base, and a moved base with the same merge base is recorded as `base
-  moved` without stopping.
+- Stage 1: a GitHub PR bundle's base is pinned to the local sha of
+  `<remote>/<baseRefName>` after the approved fetch (`baseRefOid` is recorded for
+  information only); resume compares the head and that base, and a moved base with the
+  same merge base is recorded as `base moved` without stopping, only when stage 1 is
+  reused.
 - Stage 1: `gh` output is saved by shell redirect, and a `jq` projection of it
   (`pr.hash.json`) is hashed (`forge_hashes`); resume re-queries once and compares.
   `jq` is required for GitHub PRs.
 - Stage 1: the run directory is created before the PR is read.
-- Stage 1: each repo has one selected remote, and the fetch also covers tags and shas.
+- Stage 1: each repo has one selected remote (for a GitHub PR bundle, the one whose
+  URL names the PR's repo, settled at section C; for other repos, selected lazily when
+  a fetch is needed; a PR bundle whose repo has no remote stops), and the fetch also
+  covers tags and shas. A fetch approval for a bare name covers the `ls-remote` check
+  and either candidate refspec and records the resolved kind. The run id slug for a
+  `file:` PR export uses the export's `id`, else the bundle's `branch`.
 - Resume: reads `manifest.json` and `stages.json` first and reruns from stage 1 when
-  stage 1 is missing, running, or has no brief, or when `stages.json` is missing.
+  stage 1 is missing, running, or has no brief, or when `stages.json` is missing; it
+  never moves `manifest.json`, includes `tmp/` in the walk, and removes stale
+  `pr.json.new` files on the stage-1-rerun path.
 - Stage 2: a text file over 450,000 bytes is split into byte-range chunks
-  (`split_files`), computed from a copy under the run's `tmp/` and read by the digester
-  in 24,000-byte slices.
-- Stage 7: split-mode group mergers read per-group slices under `ledger/slices/`.
+  (`split_files`), measured in place for an exported tree or from a copy under the
+  run's `tmp/` for a directly read one, and read by the digester in slices of up to
+  24,000 bytes ending at a line break, with absolute line numbers from one `awk` stage.
+- Stage 7: split-mode group mergers read per-group slices under `ledger/slices/`,
+  written by shell (`awk`, `printf`, redirects), not through the model.
 - Docs: acceptance evidence for the fixture map path and the lint output for an agent
   that lists Edit.
 

@@ -48,8 +48,8 @@ stage sections below say.
 
 The `allowed-tools` list above pre-approves read commands only. Export, snapshot,
 state-file, and probe commands (such as the export script, `rm -rf` and `mkdir` in
-the run directory, `stat`, `find`, `sha256sum`, `jq`, `mv -f`, `wc -c`, and
-`codex --version`) follow the session's permission mode; tell the user once, before
+the run directory, `stat`, `find`, `sha256sum`, `jq`, `awk`, `mv -f`, `wc -c`,
+and `codex --version`) follow the session's permission mode; tell the user once, before
 stage 1, that they may prompt. `git fetch` (with its `git ls-remote --tags` check),
 every act write, and live-data access are not pre-approved, and you also ask for them
 in words first.
@@ -130,7 +130,7 @@ Approvals recorded in `stages.json` are not asked again.
 | Domain mapper (stage 3) | `cca:mapper`, opus | as for the digester |
 | Auditor (stage 4, top-ups) | `cca:auditor`, opus | as for the digester |
 | Adversary (stages 5 and 7) | `cca:adversary`, opus, fresh context | as for the digester |
-| Second opinion (stage 6) | Codex, `--codex-model` (default `gpt-6.1-sol`), through `codex-lite:ask` | `cca:adversary` on fable, else opus, launched once per batch, each given its Codex request |
+| Second opinion (stage 6) | Codex, `--codex-model` (default `gpt-6.1-sol`), through `codex-lite:ask` | `cca:adversary` on fable, else opus, launched once per batch, each given its Codex request; also for the batches from the third on when Codex answered the first two (a partial swap) |
 | Merger (stage 7) | `cca:merger`, sonnet | you merge |
 
 An agent **fails** when it returns an error, or when its output file lacks
@@ -300,10 +300,11 @@ Coverage, and apply each field it has:
 
 - `fail`: a list of `{ role, scope, times }`. `role` is digester, mapper, auditor,
   adversary, merger, or fallback (the stage 6 fallback agent); `scope` is a group,
-  source, chunk id, or fallback batch (`second-opinion-<k>`), or `any`. Treat the
-  first `times` completions of that role at that scope as failures, counting across
-  relaunches and swaps, then apply the failure table. A merger failure injected this
-  way still goes to the orchestrator merge.
+  source, chunk id, or fallback batch (`second-opinion-<k>`), or `any`. The scope
+  `second-opinion` also matches every batch scope `second-opinion-<k>`, as a prefix.
+  Treat the first `times` completions of that role at that scope as failures, counting
+  across relaunches and swaps, then apply the failure table. A merger failure injected
+  this way still goes to the orchestrator merge.
 - `drop_ack`: `{ input, times }`. In stage 6, treat the acknowledgment of the named
   run-directory input as missing in the first `times` answers.
 - `hold`: `{ stage, until }`. Queue the named stage's agents but launch none until
@@ -368,8 +369,11 @@ with `mv -f`. Never edit either in place.
 3. `approvals` records each approval as `kind` (`fetch`, `live`, or
    `export-over-1gb`), `target`, `decision`, and `time`; a `fetch` approval also
    records `commands`, the exact commands run under that approval (the fetches and any
-   `git ls-remote --tags` check). It covers only those commands: planned commands that
-   differ are asked again and recorded as a new entry.
+   `git ls-remote --tags` check) and `resolved`, a map from each bare name that the
+   approval covered to the kind it resolved to, `tag` or `branch`. It covers only those
+   commands, except that an approval for a bare name covers the `ls-remote` check and
+   either candidate refspec for it: planned commands that differ are asked again and
+   recorded as a new entry.
 4. When a stage starts, write its entry as `running` with its inputs. When every
    output it lists exists and its read-only check has passed, write the entry with
    its final status. That write is the last act of the stage; `stages.json` is the only
@@ -378,22 +382,27 @@ with `mv -f`. Never edit either in place.
    files under `forge/`: `pr.hash.json`, a `jq` projection of the unprojected
    `pr.json` that leaves out the head and base shas and viewer-dependent fields,
    `pr-threads.json`, and `<ticket>.json`, by run-relative path, each with its hash,
-   compared by resume; `pr.json` itself is not hashed) and the `headRefOid` and
-   `baseRefOid` of each GitHub PR bundle; stages 2 and 3 record `output_hashes` (each
-   digest or map path and its hash, read by the stage 4 barrier) and `failed_scopes`;
-   stage 2 also records `split_files` (each text file split into byte-range chunks);
-   stage 3 records `test_planted` when `_test` planted a map error; stage 6 records
+   compared by resume; `pr.json` itself is not hashed), the `headRefOid` of each
+   GitHub PR bundle, which is its pinned head, and its `baseRefOid`, information only
+   (the base as GitHub last evaluated it, never pinned or compared: the pinned base is
+   the sha of the local remote-tracking ref `<remote>/<baseRefName>`); stages 2 and 3
+   record `output_hashes` (each digest or map path and its hash, read by the stage 4
+   barrier) and `failed_scopes`; stage 2 also records `split_files` (each text file
+   split into byte-range chunks); stage 3 records `test_planted` when `_test` planted
+   a map error; stage 6 records
    `codex_model` and `codex_timeout`, the values passed, `sentinels`,
-   `missing_positions` (mandatory finding ids left without a position, including the
-   ids of a third Codex batch, which cannot be requested), `batched` (true when more
-   than one batch of mandatory ids was requested, by the one Codex follow-up or by a
-   second fallback launch, else false), and `inline_reduced` (diffs dropped to fit the
-   inline cap); stage 7 lists the `ledger/slices/` files among its outputs in split
-   mode, marks a part `over threshold` when a single finding id alone exceeds the
-   split threshold, and records `converged_check` (`pass` or `fail`, absent when no
-   merge was attempted), which stage 8 reads; a resumed stage records `base_moved` (a
-   map from bundle to the current base sha) when a base sha moved but its merge base
-   did not.
+   `missing_positions` (the mandatory finding ids of the first two Codex batches still
+   without a position after the follow-up, plus the ids of any fallback batch that
+   failed after the ladder), `batched` (true when more than one batch of mandatory ids
+   was requested, else false), and `inline_reduced` (diffs of session-repository
+   bundles dropped to fit the inline cap); stage 7 lists the `ledger/slices/` files
+   among its outputs in split mode, marks a part `over threshold` when a single
+   finding id alone exceeds the split threshold, and records `converged_check` (`pass`
+   or `fail`, absent when no merge was attempted), which stage 8 reads; a resumed
+   stage records `base_moved` (a map from bundle to the current base sha) when a base
+   sha moved but its merge base did not, and only when stage 1 is reused (the first
+   rerun stage is above 1); when stage 1 reruns it re-pins the base and nothing is
+   recorded.
 
 ### Usage
 
@@ -439,8 +448,9 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/6-second-opinion.md` when stage 5 
 builds the Codex request from `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`, calls
 `codex-lite:ask`, handles status and swaps, and writes `ledger/6.md`. Every mandatory
 finding id is requested in a run where stage 6 completes: in batches of at most 60,
-the first in the request and the second in the one Codex follow-up (a third fails the
-stage), or one fallback launch per batch.
+the first in the request and the second in the one Codex follow-up (any batch after
+the second goes to the fallback, one launch each, a partial swap), or one fallback
+launch per batch. A batch past the second no longer fails the stage by itself.
 
 ## Stage 7: converge
 

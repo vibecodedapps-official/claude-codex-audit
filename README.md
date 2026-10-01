@@ -87,15 +87,18 @@ states the merged, normalized manifest before stage 1 and saves it in the run di
 `--from <stage>` takes a stage number from 1 to 8. Resume reruns from the earlier of
 `--from` and the first stage that is incomplete or whose inputs changed, reruns every
 stage after it, and marks their old outputs superseded. Approvals you gave are not
-asked again, except that a fetch approval covers only the commands it listed; other
-fetch commands are asked again. If any bundle's head has moved since the run started,
+asked again, except that a fetch approval covers only the commands it listed (an
+approval for a bare name covers either candidate refspec for it); other fetch
+commands are asked again. If any bundle's head has moved since the run started,
 or its base has moved so that the merge base changed, resume stops and asks whether to
 restart from stage 1. A base that moved with the merge base unchanged does not stop it:
 the old base sha is kept for every diff and the move is recorded as `base moved` in
-the report. Resume also re-queries the forge data the brief used; a difference
-invalidates stage 1, and if the forge cannot be queried, resume stops. A run directory
-with `manifest.json` but no `stages.json` reruns from stage 1; one without
-`manifest.json` is unrecoverable.
+the report, but only when stage 1 is reused; when stage 1 reruns it pins the base
+again (for a GitHub PR, the local `<remote>/<base branch>` ref after any approved
+fetch, not GitHub's cached `baseRefOid`). Resume also re-queries the forge data the
+brief used; a difference invalidates stage 1, and if the forge cannot be queried,
+resume stops. A run directory with `manifest.json` but no `stages.json` reruns from
+stage 1; one without `manifest.json` is unrecoverable.
 
 ### `/cca:act`
 
@@ -207,7 +210,8 @@ four. A line `extends: default` keeps the four and adds yours.
    counter-evidence, and rules on each finding.
 6. **Second opinion.** Codex, or the fallback, reviews every finding, including dropped
    ones, and may restore findings or add new ones. Every blocker, high, and
-   downgraded or dropped finding must get a position, in batches of at most 60 ids.
+   downgraded or dropped finding must get a position, in batches of at most 60 ids
+   (Codex takes two batches; the fallback takes any further ones).
 7. **Converge.** A late adversary challenges late additions (at medium and high), then
    a merger folds the ledger into one item per distinct defect, `C1`, `C2`, and so on.
 8. **Report.** The verdict and the report, written from what is on disk.

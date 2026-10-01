@@ -112,8 +112,9 @@ Choices made while building 0.1.0 where the design left room.
 - **Inline Codex requests (known limitation, 2026-10-01).** The inline request form
   travels as the Skill tool argument, and codex-lite rewrites it into its request file,
   so a request near the 450,000-byte cap is slow and may be altered in transit. A
-  request over the cap is first reduced by dropping the diffs (Codex can regenerate
-  them from the shas in the brief) and re-measured before the swap to the fallback.
+  request over the cap is first reduced by dropping the diffs of session-repository
+  bundles (Codex can regenerate them from the shas in the brief; other repos' diffs are
+  never dropped) and re-measured before the swap to the fallback.
   Stage 6 also checks that the answer gives a position for every mandatory finding id
   (every blocker or high finding and every pass-two downgrade or drop). Keeping the run
   directory inside the session's repository avoids the inline form.
@@ -123,14 +124,25 @@ Choices made while building 0.1.0 where the design left room.
 - B1: fetches are explicit and tag-free into remote-tracking refs only, with no
   `--prune`; the pinned shas are verified after the fetch and the commands are recorded
   in the approval, which covers only those commands (different planned commands are
-  asked again); the fetch also covers tags (to `refs/remotes/<remote>/tags/<name>`) and
-  shas (to `refs/remotes/<remote>/cca/<sha>`) from each repo's selected remote, and a
+  asked again), except that an approval for a bare name covers the `ls-remote` check and
+  either candidate refspec for it, with the resolved kind (`tag` or `branch`) recorded
+  in the entry's `resolved` map so resume matches it without contacting the remote; the
+  fetch also covers tags (to `refs/remotes/<remote>/tags/<name>`) and shas (to
+  `refs/remotes/<remote>/cca/<sha>`) from each repo's selected remote, and a
   `<other remote>/<branch>` ref from that configured remote. Every ref mapping is
-  recorded in the brief for resume.
-- B2: a bundle's base is pinned by the PR's `baseRefOid`, and a stale base is handled
-  like a stale head; resume stops only for a changed head or a changed merge base, and
-  a moved base sha with the same merge base is recorded as `base moved` while the
-  recorded base sha is kept for every diff.
+  recorded in the brief for resume. The remote of a GitHub PR bundle is the one whose
+  URL names the PR's owner and repo (from `url` in `pr.json`), else `origin`, else the
+  only remote, settled at section C; for other repos it is selected lazily, only when
+  step 1a needs a fetch, and several remotes without `origin` stop the run only then. A
+  PR bundle whose repo has no remote stops with `bundle <name>: no remote`.
+- B2: a GitHub PR bundle's base is pinned to the local sha of `<remote>/<baseRefName>`
+  after step 1a and its approved fetch, and is stale only when that ref is missing. The
+  PR's `baseRefOid` is GitHub's cached base at the last sync, not the live branch tip,
+  so it is recorded in the brief as information only and never pinned or compared.
+  Resume stops only for a changed head or a changed merge base, comparing the head and
+  that local base sha; a moved base sha with the same merge base is recorded as
+  `base moved` only when stage 1 is reused (a rerun stage 1 re-pins the base, so
+  nothing has moved), while the recorded base sha is kept for every diff.
 - B3: each `gh` call is made once and saved by shell redirect, never through the model;
   the PR output is saved unprojected as `pr.json`, and `pr.hash.json`, a `jq` projection
   without the shas and viewer-dependent fields (which would otherwise invalidate stage 1
@@ -138,27 +150,39 @@ Choices made while building 0.1.0 where the design left room.
   `pr.json.new`, projects it the same way, and hashes by `git hash-object --stdin`; a
   `gh` or `jq` failure stops resume. `jq` is required for GitHub PRs.
 - Run directory: it is created before the PR is read (the run id comes from the
-  manifest, with no `gh` call), so `pr.json` can be written by redirect; a stop in that
-  section removes it.
+  manifest, with no `gh` call; for a `file:` PR export the slug uses the export's `id`,
+  else the bundle's `branch`, never the path), so `pr.json` can be written by redirect;
+  a stop in that section removes it.
 - B4: resume reads `manifest.json` and `stages.json` first and reruns from stage 1 when
   stage 1 is missing, running, or has no brief, or when `stages.json` is missing; only
-  a missing `manifest.json` is unrecoverable.
+  a missing `manifest.json` is unrecoverable. Resume never moves `manifest.json`, its
+  walk list includes `tmp/`, and on the stage-1-rerun path stale `pr.json.new` files
+  are removed first.
 - B5: stage 6 requires a position for every mandatory id, and every mandatory id is
   requested in a run that completes. Above 60 ids the asks are batched: Codex gets the
-  first batch in the request and the second in its one follow-up (a third batch cannot
-  be requested, so stage 6 fails with `missing_positions` and the run ends `partial`);
-  the fallback is launched once per batch, and a batch that fails after the ladder fails
-  the stage.
+  first batch in the request and the second in its one follow-up; batches from the
+  third on go to the fallback, one launch per batch (scope `second-opinion-<k>`),
+  recorded as a partial swap (reason "mandatory ids beyond two Codex batches"). With no
+  Codex the fallback is launched once per batch. A batch past the second fails stage 6
+  only when it fails after the ladder; `missing_positions` holds the ids of the first
+  two Codex batches still missing after the follow-up and those of a failed fallback
+  batch.
 - C1: a text file over 450,000 bytes is split into byte-range chunks, listed in
-  `split_files` and in the report's Coverage. The orchestrator materializes it once
-  under the run's `tmp/` (run state, never an input or output) to compute the ranges,
-  and a digester reads its range in 24,000-byte slices (a Bash result is cut near
-  30,000 characters), ending `status: failed at byte <offset>` when it did not reach the
-  end.
+  `split_files` and in the report's Coverage. The orchestrator measures an exported
+  file in place and copies a directly read tree's file once under the run's `tmp/` (run
+  state, never an input or output, removed on every exit of step 3) to compute the
+  ranges, and a digester reads its range in slices of up to 24,000 bytes ending at the
+  last LF (a Bash result is cut near 30,000 characters), numbering lines through one
+  `awk` stage so every quoted line has an absolute number, ending `status: failed at
+  byte <offset>` when it did not reach the end.
 - C2: split-mode group mergers read a per-group slice under `ledger/slices/`, not the
-  whole ledger files; a ledger file or section a merger opens is recorded under `opened:`.
-- C3: an over-cap Codex request is reduced by dropping diffs before the swap, recorded
-  as `inline_reduced`.
+  whole ledger files; a ledger file or section a merger opens is recorded under
+  `opened:`. The slices are written by shell (`awk`, `grep`, `printf`, redirects), never
+  through the model, with `<run dir>/tmp/block.md` as scratch.
+- C3: an over-cap Codex request is reduced by dropping the diffs of bundles whose repo
+  is the session repository (others are never dropped, since Codex cannot reach them)
+  before the swap, recorded as `inline_reduced`; still over the cap, or with none
+  droppable, it swaps with the reason "request too large for inline form".
 
 ## Deferred past 0.1
 
