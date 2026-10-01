@@ -1,8 +1,8 @@
 #!/bin/sh
-# build.sh <name>: build the fixture <name> (solo, solo-dirty, or full) in a new temp
-# directory and print the absolute path of its manifest on stdout, nothing else.
+# build.sh <name>: build the fixture <name> (solo, solo-dirty, full, or tokens) in a new
+# temp directory and print the absolute path of its manifest on stdout, nothing else.
 #
-# Usage: sh tests/fixture/build.sh solo | solo-dirty | full
+# Usage: sh tests/fixture/build.sh solo | solo-dirty | full | tokens
 #
 # Every expected outcome is listed as a literal in tests/fixture/expected.md. Git runs
 # with fixed identity, fixed commit dates, no global or system config, no signing, and
@@ -12,9 +12,9 @@ set -eu
 
 name=${1:-}
 case $name in
-solo | solo-dirty | full) ;;
+solo | solo-dirty | full | tokens) ;;
 *)
-	echo "build.sh: unknown fixture '$name'; expected solo, solo-dirty, or full" >&2
+	echo "build.sh: unknown fixture '$name'; expected solo, solo-dirty, full, or tokens" >&2
 	exit 2
 	;;
 esac
@@ -852,9 +852,133 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-build_app
-write_exports
+# tokens: one repo whose exported tickets have bare-number ids, and commits that write
+# those numbers as ticket references (#4567, [4569], AB#4570) and as other numbers
+# (a build number, a row count). Each feature commit touches its own file.
+build_tokens() {
+	init app
+	put app/README.md <<'EOF'
+# app
+
+A small tool.
+EOF
+	put app/src/app.sh <<'EOF'
+#!/bin/sh
+set -eu
+echo app
+EOF
+	commit app "initial app"
+
+	g -C "$T/app" checkout -q -b feature
+	put app/src/input.sh <<'EOF'
+#!/bin/sh
+# input.sh: reject empty input.
+set -eu
+[ -n "${1:-}" ] || { echo "empty input" >&2; exit 1; }
+EOF
+	commit app "fix(#4567 #4568): reject empty input"
+	put app/ci/status.txt <<'EOF'
+build 4567: passed
+EOF
+	commit app "build 4567 passed"
+	put app/src/report.sh <<'EOF'
+#!/bin/sh
+# report.sh: print a one-line report.
+set -eu
+echo "report"
+EOF
+	commit app "[4569] add the report command"
+	put app/config/app.conf <<'EOF'
+mode=fast
+EOF
+	commit app "AB#4570 rename the config key"
+	put app/data/migration.txt <<'EOF'
+rows: 4567
+EOF
+	commit app "migrated 4567 rows"
+
+	put exports/4567.md <<'EOF'
+---
+id: 4567
+url: https://tickets.example.invalid/items/4567
+title: Reject empty input
+state: In Progress
+description: The tool must stop with an error when it gets empty input.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/4568.md <<'EOF'
+---
+id: 4568
+url: https://tickets.example.invalid/items/4568
+title: Name the empty input error
+state: In Progress
+description: The error for empty input must say that the input is empty.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/4569.md <<'EOF'
+---
+id: 4569
+url: https://tickets.example.invalid/items/4569
+title: Add a report command
+state: In Progress
+description: Add a command that prints a one-line report.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/4570.md <<'EOF'
+---
+id: 4570
+url: https://tickets.example.invalid/items/4570
+title: Rename the mode key
+state: In Progress
+description: Rename the mode key in the settings.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+}
+
+# tokens_manifest <ticket_token JSON value, or empty for no key>
+tokens_manifest() {
+	cat <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main",
+EOF
+	if [ -n "$1" ]; then
+		printf '      "ticket_token": %s,\n' "$1"
+	fi
+	cat <<'EOF'
+      "tickets": ["file:./exports/4567.md", "file:./exports/4568.md",
+                  "file:./exports/4569.md", "file:./exports/4570.md"] }
+  ]
+}
+EOF
+}
+
+# ---------------------------------------------------------------------------
 case $name in
+tokens) build_tokens ;;
+*)
+	build_app
+	write_exports
+	;;
+esac
+case $name in
+tokens)
+	tokens_manifest '' | put manifest.json
+	tokens_manifest '["#{n}", "[{n}]", "AB#{n}"]' | put manifest-token.json
+	tokens_manifest '"#n"' | put manifest-bad-token.json
+	;;
 solo)
 	write_solo_manifests
 	;;

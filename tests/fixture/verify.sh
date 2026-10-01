@@ -4,7 +4,7 @@
 #
 # Usage: m=$(sh tests/fixture/build.sh solo) && sh tests/fixture/verify.sh "$m" solo
 #
-# name is solo, solo-dirty, or full. Without it, the name comes from the fixture
+# name is solo, solo-dirty, full, or tokens. Without it, the name comes from the fixture
 # directory: manifest-groups.json means full; otherwise an app checkout on
 # scratch-branch means solo-dirty; otherwise solo.
 #
@@ -32,7 +32,7 @@ if [ -z "$name" ]; then
 	fi
 fi
 case $name in
-solo | solo-dirty | full) ;;
+solo | solo-dirty | full | tokens) ;;
 *)
 	echo "verify: unknown fixture '$name'"
 	exit 2
@@ -53,6 +53,37 @@ same() {
 rev() {
 	git -C "$1" rev-parse "$2" 2>/dev/null
 }
+
+finish() {
+	if [ "$fails" -gt 0 ]; then
+		exit 1
+	fi
+	echo "verify $name: ok"
+}
+
+# tokens: the commits, their files, the exports, and the three manifests.
+if [ "$name" = tokens ]; then
+	same "app base" 253d888eaa67c7c99b5f3d33a808835db8b6db39 "$(rev "$A" main)"
+	same "app merge-base" 253d888eaa67c7c99b5f3d33a808835db8b6db39 \
+		"$(git -C "$A" merge-base main feature 2>/dev/null)"
+	same "app feature head" b12b94c3072b10e1b5b5f4eace49e598e5ef093c "$(rev "$A" feature)"
+	same "app commits on feature" "2c91be9d37d6d3ba48068a20da316c7e6e70a245 fix(#4567 #4568): reject empty input|e38ebff437050f6ce3653d0908515336d83bcfc3 build 4567 passed|04ccf504e5efa62a444f69a2edcd40d5d42e9180 [4569] add the report command|dcae97565a63bbd4f6a52b6f9e1647530a32dd6f AB#4570 rename the config key|b12b94c3072b10e1b5b5f4eace49e598e5ef093c migrated 4567 rows" \
+		"$(git -C "$A" log --reverse --format='%H %s' main..feature 2>/dev/null | tr '\n' '|' | sed 's/|$//')"
+	same "app files changed" "ci/status.txt config/app.conf data/migration.txt src/input.sh src/report.sh" \
+		"$(git -C "$A" diff --name-only main...feature 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+	same "app checkout branch" feature "$(git -C "$A" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+	for id in 4567 4568 4569 4570; do
+		same "export $id id" "id: $id" "$(grep '^id:' "$F/exports/$id.md" 2>/dev/null)"
+	done
+	same "manifest.json ticket_token lines" 0 \
+		"$(grep -c ticket_token "$F/manifest.json" 2>/dev/null)"
+	same "manifest-token.json ticket_token" '"ticket_token": ["#{n}", "[{n}]", "AB#{n}"],' \
+		"$(sed -n 's/^ *"ticket_token"/"ticket_token"/p' "$F/manifest-token.json" 2>/dev/null)"
+	same "manifest-bad-token.json ticket_token" '"ticket_token": "#n",' \
+		"$(sed -n 's/^ *"ticket_token"/"ticket_token"/p' "$F/manifest-bad-token.json" 2>/dev/null)"
+	finish
+	exit 0
+fi
 
 if [ "$name" = full ]; then
 	mb=6b27db42e063b1881b90f0b4c277d0a8ce2f3ab3
@@ -145,7 +176,4 @@ solo | solo-dirty)
 	;;
 esac
 
-if [ "$fails" -gt 0 ]; then
-	exit 1
-fi
-echo "verify $name: ok"
+finish

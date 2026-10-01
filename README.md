@@ -181,6 +181,12 @@ are relative to the manifest's directory.
   with the PR, the run stops before stage 1 and shows both. A bundle with no resolvable
   base is rejected. Short ids such as `#159` are accepted only when the bundle's repo has
   one GitHub remote; otherwise ids are written `github:owner/repo#n` or `file:<path>`.
+  A bundle may add `ticket_token`, a string or a list of strings, each a literal template
+  with `{n}` once, such as `"#{n}"` or `["#{n}", "AB#{n}"]`. For its exported tickets,
+  stage 1 then matches commit messages by the template with `{n}` replaced by the
+  ticket's `id`, in place of the bare `id`, so a bare-number id matches `#4567` but not
+  `build 4567 passed`. The boundary rule applies outside the whole token, so `#{n}` does
+  not match `AB#4567`; list `AB#{n}` too for that. GitHub tickets keep their own rule.
 - **`references`.** Read-only repos consulted only when a question needs them, each with
   a `name`, a `path`, and a `ref`. Each is pinned to the sha its `ref` resolves to in
   stage 1.

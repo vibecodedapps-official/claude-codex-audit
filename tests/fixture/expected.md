@@ -1,20 +1,20 @@
 # Fixture expected outcomes
 
-`sh tests/fixture/build.sh <name>` builds `solo`, `solo-dirty`, or `full` in a new temp
-directory and prints the absolute path of its manifest, nothing else. Below, `$F` is that
-directory (the manifest's directory). Every value here is a literal. A value changes only
-with a recorded reason: change `build.sh` and this file in the same commit, and say why in
-the commit body.
+`sh tests/fixture/build.sh <name>` builds `solo`, `solo-dirty`, `full`, or `tokens` in a
+new temp directory and prints the absolute path of its manifest, nothing else. Below, `$F`
+is that directory (the manifest's directory). Every value here is a literal. A value
+changes only with a recorded reason: change `build.sh` and this file in the same commit,
+and say why in the commit body.
 
 `sh tests/fixture/verify.sh <manifest path> [name]` checks the key literals below against
 a built fixture with git commands (commit ids, the two-dot and three-dot diffs, the skipped
 test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule, the legacy ids, the
 CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and `solo-dirty`, that the
 five handoff files exist, the handoff's hash and each verdicts file's heading hash below,
-and that `handoff.sh claims` gives the claim count per kind below) and
-prints one line per mismatch. CI
-runs it after each build. Its expected values are copies of the literals here, so a change
-to one changes the other.
+and that `handoff.sh claims` gives the claim count per kind below; and, for `tokens`, its
+commit ids and messages, files, exports, and the `ticket_token` lines of its manifests)
+and prints one line per mismatch. CI runs it after each build. Its expected values are
+copies of the literals here, so a change to one changes the other.
 
 The builder fixes the git identity (`fixture <fixture@example.invalid>`), the commit
 dates (`2026-09-01 10:<n>:00 +0000`, one minute per commit in build order), and turns off
@@ -396,4 +396,76 @@ git -C legacy rev-parse HEAD                       # 2f21951b0c72eba8ccf5b3db9b4
 git -C legacy rev-parse main                       # b3b208f6b760091e46d601739e93d43ee9f0bce7
 git -C api diff --stat main...feature              # bin/import-users.sh | 3 +++
 grep -L 'set -eu' $(git -C app ls-files '*.sh' | sed 's|^|app/|')   # app/src/audit-log.sh
+```
+
+## tokens
+
+One repo, `app`, and four exported tickets with bare-number ids. It shares nothing with
+`solo`: its commit ids are its own. It checks the `ticket_token` bundle key.
+
+### Layout
+
+| Path | What it is |
+|---|---|
+| `$F/manifest.json` | One bundle: `./app`, branch `feature`, base `main`, tickets `file:./exports/4567.md` to `4570.md`; no `ticket_token` |
+| `$F/manifest-token.json` | The same bundle with `"ticket_token": ["#{n}", "[{n}]", "AB#{n}"]` |
+| `$F/manifest-bad-token.json` | The same bundle with `"ticket_token": "#n"` |
+| `$F/exports/4567.md` to `4570.md` | Ticket exports with ids `4567`, `4568`, `4569`, `4570`; no text names a file |
+| `$F/app` | The app repo, checked out on `feature` |
+
+### Commits
+
+| Commit | Id | Branch | Files |
+|---|---|---|---|
+| `initial app` | `253d888eaa67c7c99b5f3d33a808835db8b6db39` | merge-base, main head | `README.md`, `src/app.sh` |
+| `fix(#4567 #4568): reject empty input` | `2c91be9d37d6d3ba48068a20da316c7e6e70a245` | feature | `src/input.sh` |
+| `build 4567 passed` | `e38ebff437050f6ce3653d0908515336d83bcfc3` | feature | `ci/status.txt` |
+| `[4569] add the report command` | `04ccf504e5efa62a444f69a2edcd40d5d42e9180` | feature | `src/report.sh` |
+| `AB#4570 rename the config key` | `dcae97565a63bbd4f6a52b6f9e1647530a32dd6f` | feature | `config/app.conf` |
+| `migrated 4567 rows` | `b12b94c3072b10e1b5b5f4eace49e598e5ef093c` | feature head | `data/migration.txt` |
+
+Changed files (three-dot): `ci/status.txt`, `config/app.conf`, `data/migration.txt`,
+`src/input.sh`, `src/report.sh`. The tier is `medium` (1 bundle, 4 tickets, under 5,000
+changed lines).
+
+### Expected outcomes
+
+Groups, worked out from Stage 1, "Groups", step 8 (rule 1, then extraction and merge; no
+ticket text or commit message names a file, so rule 2 adds nothing):
+
+- `manifest.json` (no token, so the bare id matches under the boundary rule alone):
+  - `4567` matches `fix(#4567 #4568)`, `build 4567 passed`, and `migrated 4567 rows`;
+  - `4568` matches `fix(#4567 #4568)`;
+  - `4569` matches `[4569]`;
+  - `4570` matches `AB#4570`.
+
+  Groups: `app-4567` (`ci/status.txt`, `data/migration.txt`, `src/input.sh`), `app-4568`
+  (`src/input.sh`), `app-4569` (`src/report.sh`), `app-4570` (`config/app.conf`). No file
+  is in more than two groups, so nothing moves to `cross-cutting`. No merge: `app-4567`
+  has one of its three files in `app-4568`, which is not more than half. No `unticketed`
+  group.
+- `manifest-token.json` (`#{n}`, `[{n}]`, `AB#{n}`):
+  - `#4567` and `#4568` match only `fix(#4567 #4568)`; `build 4567 passed` and
+    `migrated 4567 rows` hold no `#4567`, `[4567]`, or `AB#4567`;
+  - `[4569]` matches `[4569] add the report command`;
+  - `#4570` does not match `AB#4570` (a letter comes right before `#`), and `AB#4570`
+    does.
+
+  `ci/status.txt` and `data/migration.txt` are touched only by the build and migration
+  commits, which name no ticket, so both go to `unticketed`. `app-4567` and `app-4568` each
+  hold only `src/input.sh`, so each has all its files in the other and they merge into
+  `app-4567+app-4568`. Groups: `app-4567+app-4568` (`src/input.sh`), `app-4569`
+  (`src/report.sh`), `app-4570` (`config/app.conf`), `unticketed` (`ci/status.txt`,
+  `data/migration.txt`).
+- `manifest-bad-token.json` stops before stage 1 with
+  `bundle app: ticket_token must hold {n} once`.
+
+### Verify
+
+```sh
+A="git -C $F/app"
+$A rev-parse main                          # 253d888eaa67c7c99b5f3d33a808835db8b6db39
+$A log --reverse --format='%H %s' main..feature
+$A diff --name-only main...feature         # ci/status.txt config/app.conf data/migration.txt src/input.sh src/report.sh
+grep -c ticket_token $F/manifest.json      # 0
 ```

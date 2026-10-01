@@ -44,6 +44,8 @@ everything after it is checked.
      such as `#159` is accepted only when the bundle's repo has exactly one GitHub
      remote (`git -C <repo> remote -v`); otherwise stop with
      `<id>: write it as github:owner/repo#n or file:<path>`.
+   - `ticket_token`: an optional bundle key. A string becomes a one-element list. The
+     saved manifest keeps the list; step 8.1 reads it for the bundle's exported tickets.
    - `sources_of_truth`: when the manifest lists it, it replaces the default order.
      Otherwise the default order is: legacy source code, then a guidelines corpus
      (each only when supplied, as a reference named `legacy` or a source entry), then
@@ -69,7 +71,10 @@ everything after it is checked.
      directory.
 4. A bundle needs a repo, a PR or a branch or both, and a base. A bundle whose `pr` is
    a `file:` export must also give `branch` and `base`. A bundle with no resolvable
-   base is rejected: stop with `bundle <name>: no base`.
+   base is rejected: stop with `bundle <name>: no base`. A bundle whose `ticket_token`
+   is not a string or a non-empty array of strings, or has an entry that does not hold
+   `{n}` exactly once and at least one other character, is rejected: stop with
+   `bundle <name>: ticket_token must hold {n} once`.
 5. Select each audited repo's remote once (bundles, references, and sources of truth);
    every `<remote>` below is this one. For every GitHub PR bundle, however it was
    declared, it is the remote whose URL names the PR's owner and repo
@@ -468,13 +473,21 @@ Otherwise derive, per bundle:
 
 1. A ticket's commits are those whose message names the ticket's id token: for a GitHub
    issue `github:owner/repo#n`, `owner/repo#n`, and `#n` when the issue is in the bundle's
-   repo; for an exported ticket, its `id`. A token matches only when the character before
-   it, if any, and the character after it, if any, are neither a letter nor a digit.
+   repo; for an exported ticket, its `id`, or, when the bundle has `ticket_token`, each
+   pattern with `{n}` replaced by the `id` as written, in place of the bare `id`. A
+   pattern is a literal template, never a regex: every character but `{n}` stands for
+   itself, so `.` in `ticket.{n}` is a dot. A GitHub ticket keeps its own tokens. A token
+   matches only when the character before it, if any, and the character after it, if any,
+   are neither a letter nor a digit; for a pattern, the whole token is the unit, so the
+   rule applies outside it.
    Before a GitHub token the character is also not `-`, `_`, `.`, or `/`, since those join
    owner and repo names. So `#12` does not match `#123`, `owner/app#12` does not match
    `other-owner/app#12`, and `APP-1` does not match `APP-10`, `APP-1a`, or `XAPP-1`, but
-   it matches in `feature/APP-1`. In a bundle with one ticket, every commit is that
-   ticket's. The commits a handoff lists for the ticket are also its commits: run
+   it matches in `feature/APP-1`. With the pattern `#{n}`, a commit `fix(#4567 #4568)` is
+   both tickets' commit, and `build 4567 passed` and `AB#4567` are neither's (the letters
+   before `#` break the boundary); `AB#{n}` matches `AB#4567`; `[{n}]` matches only the
+   bracketed `[4569]`. In a bundle with one ticket, every commit is that ticket's. The
+   commits a handoff lists for the ticket are also its commits: run
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/handoff.sh commits <file>` (one
    `<bundle>`, `<sha>`, `<ticket>`, `<line>` per line, tab-separated) and match each sha
    by prefix among the bundle's commits from the merge-base to the head
@@ -542,13 +555,14 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
    brief.
 3. **`audit-brief.md`**, with these sections: Scope (bundles, repos, PRs, tickets);
    Tier and reason; Bundles (head, base, merge-base, base commits since the
-   merge-base, files changed on both sides, stack; the head sha is recorded as
-   `headRefOid` for a GitHub PR, and the pinned base sha is the local sha of
-   `<remote>/<baseRefName>`; for a GitHub PR also `baseRefOid`, labeled "base as
-   GitHub last evaluated it", for information only; resume compares the head and the
-   pinned base); Combined state; Sources of truth (the order used, each with its sha
-   and class, and whether it replaced the default); References (each with its sha);
-   Read paths (name, path, sha, mode; plus each ref mapping line from step 1a); Export
+   merge-base, files changed on both sides, stack, the `ticket_token` patterns when the
+   bundle has them; the head sha is recorded as `headRefOid` for a GitHub PR, and the
+   pinned base sha is the local sha of `<remote>/<baseRefName>`; for a GitHub PR also
+   `baseRefOid`, labeled "base as GitHub last evaluated it", for information only; resume
+   compares the head and the pinned base); Combined state; Sources of truth (the order
+   used, each with its sha and class, and whether it replaced the default); References
+   (each with its sha); Read paths (name, path, sha, mode; plus each ref mapping line
+   from step 1a); Export
    notes (symlinks with targets, submodules, LFS pointers, skipped paths, declined
    exports); Forge (queried or not, per bundle; "not in export" keys); Questions; Stage
    applicability; Run directory (its path, and whether it is inside the session's
