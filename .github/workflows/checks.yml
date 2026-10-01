@@ -20,6 +20,8 @@ jobs:
         run: m=$(sh tests/fixture/build.sh solo-dirty) && sh tests/fixture/verify.sh "$m" solo-dirty
       - name: build and verify fixture full
         run: m=$(sh tests/fixture/build.sh full) && sh tests/fixture/verify.sh "$m" full
+      - name: build and verify fixture tokens
+        run: m=$(sh tests/fixture/build.sh tokens) && sh tests/fixture/verify.sh "$m" tokens
 
   scripts:
     name: scripts (${{ matrix.os }})
@@ -33,6 +35,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v5
+      - name: jq
+        run: jq --version
       - name: readonly
         run: |
           readlink -f "$(command -v awk)" || command -v awk
@@ -41,6 +45,12 @@ jobs:
         run: sh tests/handoff.sh
       - name: work-items
         run: sh tests/work-items.sh
+      - name: working-tree
+        run: sh tests/working-tree.sh
+      - name: live
+        run: sh tests/live.sh
+      - name: memory
+        run: sh tests/memory.sh
       - name: awk tests with mawk
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -52,3 +62,6 @@ jobs:
           awk -W version 2>&1 | head -n 1
           sh tests/handoff.sh
           sh tests/readonly.sh
+          sh tests/live.sh
+          sh tests/memory.sh
+          sh tests/working-tree.sh
