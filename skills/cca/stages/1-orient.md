@@ -464,11 +464,13 @@ matches go to `unticketed`. Skip to the format below.
 
 Otherwise derive, per bundle:
 
-1. A ticket's commits are those whose message names the ticket's full id token,
-   matched whole: the token followed by a non-digit, a non-letter, or the end, so `#12`
-   does not match `#123` and `APP-1` does not match `APP-10` or `APP-1a`. In a bundle
-   with one ticket, every commit is that ticket's. The commits a handoff lists for the
-   ticket are also its commits: run
+1. A ticket's commits are those whose message names the ticket's id token: for a GitHub
+   issue `github:owner/repo#n`, `owner/repo#n`, and `#n` when the issue is in the bundle's
+   repo; for an exported ticket, its `id`. A token matches only when the character before
+   it, if any, and the character after it, if any, are neither a letter nor a digit, so
+   `#12` does not match `#123`, and `APP-1` does not match `APP-10`, `APP-1a`, or
+   `XAPP-1`. In a bundle with one ticket, every commit is that ticket's. The commits a
+   handoff lists for the ticket are also its commits: run
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/handoff.sh commits <file>` (one
    `<bundle>`, `<sha>`, `<ticket>`, `<line>` per line, tab-separated) and match each sha
    by prefix among the bundle's commits from the merge-base to the head
