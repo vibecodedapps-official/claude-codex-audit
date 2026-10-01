@@ -10,7 +10,8 @@ the commit body.
 a built fixture with git commands (commit ids, the two-dot and three-dot diffs, the skipped
 test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule, the legacy ids, the
 CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and `solo-dirty`, that the
-three handoff files exist and `handoff.sh claims` gives the claim count per kind below) and
+five handoff files exist, the handoff's hash and each verdicts file's heading hash below,
+and that `handoff.sh claims` gives the claim count per kind below) and
 prints one line per mismatch. CI
 runs it after each build. Its expected values are copies of the literals here, so a change
 to one changes the other.
@@ -35,6 +36,8 @@ on Ubuntu with dash, gawk, and mawk).
 | `$F/manifest-handoff.json` | `manifest.json` with `"claims": ["./handoff.md"]` |
 | `$F/manifest-scratch.json` | `manifest.json` with `"scratch": "./app/.test-output"` added |
 | `$F/handoff.md` | The handoff, in the format of `skills/cca/handoff.md` (see "Handoff" below) |
+| `$F/claims-verdicts.md` | A return-trip file for `$F/handoff.md`, its heading carrying the handoff's hash (see "Verdicts" below) |
+| `$F/claims-verdicts-stale.md` | The same lines, its heading carrying a stale hash |
 | `$F/app` | The app repo, checked out on `feature`, no tracked changes |
 
 ### Commits
@@ -94,8 +97,8 @@ on Ubuntu with dash, gawk, and mawk).
 
 ### Handoff
 
-The three handoff files sit outside every repo, so no commit id above changes. `solo-dirty`
-builds on `solo` and has the same three files. `full` has none of them, because its app
+The five handoff files sit outside every repo, so no commit id above changes. `solo-dirty`
+builds on `solo` and has the same five files. `full` has none of them, because its app
 commit ids differ.
 
 `handoff.md` holds one bundle `app` (repo `./app`, pr `none`, branch `feature`, base
@@ -150,6 +153,34 @@ Expected audit outcomes, each only when the stage that judges it completes:
   `bd5d5e1e67a1fc55adeaa1452920245b1d368f7f` already appends without an id check, and
   `facts disagree with the handoff: yes`. The recommendation itself is not asserted.
 - With `manifest-scratch.json`, the run directory lands under `app/.test-output/cca/`.
+
+### Verdicts
+
+`git hash-object --no-filters $F/handoff.md` is `36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8`.
+`claims-verdicts.md` holds one claims file heading,
+`## $F/handoff.md (handoff), hash 36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8`, and five
+entries, each a main line with `text:` and `correction:` sub-lines:
+
+| Claim | Ref | Verdict | Its `text:` | Expected handling |
+|---|---|---|---|---|
+| 1 | `tickets/APP-1/fields` | `false` | matches the handoff | applied: the correction (state `In Progress`) is used |
+| 3 | `tickets/APP-1/decision` | `false` | does not match the handoff (`Add a deactivate command that keeps the row.`) | reconciliation work, not applied |
+| 5 | `tickets/APP-1/commit/app/0c23936` | `contested` | matches | reconciliation work, not applied |
+| 6 | `tickets/APP-1/verified/1` | `not verified` | matches | a recheck request: the entry stays under `verified`, its `check:` unchanged unless the session rechecked it |
+| 7 | `tickets/APP-1/verified/2` | `true` | matches | nothing to apply |
+
+`claims-verdicts-stale.md` holds the same entries under the heading hash
+`0000000000000000000000000000000000000000`, which matches no file, so every entry is
+reconciliation work and none is applied.
+
+Expected outcomes of `/cca:handoff manifest-handoff.json --verdicts <file>`, run in a
+session whose repository is `$F/app`, each only when the command completes:
+
+- With `claims-verdicts.md`: the corrections applied list claim 1 and nothing else; the
+  reconciliation list holds claims 3 and 5; the new handoff keeps the verified 1 entry;
+  claim 7 is in neither list.
+- With `claims-verdicts-stale.md`: no correction is applied, and the reconciliation list
+  holds all five claims, each with the hash mismatch as the reason.
 
 ### Traps that must not appear
 
