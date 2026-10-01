@@ -97,7 +97,7 @@ commit sha is logged there (step 7).
 6. **No push and no forge edits.** Never push, and never edit tickets or PRs, until the
    user says to for that item. Work-item fixes and decision comments from the report are
    shown as drafts. The operations in `work-items.jsonl` are drafts too, like the
-   work-item fixes: act applies none of them in 0.2.
+   work-item fixes: act applies none of them.
    When the user says to post one for an item, post that one only, with
    its text free of model, agent, and tool names, and log it with its URL.
 
