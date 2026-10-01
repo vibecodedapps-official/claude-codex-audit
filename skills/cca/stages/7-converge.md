@@ -151,7 +151,8 @@ by size has `<group>-<k>` parts), and `converged.md`.
       `ledger/slices/<group>-2.md`, ... and one merger each; the final merger treats
       them as one group. Fill the parts greedily in finding id order: build each id's
       block (its sections with their pointer lines, then its `gate.md` line) by the
-      commands above into `<run dir>/tmp/block.md`, measure it with `wc -c`, and append
+      commands above into `<run dir>/tmp/block.md`, truncating that file first
+      (`: > <run dir>/tmp/block.md`) since the commands append, measure it with `wc -c`, and append
       it to the open part with `cat` and a redirect; a part closes when adding the next
       id's block would take it over the threshold, and that id starts the next part. A
       single id whose block alone exceeds the threshold forms a part of its own, marked
