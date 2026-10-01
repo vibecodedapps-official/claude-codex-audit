@@ -179,14 +179,17 @@ these lines instead:
 ```
 - claim <n>: true, reproduced; <the run or quote that reproduces the stated result>
 - claim <n>: false, contradicted; <evidence>
-- claim <n>: not verified, not reproduced; <why: not run, no access, needs a live check, budget expired, or exported tree>
+- claim <n>: not verified, not reproduced; <why: not run, no access, needs a live check, budget expired, exported tree, or setup differs>
 ```
 
 A `verification` claim is `true` only when you reproduced the stated result yourself, by a
 run, or by a quote when the stated result is a fact of the code at the pinned sha. A quote
 of other text saying it was checked is not a reproduction. `false` needs counter-evidence.
-Reproducing a result does not show that the build session ran its stated check; the report
-says so once in its Claims section.
+A run under a different setup than the stated check needs is not counter-evidence: another
+directory, a missing environment variable, service, or account, or another environment
+than the one the statement names. The claim is then `not verified, not reproduced`, and
+the reason names what differs. Reproducing a result does not show that the build session
+ran its stated check; the report says so once in its Claims section.
 
 ## Decisions
 

@@ -150,7 +150,9 @@ These rules are for the writer (`/cca:handoff`, or a person writing one by hand)
   read it, in a commit body or a ticket comment, and named in `recorded_at`. The audit
   cannot open a `checkpoint:` pointer.
 - Put a statement the session checked under `verified`, with the exact check. The audit
-  marks it `true` only when it reproduces the result itself.
+  marks it `true` only when it reproduces the result itself. When the statement depends
+  on it, the check also names what it needs to give the same result: the directory it
+  ran in, environment variables, services or accounts, and the environment it ran against.
 - No credentials, tokens, or secrets anywhere in the file.
 
 ## Claims

@@ -46,7 +46,7 @@ You write one handoff file for the session's work, from the record only. Do the 
    - Keep each decision's recorded status. A deferral stays `deferred` or `deferred to <owner>`; it is never rewritten as taken.
    - Where the record shows no alternative was weighed, write `options: none recorded`, and for a taken decision `status: default taken`. Never invent an option, a reason, or an owner.
    - `decided_by` follows rule 11: `person: <name>` only when the record names that person, `role: <role>` when it names a role but no person, `checkpoint (recommended option taken)` for a checkpoint choice on the recommended option, else `not recorded`. A model, agent, or tool is never `decided_by`.
-   - A statement the session checked goes under `verified`, with the exact check, or `not recorded`.
+   - A statement the session checked goes under `verified`, with the exact check, or `not recorded`. Where the statement depends on it, the check also names its directory, environment variables, services or accounts, and the environment it ran against.
    - Apply the step 2 matches: a `false` statement is corrected, using the entry's `correction:` sub-line, or dropped. A recheck request, a `not verified` line on a `verification` claim, stays, with its `check:` updated when the session has rechecked it.
    - No credentials, tokens, or secrets anywhere in the file. Text that names a model, agent, or tool is rewritten without the name.
 

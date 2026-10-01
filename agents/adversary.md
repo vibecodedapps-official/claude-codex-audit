@@ -51,8 +51,9 @@ the Verified OK list the tier lets you attack.
    report marks `true, reproduced`. Reproduce the stated result yourself, by a run or a
    quote; a quote of other text saying it was checked does not reproduce it. Mark the
    line `upheld`, or `overturned to <...>` with the evidence, as "Pass-two verdicts"
-   gives. You may add a line for any other claim you find misjudged. Write `none` only
-   when the report marks no `verification` claim true.
+   gives. An `overturned to false, contradicted` needs counter-evidence from a run under
+   the stated setup. You may add a line for any other claim you find misjudged. Write
+   `none` only when the report marks no `verification` claim true.
 10. At every tier, write `## Decisions challenged`: a line for every entry of the report's
     `## Decisions`. Open the records the entry cites, redo the three dimensions, and class
     the decision by the order in "Decisions". Write `agree, <class>` or `disagree, <class>`

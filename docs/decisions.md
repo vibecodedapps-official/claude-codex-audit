@@ -253,6 +253,10 @@ agent-driven case `not run` until one runs.
   damage the return trip exists to prevent. The acceptance case reads: a verification claim
   the fixture cannot reproduce is never reported `true`, and appears as a recheck request.
   The owner can reverse this.
+- **A run under another setup is not counter-evidence.** A suite run without an
+  environment variable it needs, or in another directory, can fail for that reason alone.
+  Such a run leaves the claim `not verified, not reproduced`, because a `false` from it
+  would rewrite an accurate statement, which the departure above exists to prevent.
 - **Reproduction is not proof the check ran.** A reproduced result does not show that the
   build session ran its stated check, and the report says so once.
 - **Decision classes (H3).** The class follows from three dimensions read from the record:

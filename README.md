@@ -258,11 +258,12 @@ commit messages.
 **Verification rule.** A `verification` claim is `true` only when the audit reproduced the
 stated result itself, by a run, or by a quote when the stated result is a fact of the code
 at the pinned sha. A claim the audit cannot reproduce is `not verified` with the reason
-`not reproduced` (not run, no access, needs a live check, budget expired, or exported
-tree). It is never `true`, and it is not `false` either: `false` is kept for
-counter-evidence. The pass-two adversary re-checks every verification claim marked `true`.
-Reproducing a result does not show that the build session ran its check, and the report
-says so once.
+`not reproduced` (not run, no access, needs a live check, budget expired, exported
+tree, or setup differs). It is never `true`, and it is not `false` either: `false` is
+kept for counter-evidence, and a run under a different setup than the check needs is not
+counter-evidence. The pass-two adversary re-checks every verification claim marked
+`true`. Reproducing a result does not show that the build session ran its check, and the
+report says so once.
 
 **Decision classes.** Each `decision` claim lands in one class: `stale deferral` (an open
 deferral with no named person or that nothing tracks), `needs <owner>` (a tracked deferral

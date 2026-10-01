@@ -58,7 +58,9 @@ custom list.
    stated result yourself, by a run or a quote. A quote of other text saying it was
    checked is not a reproduction. When you cannot run the check (not run, no access, needs
    a live check, budget expired, or an exported tree), write
-   `not verified, not reproduced` with the reason; never `true`.
+   `not verified, not reproduced` with the reason; never `true`. A run under a different
+   setup than the stated check needs is not counter-evidence: write
+   `not verified, not reproduced`, with the reason naming what differs, never `false`.
 8. Write `## Decisions`: a line for every `decision` claim assigned to your scope, in the
    shape and with the classes "Decisions" gives, or `none`. Open the record each
    dimension needs (commit bodies, forge comments, documents at their pinned sha) before
