@@ -173,13 +173,17 @@ entries, each a main line with `text:` and `correction:` sub-lines:
 `0000000000000000000000000000000000000000`, which matches no file, so every entry is
 reconciliation work and none is applied.
 
-Expected outcomes of `/cca:handoff manifest-handoff.json --verdicts <file>`, run in a
-session whose repository is `$F/app`, each only when the command completes:
+Expected outcomes of
+`/cca:handoff $F/manifest-handoff.json --verdicts <file> --out <output>`, run in a
+session whose repository is `$F/app`, each only when the command completes. Paths are
+absolute because relative ones resolve against `$F/app`, and `--out` is given because the
+fixture app has no scratch directory. `<output>` is a file under `$F` that does not exist
+yet, such as `$F/handoff-verdicts.md`; the command writes it:
 
-- With `claims-verdicts.md`: the corrections applied list claim 1 and nothing else; the
+- With `$F/claims-verdicts.md`: the corrections applied list claim 1 and nothing else; the
   reconciliation list holds claims 3 and 5; the new handoff keeps the verified 1 entry;
   claim 7 is in neither list.
-- With `claims-verdicts-stale.md`: no correction is applied, and the reconciliation list
+- With `$F/claims-verdicts-stale.md`: no correction is applied, and the reconciliation list
   holds all five claims, each with the hash mismatch as the reason.
 
 ### Traps that must not appear
