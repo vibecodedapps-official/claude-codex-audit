@@ -80,6 +80,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 | M3-f | `_test` fails the fallback twice, with `--no-codex`: Fable fails, Opus fails, and stage 6 fails | not run | needs a live multi-agent audit run |
 | M3-g | `--codex-timeout 0` is rejected in one line; the stage 6 entry records timeout `1200` at low, and `3600` with `--codex-timeout 3600` | not run | needs a live multi-agent audit run |
 | M3-h | `_test` sets the inline cap to 1,000 bytes, run directory outside the session's repo: stage 6 first drops the diffs and re-measures (the stage 6 entry records `inline_reduced: true`), then swaps with the reason "request too large for inline form", and the run ends `reported` | not run | needs a live multi-agent audit run |
+| M3-i | A run with more than 60 mandatory ids: Codex gets the first batch in the request and the second in its one follow-up; with `--no-codex`, one fallback launch per batch (`second-opinion-<k>`); the stage 6 entry records `batched: true` and no mandatory id is left without a request | not run | needs a live multi-agent audit run |
 
 ## M4: sources and scale
 
@@ -146,7 +147,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 | Stage 4 and the barrier | M2, M4 | M2-a, M4-d | not run |
 | Stage 5 and the ledger | M2 | M2-a, M2-b | not run |
 | Map corrections and top-ups | M4 | M4-k | not run |
-| Stage 6 and the call contract | M3 | M3-a to M3-f | not run |
+| Stage 6 and the call contract | M3 | M3-a to M3-f, M3-i | not run |
 | Codex request shape and timeout | M3 | M3-g | not run |
 | Merger size and inline cap | M3, M4 | M3-h, M4-l | not run |
 | Stage 7, late adversary, review gate | M2, M4 | M2-c, M4-g, M4-h, M4-m | not run |

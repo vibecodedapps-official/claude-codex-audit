@@ -1,10 +1,12 @@
 # Stage 1: orient
 
-The orchestrator runs this stage alone. Steps A to D happen before stage 1 proper: a
-stop there ends the command with one message, and nothing is written except as step C
-says. Steps 1 to 10 follow the stage's rule numbers. Order matters: the read-only
-baseline (step 1b) is taken right after the approved fetch, before any export or other
-stage 1 work, so everything after it is checked.
+The orchestrator runs this stage alone. Sections A to D happen before stage 1 proper: a
+stop there ends the command with one message, and nothing is written except as
+sections C and D say. Their labels are fixed, but they run in this order: A, B, D1 to
+D4 (the run directory exists before any PR is read), C, then D5 to D7. Steps 1 to 10
+follow the stage's rule numbers. Order matters: the read-only baseline (step 1b) is
+taken right after the approved fetch, before any export or other stage 1 work, so
+everything after it is checked.
 
 ## A. Normalize the inputs
 
@@ -97,13 +99,19 @@ or JSON.
 
 ## C. Resolve PRs and check for disagreement
 
-1. For a `github:` PR, read it once, with the `gh pr view` command of step 2, but with
-   its output redirected by the shell to `pr-<bundle>.json.tmp` in the run directory
-   instead of `forge/<bundle>/pr.json`. When the run directory does not exist yet,
-   hold the output unchanged and write it, unchanged, to that file at D4. Read every
-   PR field below from that file. Step 2 moves it to `forge/<bundle>/pr.json`; no
-   second `gh pr view` call is made. When `gh` is missing or not authenticated, stop
-   and say the PR needs `gh` or an exported file.
+1. For a `github:` PR, read it once: create `forge/<bundle>/` in the run directory
+   (D4 made it) and run the `gh pr view` command of step 2, whose output the shell
+   redirects to `forge/<bundle>/pr.json`. The output never passes through the model:
+   a tool result cannot carry a large output, and the Write tool would re-serialize
+   it. Under `/cca:resume`, when `forge/<bundle>/pr.json.new` exists (resume step 3
+   wrote it with the same command), rename it to `forge/<bundle>/pr.json` and query
+   nothing. Read every PR field below from that file with `jq`, for example
+   `jq -r .headRefOid forge/<bundle>/pr.json`. When `gh` is missing or not
+   authenticated, or `jq` is missing, stop and say the PR needs `gh` and `jq`, or an
+   exported file. A stop anywhere in this section removes what it wrote: on a new run,
+   the run directory (it holds only `forge/` files at that point, and `runs.json` is
+   written at D6, after this section); under `/cca:resume`, the `forge/<bundle>/pr.json`
+   files this section wrote or renamed.
 2. When the manifest gives a `branch` that is not the PR's `headRefName`, or a `base`
    that is not the PR's `baseRefName` (`<remote>/<name>` and `<name>` are equal), stop
    before stage 1 and show both values.
@@ -114,6 +122,7 @@ or JSON.
 
 ## D. Run directory, run id, and state files
 
+D1 to D4 run after section B and before section C; D5 to D7 run after section C.
 Under `/cca:resume` (first rerun stage 1), skip D1 to D4 and D6: reuse the existing
 run directory, run id, and `runs.json` entry. Do D5, since `manifest.json` is a
 stage 1 output. In D7, keep `approvals` and every stage's `superseded` records
@@ -129,12 +138,12 @@ missing), and only rewrite the stage 1 entry as `running` with its inputs.
       succeeds;
    3. `${CLAUDE_PLUGIN_DATA}/runs/`.
 3. The run id is `<YYYY-MM-DD-HHMM>-<slug>`, local time. The slug is the first
-   bundle's name followed by its first ticket's number or its branch's last path
-   segment, lowercased, with runs of characters outside `a-z0-9` turned into one `-`,
-   at most 40 characters. When `${CLAUDE_PLUGIN_DATA}/runs.json` already has that id or
-   `<scratch>/cca/<run-id>/` exists, add `-2`, then `-3`, and so on.
-4. Create `<scratch>/cca/<run-id>/`. This is the run directory. Write each PR output
-   that section C held to its `pr-<bundle>.json.tmp` here.
+   bundle's name followed by its PR number, or its branch name when it has no PR, both
+   as the manifest or the prompt input gave them (no `gh` call), lowercased, with runs
+   of characters outside `a-z0-9` turned into one `-`, at most 40 characters. When
+   `${CLAUDE_PLUGIN_DATA}/runs.json` already has that id or `<scratch>/cca/<run-id>/`
+   exists, add `-2`, then `-3`, and so on.
+4. Create `<scratch>/cca/<run-id>/`. This is the run directory.
 5. State the merged, normalized manifest to the user as a fenced JSON block and save
    it as `manifest.json` in the run directory.
 6. Add the run to `${CLAUDE_PLUGIN_DATA}/runs.json` with `state: running` (read the
@@ -173,16 +182,25 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    - for a missing ref that is a 40-hex sha:
      `git -C <repo> fetch --no-tags <remote> +<sha>:refs/remotes/<remote>/cca/<sha>`;
      when the remote refuses (not every server serves arbitrary shas), stop `blocked`
-     naming the sha;
+     naming the sha, and resolve it as `<remote>/cca/<sha>` from then on;
    - for a missing ref `<name>` that is a tag on the remote:
      `git -C <repo> fetch --no-tags <remote> +refs/tags/<name>:refs/remotes/<remote>/tags/<name>`,
-     and resolve it as `<remote>/tags/<name>` from then on; the brief records the
-     mapping `<name>` to `<remote>/tags/<name>`;
-   - for any other missing ref: when the ref is `<remote>/<branch>`, split it there and
-     run `git -C <repo> fetch --no-tags <remote> +refs/heads/<branch>:refs/remotes/<remote>/<branch>`;
-     when it is a bare `<branch>`, fetch the same refspec from the repo's selected
+     and resolve it as `<remote>/tags/<name>` from then on;
+   - for any other missing ref: when the ref is `<other>/<branch>` and `<other>` is a
+     configured remote of the repo (`git -C <repo> remote`), split it there and run
+     `git -C <repo> fetch --no-tags <other> +refs/heads/<branch>:refs/remotes/<other>/<branch>`
+     (when `<other>` is not the selected remote, the question lists it, under the same
+     approval, with target `<repo name>:<other>`); a prefix that is not a configured
+     remote makes the whole ref a bare branch name that contains a slash. When it is a
+     bare `<branch>`, fetch the same refspec from the repo's selected
      remote and resolve the ref as `<remote>/<branch>` from then on, since the fetch
      never writes a local branch.
+
+   Every ref that resolves under another name is recorded as one mapping line in the
+   brief's Read paths: `<ref as given> -> <remote>/<branch>`,
+   `<ref as given> -> <remote>/tags/<name>`, or `<sha> -> <remote>/cca/<sha>`. Resume
+   resolves each ref through these lines before `rev-parse`. A ref that still cannot
+   be fetched stops the run `blocked` naming it, before step 1b.
 
    A remote configured with `remote.<name>.prune` may also delete stale remote-tracking
    refs; `--prune` is never added, and this is accepted as part of the approved fetch.
@@ -191,8 +209,10 @@ a. For each audited repo (bundles, references, sources of truth), decide which r
    `git -C <repo> rev-parse --verify <ref>^{commit}` that every other fetched ref now
    resolves; if one does not, stop `blocked` naming the sha or ref. On decline, a
    bundle whose head or base still does not resolve stops the run `blocked` with the
-   reason. Under `/cca:resume`, an approval already recorded in `stages.json` is not
-   asked again, and a fetch with no recorded approval is asked once, as above.
+   reason. Under `/cca:resume`, a recorded approval covers only the commands in its
+   `commands` list. When the planned commands for a repo and remote are all in one
+   recorded list for that target, they are not asked again. Otherwise ask once, as
+   above, listing the new commands, and record a new approval entry.
 b. Take the read-only baseline now, before any other work:
    1. Create `baseline/marker` (an empty file) in the run directory.
    2. For each audited repo `<name>`, write:
@@ -215,7 +235,8 @@ b. Take the read-only baseline now, before any other work:
 For each bundle, save under `forge/<bundle>/`:
 
 - `pr.md`: title, body, state, reviews, and review threads (file, line, comments),
-  rendered from `pr.json` and `pr-threads.json` below. For an export, copy its content.
+  rendered from `pr.json` and `pr-threads.json` below (`pr.json` is raw, so the author
+  of a review or comment is its `author.login`). For an export, copy its content.
 - `<ticket>.md` for each ticket in the bundle, and each ticket the PR's
   `closingIssuesReferences` names: text, state, acceptance criteria, fields, links,
   comments, rendered from the ticket's `.json` below. For an export, copy its content.
@@ -225,24 +246,32 @@ Every saved `.md` file starts with a provenance block: the source (`gh`, or the 
 was queried for a bundle, the brief says so.
 
 For a GitHub PR or issue, the `gh` calls below write their output by shell redirect,
-unchanged (not through a rendered file), beside the rendered files. Each call keeps a
-fixed projection of the fields, not the raw JSON, because viewer-dependent fields such
-as `viewerDidAuthor` and reactions would otherwise change the hash and invalidate
-stage 1 on resume under another login. Resume runs these identical commands.
+unchanged (never through the model), beside the rendered files. The hashed content is
+a fixed projection of the fields, not the raw JSON, because viewer-dependent fields
+such as `viewerDidAuthor` and reactions, and the head and base shas (which resume
+compares on their own), would otherwise change the hash and invalidate stage 1 on
+resume under another login or after the base moved. Resume runs these identical
+commands and the same `jq` projection.
 
-- `forge/<bundle>/pr.json`, the one `gh pr view` call (section C runs it, to
-  `pr-<bundle>.json.tmp` in the run directory; move that file to this path here and
-  parse it, with no second call):
-  `gh pr view <n> -R <owner>/<repo> --json number,url,title,body,state,headRefName,headRefOid,baseRefName,baseRefOid,closingIssuesReferences,reviews,comments --jq '{number,url,title,body,state,headRefName,headRefOid,baseRefName,baseRefOid,closingIssuesReferences,reviews: [.reviews[] | {author: .author.login, state, body, submittedAt}], comments: [.comments[] | {author: .author.login, body, createdAt}]}' > forge/<bundle>/pr.json`
+- `forge/<bundle>/pr.json`, the one `gh pr view` call, unprojected (section C runs it
+  and parses it; no second call is made):
+  `gh pr view <n> -R <owner>/<repo> --json number,url,title,body,state,headRefName,headRefOid,baseRefName,baseRefOid,closingIssuesReferences,reviews,comments > forge/<bundle>/pr.json`
+- `forge/<bundle>/pr.hash.json`, the hashed form of the PR, a `jq` projection of
+  `pr.json` that leaves out `baseRefOid`, `headRefOid`, and the viewer-dependent
+  fields:
+  `jq '{number,url,title,body,state,headRefName,baseRefName,closingIssuesReferences: [.closingIssuesReferences[] | {number, url}],reviews: [.reviews[] | {author: .author.login, state, body, submittedAt}], comments: [.comments[] | {author: .author.login, body, createdAt}]}' forge/<bundle>/pr.json > forge/<bundle>/pr.hash.json`
 - `forge/<bundle>/pr-threads.json`, the review threads:
   `gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {id, path, line, original_line, commit_id, body, user: .user.login, created_at, updated_at, in_reply_to_id}' > forge/<bundle>/pr-threads.json`
 - `forge/<bundle>/<ticket>.json`, one per GitHub ticket:
   `gh issue view <n> -R <owner>/<repo> --json number,url,title,body,state,labels,comments --jq '{number,url,title,body,state,labels: [.labels[].name], comments: [.comments[] | {author: .author.login, body, createdAt}]}' > forge/<bundle>/<ticket>.json`
 
-Hash each `.json` file with `git hash-object --no-filters <file>`. Step 10 records the
-hashes in the stage 1 entry's inputs as `forge_hashes`, a map from run-relative path
-(such as `forge/<bundle>/pr.json`) to hash. Exports (`file:` tickets and PRs) have no
-`.json` file and no entry in `forge_hashes`; their content hashes are in D7.
+Hash `pr.hash.json`, `pr-threads.json`, and each `<ticket>.json` with
+`git hash-object --no-filters <file>`; the threads and ticket files are hashed as
+written (their `--jq` output is already the projection), and `pr.json` itself is never
+hashed. Step 10 records the hashes in the stage 1 entry's inputs as `forge_hashes`, a
+map from run-relative path (such as `forge/<bundle>/pr.hash.json`) to hash. Exports
+(`file:` tickets and PRs) have no `.json` file and no entry in `forge_hashes`; their
+content hashes are in D7.
 
 ### 3. Shas
 
@@ -425,7 +454,7 @@ scope that stage 4 schedules; reassign any that does not by rule 2.
    as `headRefOid` and `baseRefOid` for a GitHub PR, which resume compares); Combined
    state; Sources of truth (the order used, each with its sha and class, and whether it
    replaced the default); References (each with its sha); Read paths (name, path, sha,
-   mode; plus each tag mapping from step 1a); Export notes (symlinks with targets,
+   mode; plus each ref mapping line from step 1a); Export notes (symlinks with targets,
    submodules, LFS pointers, skipped paths, declined exports); Forge (queried or not,
    per bundle; "not in export" keys); Questions; Stage applicability; Run directory
    (its path, and whether it is inside the session's repository: a run directory

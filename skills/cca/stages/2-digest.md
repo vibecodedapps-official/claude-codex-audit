@@ -29,10 +29,15 @@ auditors cite the original document at its pinned sha, never the digest.
       `<path> bytes <start>-<end>` (0-based, end exclusive), at most 450,000 bytes. Walk
       the file from `start` 0: when the rest of the file is 450,000 bytes or fewer,
       `end` is the file size; otherwise `end` is `start` plus the byte count up to and
-      including the last LF within the next 450,000 bytes, so no line is split. Below,
-      `<file>` is `git -C <repo> show <sha>:<path>` for a directly read tree, or
-      `cat trees/<name>/<path>` for an exported tree. Measure that count with
-      `<file> | tail -c +<start+1> | head -c 450001 | sed '$d' | wc -c`. If that
+      including the last LF within the next 450,000 bytes, so no line is split.
+      Materialize each such file once, by shell redirect, to
+      `<run dir>/tmp/<source slug>/<path>` (`git -C <repo> show <sha>:<path>` for a
+      directly read tree, or `cat trees/<name>/<path>` for an exported tree), and
+      compute every range boundary and line count from that copy, never through the
+      model's output. Below, `<file>` is that copy. The `tmp/` directory is run state,
+      never an input or output of a stage: remove the copy once the chunk files for its
+      ranges are written (3.4). Measure the count with
+      `tail -c +<start+1> <file> | head -c 450001 | sed '$d' | wc -c`. If that
       prints 0 (one line longer than the cap), cut at `start` plus 450,000 and mark
       the range `line split`. The next range starts at `end`.
    4. Number chunks from 1 across all corpora in source order. For chunk `N`, write
@@ -41,10 +46,11 @@ auditors cite the original document at its pinned sha, never the digest.
       skipped binary files (in the corpus's first chunk only). For a byte-range chunk,
       the file list has the one entry `<path> bytes <start>-<end>`, and the file also
       gives the range's first line number (the count of LF in bytes 0 to `start`, plus
-      1: `<file> | head -c <start> | wc -l`, plus 1), its line count
-      (`<file> | tail -c +<start+1> | head -c <end-start> | wc -l`, plus 1 when the
+      1: `head -c <start> <file> | wc -l`, plus 1), its line count
+      (`tail -c +<start+1> <file> | head -c <end-start> | wc -l`, plus 1 when the
       range's last byte is not an LF, so an unterminated final line counts), and the
-      file's total size.
+      file's total size. Then remove the `tmp/<source slug>/` copy of each file whose
+      chunk files are all written.
    The chunk's scope id is `digest-N`. Keep the list of files split by range, with
    each file's ranges, for the stage 2 entry (step 6.2).
 4. **Launch.** Queue one `cca:digester` per chunk (SKILL.md, Queue and Agent launch
@@ -54,10 +60,12 @@ auditors cite the original document at its pinned sha, never the digest.
    `groups.md`, every `diffs/<bundle>.stat`, the chunk file
    `guidelines/chunk-N.md`, and the output file `guidelines/digest-N.md`, and says:
    read every file in the chunk in full, or for a byte-range chunk the range the chunk
-   file names; write a cited rule list with, for each rule, the rule text, its
-   strength (`MUST`, `SHOULD`, or `MAY`), and `repo@sha:path:line`; and add a
-   `potential finding:` line, naming the group, wherever a rule collides with a claim
-   or the diff stat.
+   file names, read in slices of at most 24000 bytes (a Bash result is cut near 30,000
+   characters), and end `status: failed at byte <offset>`, never `complete`, if the
+   range was not read to its end; write a cited rule list with, for each rule, the
+   rule text, its strength (`MUST`, `SHOULD`, or `MAY`), and `repo@sha:path:line`; and
+   add a `potential finding:` line, naming the group, wherever a rule collides with a
+   claim or the diff stat.
 5. **On each completion.** Apply `_test` `fail` for role `digester` at scope
    `digest-N` or `any`. Read the output: its last line must be `status: complete`.
    On failure, apply the failure table (relaunch same model; relaunch on fable as a

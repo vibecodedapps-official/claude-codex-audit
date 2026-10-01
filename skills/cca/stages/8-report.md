@@ -107,7 +107,10 @@ Outputs: `report.md`.
        - every swap by name, with the requested model for each agent (the report says
          "requested", not "used");
        - at low tier, that one auditor covered the ticket, tests, and work-item hygiene;
-       - failed scopes and scopes not run because the budget expired;
+       - failed scopes and scopes not run because the budget expired, naming the last
+         byte offset of a digest that ended `status: failed at byte <offset>`;
+       - stage 6: whether the mandatory ids were requested in batches (`batched`) and,
+         from `missing_positions`, every mandatory id left without a position;
        - every file stage 2 split by byte range, from the stage 2 entry's `split_files`:
          the source, the path, its size, each range, and the chunk id (`digest-N`) that
          covered it with that chunk's status;

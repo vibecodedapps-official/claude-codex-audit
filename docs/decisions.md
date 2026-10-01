@@ -118,28 +118,43 @@ Choices made while building 0.1.0 where the design left room.
   (every blocker or high finding and every pass-two downgrade or drop). Keeping the run
   directory inside the session's repository avoids the inline form.
 
-## Round 4 review fixes (2026-10-01)
+## Round 4 review fixes (2026-09-30)
 
 - B1: fetches are explicit and tag-free into remote-tracking refs only, with no
   `--prune`; the pinned shas are verified after the fetch and the commands are recorded
-  in the approval; the fetch also covers tags (to `refs/remotes/<remote>/tags/<name>`)
-  and shas (to `refs/remotes/<remote>/cca/<sha>`) from each repo's selected remote.
+  in the approval, which covers only those commands (different planned commands are
+  asked again); the fetch also covers tags (to `refs/remotes/<remote>/tags/<name>`) and
+  shas (to `refs/remotes/<remote>/cca/<sha>`) from each repo's selected remote, and a
+  `<other remote>/<branch>` ref from that configured remote. Every ref mapping is
+  recorded in the brief for resume.
 - B2: a bundle's base is pinned by the PR's `baseRefOid`, and a stale base is handled
   like a stale head; resume stops only for a changed head or a changed merge base, and
   a moved base sha with the same merge base is recorded as `base moved` while the
   recorded base sha is kept for every diff.
-- B3: each `gh` call is made once, projected to fixed fields (viewer-dependent fields
-  would otherwise invalidate stage 1 under another login), saved beside the rendered
-  forge files, and hashed in `forge_hashes`; resume re-runs the same commands and
-  compares, and a `gh` failure stops resume.
+- B3: each `gh` call is made once and saved by shell redirect, never through the model;
+  the PR output is saved unprojected as `pr.json`, and `pr.hash.json`, a `jq` projection
+  without the shas and viewer-dependent fields (which would otherwise invalidate stage 1
+  under another login), is what `forge_hashes` hashes. Resume re-queries once into
+  `pr.json.new`, projects it the same way, and hashes by `git hash-object --stdin`; a
+  `gh` or `jq` failure stops resume. `jq` is required for GitHub PRs.
+- Run directory: it is created before the PR is read (the run id comes from the
+  manifest, with no `gh` call), so `pr.json` can be written by redirect; a stop in that
+  section removes it.
 - B4: resume reads `manifest.json` and `stages.json` first and reruns from stage 1 when
   stage 1 is missing, running, or has no brief, or when `stages.json` is missing; only
   a missing `manifest.json` is unrecoverable.
-- B5: stage 6 requires a position for every mandatory id and batches the asks across
-  the request and the one follow-up above 60 ids; with the fallback there is no
-  follow-up, so ids past the first batch are `not requested` and stay provisional.
+- B5: stage 6 requires a position for every mandatory id, and every mandatory id is
+  requested in a run that completes. Above 60 ids the asks are batched: Codex gets the
+  first batch in the request and the second in its one follow-up (a third batch cannot
+  be requested, so stage 6 fails with `missing_positions` and the run ends `partial`);
+  the fallback is launched once per batch, and a batch that fails after the ladder fails
+  the stage.
 - C1: a text file over 450,000 bytes is split into byte-range chunks, listed in
-  `split_files` and in the report's Coverage.
+  `split_files` and in the report's Coverage. The orchestrator materializes it once
+  under the run's `tmp/` (run state, never an input or output) to compute the ranges,
+  and a digester reads its range in 24,000-byte slices (a Bash result is cut near
+  30,000 characters), ending `status: failed at byte <offset>` when it did not reach the
+  end.
 - C2: split-mode group mergers read a per-group slice under `ledger/slices/`, not the
   whole ledger files; a ledger file or section a merger opens is recorded under `opened:`.
 - C3: an over-cap Codex request is reduced by dropping diffs before the swap, recorded

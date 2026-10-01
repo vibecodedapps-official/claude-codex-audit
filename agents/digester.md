@@ -29,16 +29,22 @@ files in your chunk and any skipped binary files), and your output file
    Read only the trees the brief maps for you, plus those run directory files.
 3. Read every file in your chunk in full. Do not sample or skim. List the skipped binary
    files your chunk file names, as given. When the chunk file gives a byte range
-   (`<path> bytes <start>-<end>`, 0-based, end exclusive), read only that range: in a
-   directly read tree, `git -C <repo> show <sha>:<path> | tail -c +<start+1> | head -c
-   <end-start>`; in an export, `cat <export path>/<path> | tail -c +<start+1> | head -c
-   <end-start>` (`wc -c` checks a length). Never read a range with the Read tool's
-   line offset: a range marked `line split` holds part of one line, which no line
-   offset can select. Cite lines by their
-   absolute line number in the file: the chunk file gives the range's first line
-   number, so the range's first line is that number, not 1. Start the digest with a
-   line stating the range it covers: path, `bytes <start>-<end>`, and its first and
-   last line numbers.
+   (`<path> bytes <start>-<end>`, 0-based, end exclusive), read only that range, in
+   slices, because a Bash tool result is cut near 30,000 characters. Read one slice per
+   call: in a directly read tree, `git -C <repo> show <sha>:<path> | tail -c +<s> |
+   head -c <n>`; in an export, `cat <export path>/<path> | tail -c +<s> | head -c
+   <n>`. Begin with `<s>` = `<start>+1` and `<n>` = 24000, or the bytes left when fewer.
+   After each call advance `<s>` by the bytes actually read (24000, or fewer if the
+   result came back cut, which you then re-read with a smaller `<n>`), and stop when
+   `<s>` is `<end>+1`. Never read the range in one call. A digest whose range was not
+   read to its end must close with `status: failed at byte <offset>` as its last line,
+   `<offset>` being the 0-based offset of the first byte not read, and never
+   `status: complete`. Never read a range with the Read tool's line offset: a range
+   marked `line split` holds part of one line, which no line offset can select. Cite
+   lines by their absolute line number in the file: the chunk file gives the range's
+   first line number, so the range's first line is that number, not 1. Start the
+   digest with a line stating the range it covers: path, `bytes <start>-<end>`, and its
+   first and last line numbers.
 4. For each rule, write one entry: the rule text, quoted or quoted in part; its strength,
    `MUST`, `SHOULD`, or `MAY`, as the document words it (write `strength inferred` when the
    document uses no such word); and its citation `repo@sha:path:line` at the pinned sha.
@@ -50,7 +56,8 @@ files in your chunk and any skipped binary files), and your output file
 6. Close the file as `common.md`'s "Output contract" section says: every command you ran
    under `runs:` (command, directory, exit status), every digest or map file you read
    under `consumed:` with its `git hash-object --no-filters <file>` hash, `none` under
-   either when empty, and `status: complete` as the last line.
+   either when empty, and `status: complete` as the last line (`status: failed at byte
+   <offset>` when step 3 left a range unread).
 7. Write the whole output file in one write before you report. Then return only the
    output path and one line of status.
 
@@ -61,8 +68,8 @@ files in your chunk and any skipped binary files), and your output file
    `ls`, their `git -C <repo>` forms, and `git hash-object --no-filters <file>` for the
    `consumed:` list. For a byte-range chunk you may also pipe `git show` output, or
    `cat` of the one file under the export path, through `tail -c +<n>` and
-   `head -c <n>`, and measure with `wc -c`; no other pipe stage. You
-   need no test or lint run.
+   `head -c <n>` to read it in slices of at most 24000 bytes, and measure with `wc -c`;
+   no other pipe stage. You need no test or lint run.
 3. Read and search trees as `common.md`'s "Reading trees and searching" section says. In
    a directly read working tree, search with `git grep` at the pinned sha, or with `rg`
    over the files `git ls-files` lists; use the Grep and Glob tools only in an export or

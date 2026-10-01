@@ -38,10 +38,11 @@ stage 6 entry's `sentinels` map, so the acknowledgment check can compare them.
 - **By path.** When the run directory is inside the session's repository, the request
   names each input copy by its path relative to that repository's root, and Codex
   opens them.
-- **Inline.** When the run directory is outside the session's repository, and in the
-  retry after a missing acknowledgment, the request carries the full content of every
-  input copy, each under a header with its run-directory path, sentinel line first,
-  diffs included, so it names no file Codex must open:
+- **Inline.** When the run directory is outside the session's repository, the request
+  carries the full content of every input copy, each under a header with its
+  run-directory path, sentinel line first, diffs included, so it names no file Codex
+  must open. The retry after a missing acknowledgment carries only the unacknowledged
+  inputs in the same form, as stage 6 step 8 describes:
 
   ```
   ===== input: codex/inputs/<run-relative path> =====
@@ -122,5 +123,8 @@ With `_test` `drop_ack`, treat the named input's acknowledgment as missing in th
 `times` answers. Stage 6 also checks that the answer gives a position for every
 blocker or high finding and every pass-two downgrade or drop (asks 1 and 2); one still
 missing after the one follow-up fails the stage the same way. The ids checked are
-every mandatory id when the set was not split, else the ids listed in the "for these
-ids" slots of asks 1 and 2 in the request and the follow-up.
+every mandatory id: when the set was split into batches of at most 60, the request
+carries the first batch and the follow-up the second (Codex), or the fallback is
+launched once per batch, each request with its own ids in the "for these ids" slot.
+A request for a batch after the first, which only the fallback receives, keeps the
+inputs, the acknowledgments, and asks 1 and 2 alone.

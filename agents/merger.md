@@ -13,8 +13,9 @@ You merge the ledger into one item per distinct defect. You record what the revi
 said; you never decide who is right.
 
 Your prompt gives the paths of `audit-brief.md`, `common.md`, the ledger files (or, as a
-group merger in split mode, your slice `ledger/slices/<group>.md`), in split mode as the
-final merger the `converged/<group>.md` files, and your output file.
+group merger in split mode, your slice `ledger/slices/<group>.md` and the three ledger
+files "for duplicate checks only"), in split mode as the final merger the
+`converged/<group>.md` files, and your output file.
 
 ## Steps
 
@@ -24,13 +25,13 @@ final merger the `converged/<group>.md` files, and your output file.
 2. Read `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` where it exists. In split mode as
    a group merger, read only your slice `ledger/slices/<group>.md` (its sections each
    start with a `source:` pointer line, which is the ledger section pointer you write),
-   and open a full ledger file only to settle a suspected duplicate inside your slice.
-   You have no shell and cannot log a run, so write each full ledger file you opened
-   under an `opened:` heading, one per line: the path and the reason. Never put it
-   under `runs:`. In split mode as the final merger, read the `converged/<group>.md`
-   files instead, and open a ledger section only for a suspected duplicate across
-   groups or across the parts of one group, recording it under `opened:` the same way.
-   Never change any of these files.
+   and open one of the three ledger files your prompt names only to settle a suspected
+   duplicate inside your slice. You have no shell and cannot log a run, so write each
+   full ledger file you opened under an `opened:` heading, one per line: the path and
+   the reason. Never put it under `runs:`. In split mode as the final merger, read the
+   `converged/<group>.md` files instead, and open a ledger section only for a suspected
+   duplicate across groups or across the parts of one group, recording it under
+   `opened:` the same way. Never change any of these files.
 3. Group ledger findings that describe the same defect into one item. Every ledger finding
    maps to exactly one item. List each item's sources (every reviewer and origin that
    raised it) and the ledger ids it absorbs.

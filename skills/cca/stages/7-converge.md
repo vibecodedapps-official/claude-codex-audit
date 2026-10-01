@@ -62,10 +62,10 @@ by size has `<group>-<k>` parts), and `converged.md`.
    | `codex` | the late adversary gave a verdict | provisional (always at low) |
    | `late` | never | provisional |
 
-   "Stage 6 saw it" means stage 6 is `complete`, the finding was in the request, and
-   `ledger/6.md` does not list its id as `not requested`; every id listed as `not
-   requested` stays provisional even when stage 6 is complete. When stage 6 failed, no
-   finding passes the gate on its account. A finding whose stage 5 scope failed has no
+   "Stage 6 saw it" means stage 6 is `complete` and the finding was in the request.
+   A complete stage 6 requested every mandatory id (its step 4.3), so no finding
+   stays provisional for having gone unrequested. When stage 6 failed, no finding
+   passes the gate on its account. A finding whose stage 5 scope failed has no
    stage 5 verdict. A `dropped` verdict still counts as a challenge; the disposition
    decides what happens to it.
 
@@ -124,14 +124,16 @@ by size has `<group>-<k>` parts), and `converged.md`.
       marked `over threshold` in its slice header and in the stage entry. Every id
       lands in exactly one part, so the split ends and gives the same parts each time.
    3. Launch one merger per group (per part), prompt: the paths of `audit-brief.md`,
-      `common.md`, its slice, and the output path `converged/<group>.md` (or
-      `converged/<group>-<k>.md` for a part), and nothing else. The merger reads the
-      slice and may open a full ledger file only to settle a suspected duplicate inside
-      its own slice; it records each file it opened, with the reason, under its own
-      `opened:` heading, not under `runs:` (which stays as `common.md`'s output
-      contract defines it). Each item holds: the item, sources, each position's
-      severity and label, disposition, gate, absorbed ledger ids, and a ledger section
-      pointer. No `C<n>` ids yet. Each file ends with `status: complete`.
+      `common.md`, its slice, the three ledger files `ledger/5.md`, `ledger/6.md`, and
+      `ledger/7.md` "for duplicate checks only", and the output path
+      `converged/<group>.md` (or `converged/<group>-<k>.md` for a part). The merger
+      reads the slice and may open a full ledger file only to settle a suspected
+      duplicate inside its own slice; it records each file it opened, with the
+      reason, under its own `opened:` heading, not under `runs:` (which stays as
+      `common.md`'s output contract defines it). Each item holds: the item, sources,
+      each position's severity and label, disposition, gate, absorbed ledger ids, and
+      a ledger section pointer. No `C<n>` ids yet. Each file ends with
+      `status: complete`.
    4. Launch the final merger with the paths of `audit-brief.md`, `common.md`, every
       `converged/<group>.md` (every part of a split group), the ledger files, and
       `gate.md`, and the output path `converged.md`. It assigns `C<n>` ids, merges

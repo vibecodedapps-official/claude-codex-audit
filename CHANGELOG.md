@@ -8,23 +8,28 @@
   Codex's.
 - Stage 6: every blocker or high finding and every pass-two downgrade or drop needs a
   position; missing ones get one follow-up, then fail the stage (`missing_positions`);
-  above 60 mandatory ids the asks are batched (`batched`, true only when a Codex
-  follow-up carried the second batch; with the fallback the rest are `not requested`).
+  above 60 mandatory ids the asks are batched (`batched`): Codex gets the second batch
+  in its one follow-up, a third fails the stage, and the fallback is launched once per
+  batch. Every mandatory id is requested in a run that completes.
 - Stage 6: a request over the inline cap is first reduced by dropping diffs
   (`inline_reduced`) before the swap.
 - Stage 8: the terminal state is decided from stages 1 to 7 only.
 - Stage 1: fetches are explicit, tag-free, into remote-tracking refs only, verified by
-  sha, and recorded in the approval.
+  sha, and recorded in the approval, which covers only its listed commands; a
+  `<other remote>/<branch>` ref is fetched from that remote.
 - Stage 1: a bundle's base is pinned by the PR's `baseRefOid`; resume compares the head
   and the merge base, and a moved base with the same merge base is recorded as `base
   moved` without stopping.
-- Stage 1: `gh` output is projected to fixed fields, saved, and hashed
-  (`forge_hashes`); resume re-queries and compares.
+- Stage 1: `gh` output is saved by shell redirect, and a `jq` projection of it
+  (`pr.hash.json`) is hashed (`forge_hashes`); resume re-queries once and compares.
+  `jq` is required for GitHub PRs.
+- Stage 1: the run directory is created before the PR is read.
 - Stage 1: each repo has one selected remote, and the fetch also covers tags and shas.
 - Resume: reads `manifest.json` and `stages.json` first and reruns from stage 1 when
   stage 1 is missing, running, or has no brief, or when `stages.json` is missing.
 - Stage 2: a text file over 450,000 bytes is split into byte-range chunks
-  (`split_files`).
+  (`split_files`), computed from a copy under the run's `tmp/` and read by the digester
+  in 24,000-byte slices.
 - Stage 7: split-mode group mergers read per-group slices under `ledger/slices/`.
 - Docs: acceptance evidence for the fixture map path and the lint output for an agent
   that lists Edit.
