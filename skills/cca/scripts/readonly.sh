@@ -49,7 +49,9 @@
 # top level, and against every path, without regard to case.
 #
 # check: refuses (exit 2) when <out prefix> equals the baseline or the ignored base
-# prefix, is not inside the run directory, or when a baseline file it needs is missing.
+# prefix, by name or as the same file (`-ef`, so other letters on a case-insensitive file
+# system do not pass), is not inside the run directory (a walk up from its directory to one
+# that is the same file as the run directory), or when a baseline file it needs is missing.
 # Otherwise it runs snapshot into <out prefix>, then prints one line per difference, in
 # this order, each group sorted:
 #   blocked <status|stash|config|hashes|refs> <-|+> <line>
@@ -406,11 +408,28 @@ check() {
 	np_ibase=$(normprefix "$ibase") || die "cannot resolve $ibase"
 	[ "$np_out" != "$np_base" ] || die "out prefix equals the baseline prefix: $5"
 	[ "$np_out" != "$np_ibase" ] || die "out prefix equals the ignored base prefix: $5"
+	# The same files under another spelling (case, links) pass the name checks above, so
+	# compare by identity too. `-ef` is not in POSIX test, but dash, bash, and macOS sh have it.
+	if [ -e "$5.marker" ] && [ "$5.marker" -ef "$base.marker" ]; then
+		die "out prefix equals the baseline prefix: $5"
+	fi
+	if [ -e "$5.ignored" ] && [ "$5.ignored" -ef "$ibase.ignored" ]; then
+		die "out prefix equals the ignored base prefix: $5"
+	fi
 	np_run=$(cd "$2" && pwd -P) || die "run directory not found: $2"
-	case $np_out in
-	"$np_run"/*) ;;
-	*) die "out prefix is not inside the run directory: $5" ;;
-	esac
+	# Walk up from the out prefix's directory (it may not exist yet; np_out is absolute, so the
+	# walk ends at /) to a directory that is the run directory, compared by file identity.
+	inside=
+	d=$(dirname -- "$np_out")
+	while :; do
+		if [ -d "$d" ] && [ "$d" -ef "$np_run" ]; then
+			inside=1
+			break
+		fi
+		[ "$d" = / ] && break
+		d=$(dirname -- "$d") || die "cannot resolve $5"
+	done
+	[ -n "$inside" ] || die "out prefix is not inside the run directory: $5"
 
 	snapshot "$1" "$2" "$5"
 

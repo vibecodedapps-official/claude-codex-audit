@@ -26,6 +26,7 @@
 # 15 dirty submodule edited again     19 run directory in other letters
 # 16 nested repo: edit and new file   20 stat-only change, index kept
 # 21 submodule not checked out: file added
+# 22 out prefix is the baseline in other letters  23 run directory in other letters
 #
 # Prints one line per mismatch, then `readonly test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -380,6 +381,34 @@ snap "$R/b"
 printf '%s\n' 'new' > "$A/sub/new.txt"
 ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
 expect "case 21" 1 'blocked hashes + 3e757656cf36eca53338e520d134963a44f793f8 sub/new.txt\n' ''
+
+# 22 and 23 only mean something on a case-insensitive file system, where $R/BASE names the
+# same files as $R/base. The test probes for it (the script itself does not): after the
+# baseline to $R/base, $R/BASE.marker exists there. Elsewhere (Linux) both are skipped.
+
+# 22. an out prefix that is the baseline in other letters: refused, baseline untouched.
+case_id="case 22"
+fresh
+snap "$R/base"
+if [ -e "$R/BASE.marker" ]; then
+	printf '%s\n' 'Second local edit.' >> "$A/README.md"
+	h0=$(git hash-object --no-filters "$R/base.hashes")
+	ro check "$A" "$R" "$R/base" "$R/base" "$R/BASE"
+	expect "case 22" 2 '' "readonly: out prefix equals the baseline prefix: $R/BASE\n"
+	[ "$(git hash-object --no-filters "$R/base.hashes")" = "$h0" ] || mismatch "case 22: the baseline was overwritten"
+fi
+
+# 23. the run directory passed in other letters than the out prefix's directory: the
+# normal result.
+case_id="case 23"
+fresh
+snap "$R/base"
+if [ -e "$R/BASE.marker" ]; then
+	RU=$(dirname "$R")/$(basename "$R" | tr 'a-z' 'A-Z')
+	printf '%s\n' 'Second local edit.' >> "$A/README.md"
+	ro check "$A" "$RU" "$R/base" "$R/base" "$R/c"
+	expect "case 23" 1 "blocked hashes + $hash_edit README.md\nblocked hashes - $hash_orig README.md\n" ''
+fi
 
 if [ "$bad" -gt 0 ]; then
 	exit 1
