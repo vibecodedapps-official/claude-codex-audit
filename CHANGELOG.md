@@ -13,8 +13,8 @@ session to the audit, with a return trip back. No full multi-agent audit has run
   `claims-verdicts.md` from an earlier audit.
 - The handoff format (`skills/cca/handoff.md`) and `skills/cca/scripts/handoff.sh`, which
   detects, validates, and turns a handoff into typed claims and a commit list. A leading
-  UTF-8 byte order mark is ignored, and a claim whose text is over 8,000 bytes is an
-  error, since a claim is read as one line.
+  UTF-8 byte order mark is ignored, and a claim line over 8,000 bytes, ids included, is
+  an error, since a claim is read as one line.
 - Typed claims, with kinds `code`, `decision`, `verification`, `scope`, and `status`.
   Prose claims files get a kind per sentence. A handoff's commit lists seed the review
   groups.
@@ -51,8 +51,9 @@ session to the audit, with a return trip back. No full multi-agent audit has run
   as part of it, and the files under a submodule that is not checked out are hashed. An
   upstream's ahead and behind count is no longer compared, and the run directory is
   matched without regard to case where the repo's `core.ignorecase` is true. The check
-  compares its output prefix with the baseline and the run directory by file identity, so
-  a prefix spelled in other letters cannot overwrite the baseline.
+  compares its output prefix with the baseline and the run directory by file identity, and
+  refuses a prefix with a `..` component, so a prefix spelled in other letters or routed
+  through a missing directory cannot overwrite the baseline.
 - No git command cca or its agents issue rewrites an audited repo's index: the check
   script sets `GIT_OPTIONAL_LOCKS=0`, the stages run `git status` with
   `--no-optional-locks`, and agents diff only between two commits, since a working-tree
