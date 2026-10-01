@@ -43,7 +43,9 @@ session to the audit, with a return trip back. No full multi-agent audit has run
 - A `verification` claim is `true` only when the audit reproduces the result itself. One
   it cannot reproduce is `not verified` with the reason `not reproduced`, listed in
   `claims-verdicts.md` as a recheck request, never as a correction. The pass-two
-  adversary re-checks every verification claim marked `true`.
+  adversary re-checks every verification claim marked `true`. A run under a different
+  setup than the stated check needs is not counter-evidence, and the handoff asks the
+  writer to name a check's preconditions.
 - The read-only check runs a script. An ignored file is compared by size and sub-second
   modification time, and each audited repo has its own baseline marker. Paths that git
   prints quoted are not supported and stop the check with exit 2. Nested repositories
@@ -53,7 +55,12 @@ session to the audit, with a return trip back. No full multi-agent audit has run
   matched without regard to case where the repo's `core.ignorecase` is true. The check
   compares its output prefix with the baseline and the run directory by file identity, and
   refuses a prefix with a `..` component, so a prefix spelled in other letters or routed
-  through a missing directory cannot overwrite the baseline.
+  through a missing directory cannot overwrite the baseline. A repository inside an
+  ignored directory is recorded as one ignored directory, so a change inside it is not
+  detected unless it adds or removes an entry at its top level, and the report says so.
+- The stage 1 ticket token rule now names the token for an exported ticket (its `id`),
+  matches a GitHub `#n` only for an issue in the bundle's repo, and checks a boundary on
+  both sides, so `APP-1` matches neither `APP-1a` nor `XAPP-1`.
 - No git command cca or its agents issue rewrites an audited repo's index: the check
   script sets `GIT_OPTIONAL_LOCKS=0`, the stages run `git status` with
   `--no-optional-locks`, and agents diff only between two commits, since a working-tree
