@@ -56,6 +56,13 @@
 # before any `git status`, which would run a submodule's filter on a modified file. A
 # path in a submodule carries its prefix (`sub/x.dat`). One LFS line (the first path found
 # overall), and one filter line per driver and repository (its first path).
+# Every attribute value is a driver name, `set`, `unset`, and `unspecified` included (a
+# string `filter=set` names a driver `set`); one is refused only when its `clean` or
+# `process` key is set, as for any driver. With no index file at the top level, the build
+# starts from HEAD, so HEAD's paths (an ignored one among them) join the scanned paths; a
+# submodule with no index file is not given this. The skip-worktree and assume-unchanged
+# check also runs in every checked-out submodule: the count is summed over the
+# repositories, and the first path is the first in scan order, with its prefix.
 #
 # Output, exit 0, on stdout:
 #   head <sha>
@@ -178,21 +185,35 @@ build() {
 		echo "working-tree: refused: sparse checkout is on" > "$r/2"
 	fi
 
-	# 3. skip-worktree or assume-unchanged paths: `ls-files -v` tags S, h, and s.
-	g ls-files -v > "$tmp/lsv" || die "git ls-files failed"
-	awk '
-		{
-			c = substr($0, 1, 1)
-			if (c == "S" || c == "h" || c == "s") {
-				n++
-				if (n == 1) p = substr($0, 3)
+	# The top level, then each checked-out submodule, depth first.
+	: > "$tmp/repos"
+	lr=0
+	list_repos "$top" ""
+
+	# 3. skip-worktree or assume-unchanged paths, in every repository: `ls-files -v` tags
+	# S, h, and s. The count is summed, and the first path is the first in scan order.
+	nflag=0
+	firstflag=
+	while IFS=$tab read -r rd rp; do
+		gd "$rd" ls-files -v > "$tmp/lsv" || die "git ls-files failed${rp:+ in $rp}"
+		PRE=$rp awk '
+			{
+				c = substr($0, 1, 1)
+				if (c == "S" || c == "h" || c == "s") {
+					n++
+					if (n == 1) p = substr($0, 3)
+				}
 			}
-		}
-		END { if (n > 0) print n " paths are skip-worktree or assume-unchanged, first " p }
-	' "$tmp/lsv" > "$tmp/flags" || die "awk failed"
-	if [ -s "$tmp/flags" ]; then
-		IFS= read -r line < "$tmp/flags"
-		printf '%s\n' "working-tree: refused: $line" > "$r/3"
+			END { if (n > 0) print n "\t" ENVIRON["PRE"] p }
+		' "$tmp/lsv" > "$tmp/flags" || die "awk failed"
+		if [ -s "$tmp/flags" ]; then
+			IFS=$tab read -r fn fp < "$tmp/flags"
+			[ "$nflag" -gt 0 ] || firstflag=$fp
+			nflag=$((nflag + fn))
+		fi
+	done < "$tmp/repos"
+	if [ "$nflag" -gt 0 ]; then
+		printf '%s\n' "working-tree: refused: $nflag paths are skip-worktree or assume-unchanged, first $firstflag" > "$r/3"
 	fi
 
 	# 4. unmerged paths.
@@ -208,14 +229,24 @@ build() {
 	# each checked-out submodule, depth first, so no filter can run in a later step. Quoted
 	# paths are refused (9). 7 and 8: Git LFS (the first path found), and a driver whose
 	# `clean` or `process` is set, one line per driver and repository, with the first path.
-	: > "$tmp/repos"
-	lr=0
-	list_repos "$top" ""
 	k=0
+	real=$(g rev-parse --git-path index) || die "git rev-parse failed"
+	case $real in
+	/* | [A-Za-z]:/*) ;;
+	*) real=$top/$real ;;
+	esac
 	while IFS=$tab read -r rd rp; do
 		k=$((k + 1))
 		gd "$rd" ls-files --cached --others --exclude-standard > "$tmp/paths.$k" ||
 			die "git ls-files failed${rp:+ in $rp}"
+		# With no index file at the top level, the build starts from HEAD, so HEAD's paths
+		# (an ignored one among them) are scanned too. Submodules are not given this.
+		if [ "$k" -eq 1 ] && [ ! -f "$real" ] && [ -n "$head" ]; then
+			g ls-tree -r --name-only --full-tree "$head" >> "$tmp/paths.$k" ||
+				die "git ls-tree failed"
+			sort -u "$tmp/paths.$k" > "$tmp/paths.sorted" || die "sort failed"
+			cp "$tmp/paths.sorted" "$tmp/paths.$k" || die "cp failed"
+		fi
 		git -c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath="$nohooks" -C "$rd" check-attr --stdin filter \
 			< "$tmp/paths.$k" > "$tmp/attr" || die "git check-attr failed${rp:+ in $rp}"
 		# `driver<TAB>path` for the first path of each driver, in first-seen order.
@@ -223,7 +254,6 @@ build() {
 			{
 				n = split($0, f, " ")
 				v = f[n]
-				if (v == "unspecified" || v == "unset" || v == "set") next
 				if (!(v in seen)) {
 					seen[v] = 1
 					print v "\t" substr($0, 1, length($0) - length(v) - 10)
@@ -290,11 +320,6 @@ build() {
 	idx=$tmp/index
 	# No shared index and no untracked cache may be written into .git.
 	ti='-c core.splitIndex=false -c core.untrackedCache=false'
-	real=$(g rev-parse --git-path index) || die "git rev-parse failed"
-	case $real in
-	/* | [A-Za-z]:/*) ;;
-	*) real=$top/$real ;;
-	esac
 	if [ -f "$real" ]; then
 		cp -p "$real" "$idx" || die "cannot copy the index"
 	else

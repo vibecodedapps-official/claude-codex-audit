@@ -28,6 +28,8 @@
 # 12 `check`: no output and no write, and the same refusal lines as `build`
 # 13 a submodule's own program filter, refused with the submodule prefix
 # 14 a repo hook is not run         15 a renamed submodule with a change is refused
+# 16 a driver named `set`            17 no index file, an ignored tracked file with a filter
+# 18 an assume-unchanged file in a submodule
 #
 # Prints one line per mismatch, then `working-tree test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -478,6 +480,48 @@ printf '%s\n' 'edit' >> "$A/sub2/s.txt"
 for mode in check build; do
 	run "$mode" "$A"
 	expect "case 15, $mode" 1 '' "$r submodule sub2 has uncommitted changes or untracked files\n"
+done
+
+# 16. a driver named `set` (filter=set is a string, not the attribute state): refused when
+# filter.set.clean is configured.
+case_id="case 16"
+fresh
+printf '*.dat filter=set\n' > "$A/.gitattributes"
+printf 'data\n' > "$A/x.dat"
+git -C "$A" config filter.set.clean "touch '$root/filter-ran16'; cat"
+for mode in check build; do
+	run "$mode" "$A"
+	expect "case 16, $mode" 1 '' "$r filter 'set' runs a program on x.dat\n"
+	[ ! -e "$root/filter-ran16" ] || mismatch "case 16, $mode: the filter ran"
+done
+
+# 17. no index file, and HEAD tracks a file an ignore rule matches, with a program filter:
+# the scan reads HEAD's paths too, so it is refused before `add -A` runs the filter.
+case_id="case 17"
+fresh
+printf '*.dat\n' >> "$A/.gitignore"
+printf '*.dat filter=mark\n' > "$A/.gitattributes"
+printf 'data\n' > "$A/x.dat"
+g -C "$A" add -f .gitignore .gitattributes x.dat
+g -C "$A" commit -q -m dat
+git -C "$A" config filter.mark.clean "touch '$root/filter-ran17'; cat"
+printf 'atad\n' > "$A/x.dat"
+rm "$A/.git/index"
+for mode in check build; do
+	run "$mode" "$A"
+	expect "case 17, $mode" 1 '' "$r filter 'mark' runs a program on x.dat\n"
+	[ ! -e "$root/filter-ran17" ] || mismatch "case 17, $mode: the filter ran"
+done
+
+# 18. an assume-unchanged file edited in a submodule: refused, with the submodule prefix.
+case_id="case 18"
+fresh
+add_sub
+git -C "$A/sub" update-index --assume-unchanged s.txt
+printf '%s\n' 'edit' >> "$A/sub/s.txt"
+for mode in check build; do
+	run "$mode" "$A"
+	expect "case 18, $mode" 1 '' "$r 1 paths are skip-worktree or assume-unchanged, first sub/s.txt\n"
 done
 
 if [ "$bad" -gt 0 ]; then
