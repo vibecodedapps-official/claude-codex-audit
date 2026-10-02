@@ -411,8 +411,9 @@ Settled choices:
   and a rename, and a rerun after a failure completes the job.
 - **Parent and links (#7).** Optional keys `parent` and `links` on tickets and raised
   tickets; `links: none` is a checkable claim. `cca-handoff: 1` stays, so ccl must check for
-  cca 0.3.0 or later before writing them. `/cca:handoff` fills them from the record only,
-  and gh has no parent field.
+  cca 0.3.0 or later before writing them. `/cca:handoff` fills them from the record only.
+  `gh issue view` has no parent field, so stage 1 and `/cca:handoff` read a GitHub
+  ticket's parent with a GraphQL query, saved as `<ticket>.parent.json` and hashed.
 - **Work items (#8).** `update_comment`, `remove_link`, and `set_fields`; `mentions` on
   every op with `text`; `W<n>` items for an op that exists only to support another. The
   validator rejects unknown keys and an op that reaches no `C<n>` or `claim <n>`, directly
@@ -528,6 +529,16 @@ A review of PR #12 on 2026-10-02 found 6. Two were taken, each shown failing fir
 Three findings about unbounded agent inputs (a live result value of any length, every
 memory match, and every untracked file in the brief) join the deferred bounded-loading
 item below. The proposal to split the PR was declined: 0.3.0 was planned as one PR.
+
+A PR comment the same day found that hygiene checked a GitHub ticket's `parent` against
+forge data that held none: stage 1 saved no parent, and `/cca:handoff` wrote none. With
+ccl writing a GitHub `parent` (ccl#26), a right value could read as a mismatch. Taken:
+stage 1 saves the parent from GraphQL as `<ticket>.parent.json`, hashed in
+`forge_hashes` and rechecked by resume, `<ticket>.md` lists it, and `/cca:handoff` fills
+it. The query and its projection were run on 2026-10-02 against an issue with a parent
+(cli/cli#14529, giving `{"parent":{"number":14563,"repo":"cli/cli","url":...}}`) and one
+without (giving `{"parent":null}`). Documenting the gap instead was rejected: every
+handoff with a GitHub parent would carry a permanent gap line.
 
 ## Deferred past 0.3
 
