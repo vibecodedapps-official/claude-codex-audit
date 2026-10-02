@@ -389,14 +389,29 @@ expect "case 10" 0 "$(lines 38bd28c7b7222e6064df2e0e4a667ba31bc58f2b 5e0ec0a2630
 n=$(git -C "$A" ls-tree -r --name-only 5e0ec0a263096b090c7abdcfcd4c74cd27864dfe | grep -c '^\.test-output/keep\.txt$')
 [ "$n" = 1 ] || mismatch "case 10: the staged ignored file is not in the tree"
 
-# 11. no index file: the build starts from HEAD, so the head and tree are the case 1 ones.
-# With no index every file is untracked, so the untracked list is every file.
+# 11. no index file: refused, with the path of the repository, before anything is
+# written. A checked-out repository always has an index, so this state is not built from.
+# 11b: the same for a checked-out submodule.
 case_id="case 11"
 fresh
 rm "$A/.git/index"
-run build "$A"
-expect "case 11" 0 "head $head1\nparent $parent\ntree $tree1\nuntracked .gitignore\nuntracked README.md\nuntracked data/users.csv\nuntracked migrations/001_create_users.sh\nuntracked migrations/002_add_status.sh\nuntracked notes/deactivate-draft.txt\nuntracked run-tests.sh\nuntracked src/users.sh\nuntracked tests/test_users.sh\n" ''
+n0=$(loose "$A")
+for mode in check build; do
+	run "$mode" "$A"
+	expect "case 11, $mode" 1 '' "$r no index file in .
+"
+	[ "$(loose "$A")" = "$n0" ] || mismatch "case 11, $mode: the object count changed"
+done
 [ ! -e "$A/.git/index" ] || mismatch "case 11: an index file was written"
+case_id="case 11b"
+fresh
+add_sub
+rm "$A/sub/.git/index"
+for mode in check build; do
+	run "$mode" "$A"
+	expect "case 11b, $mode" 1 '' "$r no index file in sub
+"
+done
 
 # 12. `check`: the refusal checks only. Nothing is printed and nothing is written for a
 # repo that would build; a refusal gives the lines `build` gives, no program runs, and the
@@ -495,22 +510,29 @@ for mode in check build; do
 	[ ! -e "$root/filter-ran16" ] || mismatch "case 16, $mode: the filter ran"
 done
 
-# 17. no index file, and HEAD tracks a file an ignore rule matches, with a program filter:
-# the scan reads HEAD's paths too, so it is refused before `add -A` runs the filter.
+# 17. no index file, HEAD tracks an ignored file with a program filter and its
+# .gitattributes is deleted from disk: refused for the missing index before anything runs.
 case_id="case 17"
 fresh
-printf '*.dat\n' >> "$A/.gitignore"
-printf '*.dat filter=mark\n' > "$A/.gitattributes"
-printf 'data\n' > "$A/x.dat"
+printf '*.dat
+' >> "$A/.gitignore"
+printf '*.dat filter=mark
+' > "$A/.gitattributes"
+printf 'data
+' > "$A/x.dat"
 g -C "$A" add -f .gitignore .gitattributes x.dat
 g -C "$A" commit -q -m dat
 git -C "$A" config filter.mark.clean "touch '$root/filter-ran17'; cat"
-printf 'atad\n' > "$A/x.dat"
-rm "$A/.git/index"
+printf 'atad
+' > "$A/x.dat"
+rm "$A/.gitattributes" "$A/.git/index"
+n0=$(loose "$A")
 for mode in check build; do
 	run "$mode" "$A"
-	expect "case 17, $mode" 1 '' "$r filter 'mark' runs a program on x.dat\n"
+	expect "case 17, $mode" 1 '' "$r no index file in .
+"
 	[ ! -e "$root/filter-ran17" ] || mismatch "case 17, $mode: the filter ran"
+	[ "$(loose "$A")" = "$n0" ] || mismatch "case 17, $mode: the object count changed"
 done
 
 # 18. an assume-unchanged file edited in a submodule: refused, with the submodule prefix.

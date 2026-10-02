@@ -15,7 +15,7 @@
 # inside the script's own temporary directory, a copy (`cp -p`, so its mtime is kept) of
 # the repository's own index, so the tree is what `git add -A && git commit` would make
 # from the user's own index, a file staged with `git add -f` despite an ignore rule
-# included. A repository with no index file starts from `read-tree HEAD` instead. Then
+# included. Then
 # `add -A`, `write-tree`, and `commit-tree` with parent HEAD, which is resolved once,
 # first. The git steps that touch the temporary index run with core.splitIndex=false and
 # core.untrackedCache=false, so no shared index or cache lands in .git. Author and
@@ -36,6 +36,7 @@
 # Refusals: exit 1, on stderr, before any write, one line per reason that holds, in this
 # order. A reason that names a path names the first one.
 #   working-tree: refused: no HEAD commit
+#   working-tree: refused: no index file in <path>
 #   working-tree: refused: sparse checkout is on
 #   working-tree: refused: <n> paths are skip-worktree or assume-unchanged, first <path>
 #   working-tree: refused: unmerged paths, first <path>
@@ -58,11 +59,13 @@
 # overall), and one filter line per driver and repository (its first path).
 # Every attribute value is a driver name, `set`, `unset`, and `unspecified` included (a
 # string `filter=set` names a driver `set`); one is refused only when its `clean` or
-# `process` key is set, as for any driver. With no index file at the top level, the build
-# starts from HEAD, so HEAD's paths (an ignored one among them) join the scanned paths; a
-# submodule with no index file is not given this. The skip-worktree and assume-unchanged
-# check also runs in every checked-out submodule: the count is summed over the
-# repositories, and the first path is the first in scan order, with its prefix.
+# `process` key is set, as for any driver. A checked-out repository always has an index
+# file, and the build copies it, so a top level or checked-out submodule with none is
+# refused (`<path>` is `.` for the top level, else the submodule's path): a HEAD-only
+# start would restore attributes the scan never saw. Like a filter reason, it skips
+# `git status`. It is not checked without a HEAD commit. The skip-worktree and
+# assume-unchanged check also runs in every checked-out submodule: the count is summed
+# over the repositories, and the first path is the first in scan order, with its prefix.
 #
 # Output, exit 0, on stdout:
 #   head <sha>
@@ -139,6 +142,15 @@ cfgset() {
 	[ "$cs_rc" -eq 0 ]
 }
 
+# index_file <dir>: print the path of the index file of the repository in <dir>, absolute.
+index_file() {
+	if_p=$(gd "$1" rev-parse --git-path index) || die "git rev-parse failed"
+	case $if_p in
+	/* | [A-Za-z]:/*) printf '%s\n' "$if_p" ;;
+	*) printf '%s\n' "$1/$if_p" ;;
+	esac
+}
+
 # list_repos <dir> <prefix>: append `<dir><TAB><prefix>` to $tmp/repos for the repository
 # in <dir>, then for each checked-out submodule of it (a gitlink whose directory holds a
 # .git), depth first, in `ls-files` order. The prefix is the path from the top level, with
@@ -174,7 +186,7 @@ build() {
 		n=$((n + 1))
 	done
 
-	# 1. no HEAD commit. The sha is resolved once and used for the parent and read-tree.
+	# 1. no HEAD commit. The sha is resolved once and used for the parent.
 	if ! head=$(g rev-parse --verify -q 'HEAD^{commit}'); then
 		head=
 		echo "working-tree: refused: no HEAD commit" > "$r/1"
@@ -189,6 +201,18 @@ build() {
 	: > "$tmp/repos"
 	lr=0
 	list_repos "$top" ""
+
+	# 1b. no index file in the top level or a checked-out submodule: a checked-out
+	# repository always has one, and the build copies it. Written after the HEAD line, and
+	# not checked without a HEAD commit (a new repository has none yet).
+	noindex=
+	while IFS=$tab read -r rd rp; do
+		if [ -n "$head" ] && [ ! -f "$(index_file "$rd")" ]; then
+			noindex=1
+			ip=${rp%/}
+			printf '%s\n' "working-tree: refused: no index file in ${ip:-.}" >> "$r/1"
+		fi
+	done < "$tmp/repos"
 
 	# 3. skip-worktree or assume-unchanged paths, in every repository: `ls-files -v` tags
 	# S, h, and s. The count is summed, and the first path is the first in scan order.
@@ -230,23 +254,10 @@ build() {
 	# paths are refused (9). 7 and 8: Git LFS (the first path found), and a driver whose
 	# `clean` or `process` is set, one line per driver and repository, with the first path.
 	k=0
-	real=$(g rev-parse --git-path index) || die "git rev-parse failed"
-	case $real in
-	/* | [A-Za-z]:/*) ;;
-	*) real=$top/$real ;;
-	esac
 	while IFS=$tab read -r rd rp; do
 		k=$((k + 1))
 		gd "$rd" ls-files --cached --others --exclude-standard > "$tmp/paths.$k" ||
 			die "git ls-files failed${rp:+ in $rp}"
-		# With no index file at the top level, the build starts from HEAD, so HEAD's paths
-		# (an ignored one among them) are scanned too. Submodules are not given this.
-		if [ "$k" -eq 1 ] && [ ! -f "$real" ] && [ -n "$head" ]; then
-			g ls-tree -r --name-only --full-tree "$head" >> "$tmp/paths.$k" ||
-				die "git ls-tree failed"
-			sort -u "$tmp/paths.$k" > "$tmp/paths.sorted" || die "sort failed"
-			cp "$tmp/paths.sorted" "$tmp/paths.$k" || die "cp failed"
-		fi
 		git -c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath="$nohooks" -C "$rd" check-attr --stdin filter \
 			< "$tmp/paths.$k" > "$tmp/attr" || die "git check-attr failed${rp:+ in $rp}"
 		# `driver<TAB>path` for the first path of each driver, in first-seen order.
@@ -280,7 +291,7 @@ build() {
 
 	# 5 and 6. A dirty submodule, and an untracked nested repository. A status would run
 	# a filter that a reason above names, so it waits for them to be absent.
-	if [ ! -s "$r/7" ] && [ ! -s "$r/8" ]; then
+	if [ ! -s "$r/7" ] && [ ! -s "$r/8" ] && [ -z "$noindex" ]; then
 		g status --porcelain=v2 --no-renames --untracked-files=all --ignore-submodules=none \
 			> "$tmp/status" || die "git status failed"
 		awk '
@@ -316,15 +327,11 @@ build() {
 	[ "$mode" = build ] || exit 0
 
 	# The build, in a temporary index of its own, a copy of the repository's index. The
-	# path is absolute or relative to the top level. Without an index file, start from HEAD.
+	# path is absolute or relative to the repository's directory.
 	idx=$tmp/index
 	# No shared index and no untracked cache may be written into .git.
 	ti='-c core.splitIndex=false -c core.untrackedCache=false'
-	if [ -f "$real" ]; then
-		cp -p "$real" "$idx" || die "cannot copy the index"
-	else
-		GIT_INDEX_FILE=$idx g $ti read-tree "$head" || die "git read-tree failed"
-	fi
+	cp -p "$(index_file "$top")" "$idx" || die "cannot copy the index"
 	GIT_INDEX_FILE=$idx g $ti add -A || die "git add failed"
 	tree=$(GIT_INDEX_FILE=$idx g $ti write-tree) || die "git write-tree failed"
 	commit=$(GIT_AUTHOR_NAME=cca GIT_AUTHOR_EMAIL=cca@example.invalid \

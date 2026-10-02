@@ -457,19 +457,19 @@ target, and submodules are listed, not exported. An export over 1 GB is asked ab
 first.
 
 A bundle with `head: working-tree` writes one more thing to its repo: the loose git
-objects of a commit that `skills/cca/scripts/working-tree.sh build` makes from the
-working tree in a temporary index, a copy of the repo's own, so a file you staged with
+objects of a commit that `skills/cca/scripts/working-tree.sh build` makes from the working
+tree in a temporary index, a copy of the repo's own, so a file you staged with
 `git add -f` despite an ignore rule is kept. The repo's index, refs, and files are not
 touched, and the commit has no ref, so `git gc` may prune it after its prune window; the
-report's Coverage says so, and lists the files untracked at audit time. The script
-refuses (exit 1, before it writes anything) a repo with no `HEAD` commit, a sparse
-checkout, skip-worktree or assume-unchanged paths, unmerged paths, a submodule with
-changes, an untracked nested repository, a Git LFS or program filter, or a path git
-prints quoted. Its `check` mode runs only these refusal checks, which run no filter or
-hook and write nothing, and stage 1 runs it before the read-only baseline, so a program
-filter never runs. The same working tree and `HEAD` give the same commit sha, so
-`/cca:resume` rebuilds the head and does not ask to restart. Agents search such a tree
-with `git grep <pattern> <head sha>`.
+report's Coverage says so, and lists the files untracked at audit time. The script refuses
+(exit 1, before it writes anything) a repo with no `HEAD` commit, a repo or checked-out
+submodule with no index file, a sparse checkout, skip-worktree or assume-unchanged paths,
+unmerged paths, a submodule with changes, an untracked nested repository, a Git LFS or
+program filter, or a path git prints quoted. Its `check` mode runs only these refusal
+checks, which run no filter or hook and write nothing, and stage 1 runs it before the
+read-only baseline, so a program filter never runs. The same working tree and `HEAD` give
+the same commit sha, so `/cca:resume` rebuilds the head and does not ask to restart.
+Agents search such a tree with `git grep <pattern> <head sha>`.
 
 Role agents' tool lists exclude Edit and NotebookEdit. Each agent has Write, limited by
 instruction to its own output file in the run directory; the read-only check after every

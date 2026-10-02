@@ -311,21 +311,22 @@ b. Take the read-only baseline now, before any other work. For each audited repo
    once. A non-zero exit ends the run `blocked`, since the boundary cannot be checked;
    show the script's message.
 c. For each bundle with `head: working-tree`, build its head now, right after the
-   baseline, so the stage's read-only check covers any edit made between the baseline
-   and the build. Run
+   baseline, so the stage's read-only check covers any edit made between the baseline and
+   the build. Run
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh build <repo>` with the
-   resolved absolute script path. It builds a commit from the working tree in a
-   temporary index copied from the repo's own, so the repo's index, refs, and files are
-   untouched, and a file staged despite an ignore rule is kept; its only writes to the
-   repo are git objects. It runs the same refusal checks as A.4's `check` first. Exit 0
-   prints, on stdout, `head <sha>`, `parent <sha>`, `tree <sha>`, and one
-   `untracked <path>` line per untracked file that is not ignored; keep all four. The head commit has no ref, and the same working tree and `HEAD` give
-   the same sha. Exit 1 is a refusal (a missing `HEAD` commit, a sparse checkout,
+   resolved absolute script path. It builds a commit from the working tree in a temporary
+   index copied from the repo's own, so the repo's index, refs, and files are untouched,
+   and a file staged despite an ignore rule is kept; its only writes to the repo are git
+   objects. It runs the same refusal checks as A.4's `check` first. Exit 0 prints, on
+   stdout, `head <sha>`, `parent <sha>`, `tree <sha>`, and one `untracked <path>` line per
+   untracked file that is not ignored; keep all four. The head commit has no ref, and the
+   same working tree and `HEAD` give the same sha. Exit 1 is a refusal (a missing `HEAD`
+   commit, a repo or checked-out submodule with no index file, a sparse checkout,
    skip-worktree or assume-unchanged paths, unmerged paths, a dirty submodule or an
-   untracked nested repository, a Git LFS or program filter, or a path git prints
-   quoted): the script writes one line per reason on stderr, before it writes anything;
-   end the run `blocked` and show those lines. Exit 2 (usage, not a work tree, or a git
-   step failed; one line on stderr) ends the run `blocked` the same way.
+   untracked nested repository, a Git LFS or program filter, or a path git prints quoted):
+   the script writes one line per reason on stderr, before it writes anything; end the run
+   `blocked` and show those lines. Exit 2 (usage, not a work tree, or a git step failed;
+   one line on stderr) ends the run `blocked` the same way.
 
 ### 2. Forge data
 

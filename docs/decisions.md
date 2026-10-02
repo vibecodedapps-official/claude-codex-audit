@@ -499,6 +499,22 @@ The final review of the branch against `main` found 2, both taken:
    ignore rule. The temporary index is now a copy of the repo's own index (`cp -p`), so
    the head is what `git add -A && git commit` would make.
 
+Later rounds of the same review, each fix shown failing on the old script first, all in
+`working-tree.sh`:
+
+3. A submodule's own clean filter ran inside the recursive `git status` on a same-size
+   edit. The filter scan now covers every checked-out submodule before any status.
+4. A `post-index-change` hook ran during `add -A`; every git call now points
+   `core.hooksPath` at an empty directory. A dirty submodule staged as a rename was a
+   porcelain type 2 record the refusal did not read; status now runs with
+   `--no-renames`.
+5. A driver literally named `set`, `unset`, or `unspecified` was skipped; it is now
+   checked like any other. The skip-worktree and assume-unchanged refusal now runs in
+   every checked-out submodule.
+6. A missing index file let attributes the scan could not see come back from HEAD in a
+   fallback build. A repo or checked-out submodule with no index file is now refused,
+   and the fallback is gone.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
