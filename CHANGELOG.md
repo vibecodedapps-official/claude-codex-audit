@@ -39,6 +39,10 @@ agent-driven cases in `docs/acceptance.md` are still `not run`.
   escape it; Coverage says so. Resume reruns stage 1 when a directly read working-tree
   bundle now has a flagged path, in a submodule too. A sparse checkout is now refused in
   a checked-out submodule too, not only in the top level.
+- `working-tree.sh build` no longer prints git's line-ending warnings on stderr under the
+  default `core.safecrlf`; a repo that sets `core.safecrlf=true` keeps it. Stage 1 treats
+  a stderr line with exit 0 as a warning, not a refusal. The README says that one flagged
+  path makes the bundle an export, where no test runs, and how to clear a flag first.
 - A run started under 0.3.1 and resumed under 0.4.0 reruns from stage 1.
 
 ## 0.3.1 - 2026-10-02

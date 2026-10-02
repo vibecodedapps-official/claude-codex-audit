@@ -365,15 +365,16 @@ c. For each bundle with `head: working-tree`, build its head now, right after th
    assume-unchanged path, which the head holds at its index version (the top level first,
    then each checked-out submodule, its paths with the submodule's prefix); keep every
    line. The head commit has no ref, and the same working tree and `HEAD` give the same
-   sha. Exit 1 is a refusal (a missing `HEAD` commit, a repo or checked-out submodule with
-   no index file, a sparse checkout in the top level or a checked-out submodule, flagged
-   paths the build cannot hold at the index version or cannot check on disk, unmerged
-   paths, a dirty submodule or an untracked nested repository, a Git LFS or program
-   filter, or a path git prints quoted): the script writes one line per reason on
-   stderr, before it writes anything; end the run `blocked` and show those lines. Exit 2
-   (usage, not a work tree, a git step failed, or, after objects are written, a flagged
-   path of the top level is not at its index version in the built tree; one line on
-   stderr) ends the run `blocked` the same way.
+   sha. A line on stderr with exit 0 is a git warning, not a refusal: the run goes on, and
+   it is not shown as a reason. Exit 1 is a refusal (a missing `HEAD` commit, a repo or
+   checked-out submodule with no index file, a sparse checkout in the top level or a
+   checked-out submodule, flagged paths the build cannot hold at the index version or
+   cannot check on disk, unmerged paths, a dirty submodule or an untracked nested
+   repository, a Git LFS or program filter, or a path git prints quoted): the script
+   writes one line per reason on stderr, before it writes anything; end the run
+   `blocked` and show those lines. Exit 2 (usage, not a work tree, a git step failed, or,
+   after objects are written, a flagged path of the top level is not at its index
+   version in the built tree; one line on stderr) ends the run `blocked` the same way.
 
 ### 2. Forge data
 

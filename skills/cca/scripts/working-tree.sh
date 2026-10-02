@@ -440,6 +440,14 @@ build() {
 	idx=$tmp/index
 	# No shared index and no untracked cache may be written into .git.
 	ti='-c core.splitIndex=false -c core.untrackedCache=false'
+	# Under the default core.safecrlf (warn), `add -A` prints one line-ending warning per
+	# converted file on stderr; quiet it. The tree does not change. A repository that sets
+	# core.safecrlf=true keeps it, so `add -A` still fails there (case 8b).
+	sc=$(g config --get core.safecrlf | tr 'A-Z' 'a-z')
+	case $sc in
+	true | yes | on | 1) ;;
+	*) ti="$ti -c core.safecrlf=false" ;;
+	esac
 	cp -p "$(index_file "$top")" "$idx" || die "cannot copy the index"
 	# `mode sha<TAB>path` of each flagged path of the top level, from the copied index the
 	# tree is built from, checked against the tree after `write-tree` and printed as the

@@ -41,6 +41,7 @@
 # 16 a driver named `set`            17 no index file, an ignored tracked file with a filter
 # 18 flagged files in the top level and a submodule, built and listed in scan order
 # 19 a quoted submodule path with a program filter (19a top level, 19b in a submodule)
+# 20 core.autocrlf=true: no line-ending warning on stderr
 #
 # Prints one line per mismatch, then `working-tree test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -792,6 +793,15 @@ for c in a b; do
 		rm -f "$root/filter-ran19"
 	done
 done
+
+# 20. core.autocrlf=true with an LF file: `add -A` would warn on stderr under the default
+# core.safecrlf; the build quiets it, so stderr stays empty on exit 0.
+case_id="case 20"
+fresh
+git -C "$A" config core.autocrlf true
+printf 'one\ntwo\n' > "$A/notes/lf.txt"
+run build "$A"
+expect "case 20" 0 "head 439a2d83c3ce4f770ac61cd88234e4176e51027f\nparent 0c23936980b254c4abd489d3ecfd296f5e7bc0db\ntree b2943d241184d80d26a88e5e3534be7989c52dc0\nuntracked notes/deactivate-draft.txt\nuntracked notes/lf.txt\n" ''
 
 if [ "$bad" -gt 0 ]; then
 	exit 1

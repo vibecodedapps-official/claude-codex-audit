@@ -469,9 +469,13 @@ report's Coverage says so, and lists the files untracked at audit time. A skip-w
 assume-unchanged path is built at its index version, whatever its file on disk holds; the
 brief and Coverage list it as flagged, and agents read the bundle from an export of its
 head, never the local file (a flagged path in a submodule is absent from the export, as
-every submodule path is). The read-only check does not compare a flagged file's content,
-so a change to one during the run may escape it. The script refuses (exit 1, before it
-writes anything) a repo with no `HEAD` commit, a repo or checked-out submodule with no
+every submodule path is). One flagged path is enough to make the bundle an export, and no
+test runs in an export. If the bundle's tests matter, clear the flag before the run
+(`git update-index --no-skip-worktree <path>`, or `--no-assume-unchanged <path>`); the
+head then holds that file's local content, so leave the flag on a file such as local
+credentials. The read-only check does not compare a flagged file's content, so a change
+to one during the run may escape it. The script refuses (exit 1, before it writes
+anything) a repo with no `HEAD` commit, a repo or checked-out submodule with no
 index file, a sparse checkout in the top level or a checked-out submodule, flagged paths
 the build cannot hold at the index version (a flagged submodule or intent-to-add entry, a
 path that is a directory on disk or lies under a symlink or a file, or a path git prints
