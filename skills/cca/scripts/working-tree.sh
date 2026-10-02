@@ -46,6 +46,11 @@
 # nothing, so git stores the file as is. Git LFS is always refused. When a filter reason
 # holds, `git status` is not run, since it would run the filter, so the two submodule and
 # nested repository reasons are then not reported.
+# The filter scan covers the top level and then each checked-out submodule (a gitlink whose
+# directory holds a .git), depth first, each with its own paths, attributes, and config,
+# before any `git status`, which would run a submodule's filter on a modified file. A
+# path in a submodule carries its prefix (`sub/x.dat`). One LFS line (the first path found
+# overall), and one filter line per driver and repository (its first path).
 #
 # Output, exit 0, on stdout:
 #   head <sha>
@@ -100,12 +105,40 @@ g() {
 	git -c core.quotePath=false -c core.fsmonitor=false -C "$top" "$@" < /dev/null
 }
 
-# cfgset <key>: success when the key is set in any scope.
+# gd <dir> <git args>: git in a directory, quoting only the paths git must quote.
+gd() {
+	gd_dir=$1
+	shift
+	git -c core.quotePath=false -c core.fsmonitor=false -C "$gd_dir" "$@" < /dev/null
+}
+
+# cfgset <dir> <key>: success when the key is set in any scope of the repository in <dir>.
 cfgset() {
-	g config --get "$1" > /dev/null
+	gd "$1" config --get "$2" > /dev/null
 	cs_rc=$?
-	[ "$cs_rc" -le 1 ] || die "git config failed: $1"
+	[ "$cs_rc" -le 1 ] || die "git config failed: $2"
 	[ "$cs_rc" -eq 0 ]
+}
+
+# list_repos <dir> <prefix>: append `<dir><TAB><prefix>` to $tmp/repos for the repository
+# in <dir>, then for each checked-out submodule of it (a gitlink whose directory holds a
+# .git), depth first, in `ls-files` order. The prefix is the path from the top level, with
+# a trailing slash, or empty.
+list_repos() {
+	printf '%s\t%s\n' "$1" "$2" >> "$tmp/repos"
+	lr=$((lr + 1))
+	lrf=$tmp/subs.$lr
+	gd "$1" ls-files -s > "$lrf.raw" || die "git ls-files failed${2:+ in $2}"
+	awk '$1 == "160000" { print substr($0, index($0, "\t") + 1) }' "$lrf.raw" > "$lrf" ||
+		die "awk failed"
+	while IFS= read -r lrs; do
+		case $lrs in
+		'"'*) continue ;;
+		esac
+		if [ -e "$1/$lrs/.git" ]; then
+			list_repos "$1/$lrs" "$2$lrs/"
+		fi
+	done < "$lrf"
 }
 
 # build <build|check> <repo>
@@ -159,33 +192,45 @@ build() {
 		printf '%s\n' "working-tree: refused: unmerged paths, first $line" > "$r/4"
 	fi
 
-	# The paths a build would add, and the driver of each. Quoted paths are refused (9).
-	g ls-files --cached --others --exclude-standard > "$tmp/paths" ||
-		die "git ls-files failed"
-	git -c core.quotePath=false -c core.fsmonitor=false -C "$top" check-attr --stdin filter < "$tmp/paths" > "$tmp/attr" ||
-		die "git check-attr failed"
-	# 7 and 8. `driver<TAB>path` for the first path of each driver, in first-seen order.
-	awk '
-		{
-			n = split($0, f, " ")
-			v = f[n]
-			if (v == "unspecified" || v == "unset" || v == "set") next
-			if (!(v in seen)) {
-				seen[v] = 1
-				print v "\t" substr($0, 1, length($0) - length(v) - 10)
+	# The paths a build would add, and the driver of each, in the top level and then in
+	# each checked-out submodule, depth first, so no filter can run in a later step. Quoted
+	# paths are refused (9). 7 and 8: Git LFS (the first path found), and a driver whose
+	# `clean` or `process` is set, one line per driver and repository, with the first path.
+	: > "$tmp/repos"
+	lr=0
+	list_repos "$top" ""
+	k=0
+	while IFS=$tab read -r rd rp; do
+		k=$((k + 1))
+		gd "$rd" ls-files --cached --others --exclude-standard > "$tmp/paths.$k" ||
+			die "git ls-files failed${rp:+ in $rp}"
+		git -c core.quotePath=false -c core.fsmonitor=false -C "$rd" check-attr --stdin filter \
+			< "$tmp/paths.$k" > "$tmp/attr" || die "git check-attr failed${rp:+ in $rp}"
+		# `driver<TAB>path` for the first path of each driver, in first-seen order.
+		awk '
+			{
+				n = split($0, f, " ")
+				v = f[n]
+				if (v == "unspecified" || v == "unset" || v == "set") next
+				if (!(v in seen)) {
+					seen[v] = 1
+					print v "\t" substr($0, 1, length($0) - length(v) - 10)
+				}
 			}
-		}
-	' "$tmp/attr" > "$tmp/drivers" || die "awk failed"
-	while IFS=$tab read -r drv p; do
-		if [ "$drv" = lfs ]; then
-			printf '%s\n' "working-tree: refused: Git LFS filter on $p" > "$r/7"
-		elif cfgset "filter.$drv.clean" || cfgset "filter.$drv.process"; then
-			printf '%s\n' "working-tree: refused: filter '$drv' runs a program on $p" >> "$r/8"
-		fi
-	done < "$tmp/drivers"
+		' "$tmp/attr" > "$tmp/drivers" || die "awk failed"
+		while IFS=$tab read -r drv p; do
+			if [ "$drv" = lfs ]; then
+				[ -s "$r/7" ] ||
+					printf '%s\n' "working-tree: refused: Git LFS filter on $rp$p" > "$r/7"
+			elif cfgset "$rd" "filter.$drv.clean" || cfgset "$rd" "filter.$drv.process"; then
+				printf '%s\n' "working-tree: refused: filter '$drv' runs a program on $rp$p" >> "$r/8"
+			fi
+		done < "$tmp/drivers"
+	done < "$tmp/repos"
+	paths=$tmp/paths.1
 
 	# 9. a path git prints quoted even with core.quotePath=false.
-	awk '/^"/ { print; exit }' "$tmp/paths" > "$tmp/quoted" || die "awk failed"
+	awk '/^"/ { print; exit }' "$paths" > "$tmp/quoted" || die "awk failed"
 	if [ -s "$tmp/quoted" ]; then
 		IFS= read -r line < "$tmp/quoted"
 		printf '%s\n' "working-tree: refused: unsupported path (git prints it quoted): $line" > "$r/9"

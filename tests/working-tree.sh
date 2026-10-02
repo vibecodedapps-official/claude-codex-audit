@@ -26,6 +26,7 @@
 #  9 not a work tree, and usage errors
 # 10 a staged file that matches an ignore rule   11 no index file
 # 12 `check`: no output and no write, and the same refusal lines as `build`
+# 13 a submodule's own program filter, refused with the submodule prefix
 #
 # Prints one line per mismatch, then `working-tree test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -424,6 +425,30 @@ run check
 expect "case 12, no repo" 2 '' "$usage"
 run check "$base" extra
 expect "case 12, extra argument" 2 '' "$usage"
+
+# 13. a submodule's own clean filter on a modified tracked file: `check` and `build` both
+# refuse before any `git status` could run it, naming the path with the submodule prefix.
+# The marker the filter would create stays absent, and no object is written in either repo.
+case_id="case 13"
+fresh
+add_sub
+printf '*.dat filter=mark\n' > "$A/sub/.gitattributes"
+printf 'data\n' > "$A/sub/x.dat"
+g -C "$A/sub" add .gitattributes x.dat
+g -C "$A/sub" commit -q -m dat
+git -C "$A/sub" config filter.mark.clean "touch '$root/filter-ran13'; cat"
+# A same-size edit: git must hash the file to see the change, so a status in the
+# submodule would run the clean filter.
+printf 'atad\n' > "$A/sub/x.dat"
+n0=$(loose "$A")
+s0=$(loose "$A/sub")
+for mode in check build; do
+	run "$mode" "$A"
+	expect "case 13, $mode" 1 '' "$r filter 'mark' runs a program on sub/x.dat\n"
+	[ "$(loose "$A")" = "$n0" ] || mismatch "case 13, $mode: the object count changed"
+	[ "$(loose "$A/sub")" = "$s0" ] || mismatch "case 13, $mode: the submodule's object count changed"
+	[ ! -e "$root/filter-ran13" ] || mismatch "case 13, $mode: the filter ran"
+done
 
 if [ "$bad" -gt 0 ]; then
 	exit 1
