@@ -25,8 +25,10 @@ have passed; no full multi-agent audit has run yet (see `docs/acceptance.md`).
   is a local clone.
 - For GitHub bundles, `gh` 2.73.0 or later, authenticated, and `jq`. An older `gh` stops
   stage 1 with its "Unknown JSON field" message, because stage 1 asks for the pull
-  requests that close a ticket. `jq` is also what validates `work-items.jsonl`; without
-  it, the report's Coverage says the file was not validated.
+  requests that close a ticket. A bundle repo whose remote for the PR or ticket is an
+  SSH remote on a host other than github.com needs `gh` 2.81.0 or later, unless the id
+  is given as a URL. `jq` is also what validates `work-items.jsonl`; without it, the
+  report's Coverage says the file was not validated.
   For any other forge, or without a forge CLI, supply ticket and thread text as exported files (see Exported forge
   files); the report then says the forge was not queried.
 - `jq` for `/cca:resume --live`, on any forge. Without it, the import stops before it

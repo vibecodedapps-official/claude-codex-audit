@@ -35,6 +35,20 @@
 # - No file under agents/, skills/, commands/ mentions `advisor`, except a line that
 #   forbids it: one matching (no|never|not)( use)?( the)? `?advisor, any case, such as
 #   "no advisor", "never the `advisor`", or "do not use the advisor".
+# - Every gh read in a file under agents/, skills/, or commands/ names its host. In a
+#   backtick span, a `gh pr <sub>` or `gh issue <sub>` command with at least one
+#   argument after <sub> must pass -R or --repo a <host>/<owner>/<repo> value, attached
+#   or separated, or an argument that starts with https:// or http:// or is <url>; a
+#   `gh api` command with at least one argument must pass --hostname. A command may
+#   start anywhere in the span (after a blank, `;`, `|`, `&`, or `(`) and ends at the
+#   next `;`, `|`, `&`, or `)`. A single-quoted argument with no blank, `;`, `|`, `&`,
+#   or `)` in it counts without its quotes; other single-quoted text is ignored. Without
+#   a host, gh uses its default host, which can differ from the bundle's. A span with no
+#   argument, such as "`gh api` calls" or "`gh issue view` has no parent field", is
+#   prose and does not count, nor does an argument that starts with `*`, as in an
+#   allowed-tools pattern. Not checked: a span that runs across lines, and lines inside
+#   ``` fenced code blocks. A self-test runs the check on fixed sample lines first and
+#   fails when its result differs from the expected one; an awk failure also fails.
 #
 # Exit 0 when every check passes. Otherwise print one line per failure and exit 1.
 
@@ -218,6 +232,108 @@ for f in $(listed '^(agents|skills|commands)/'); do
 	tr -d '\r' < "$f" | grep -ni 'advisor' |
 		grep -viE '(no|never|not)( use)?( the)? `?advisor' > "$tmp/grep"
 	hits "$f" "mentions advisor" < "$tmp/grep"
+done
+
+# gh_spans <kind>: read a file on stdin and print `<line>:` once per line that holds a
+# backtick span with a gh command of that kind naming no host. Only spans opened and
+# closed on the same line are read, and lines inside ``` fenced code blocks are skipped.
+# In a span, a single-quoted argument that holds no blank, `;`, `|`, `&`, or `)` loses
+# its quotes; other single-quoted text is blanked. Each command starts at `gh` (at the
+# span's start or after a blank, `;`, `|`, `&`, or `(`) and runs to the next `;`, `|`,
+# `&`, or `)`. Kind repo: `gh pr <sub>` or `gh issue <sub>` with at least one argument
+# after <sub> passes neither -R nor --repo a <host>/<owner>/<repo> value (attached or
+# separated) nor an argument that starts with https:// or http:// or is <url>. Kind api:
+# `gh api` with at least one argument lacks --hostname. An argument that starts with `*`
+# (as in an allowed-tools pattern) does not count. The patterns are string regexes,
+# since BSD awk ends a regex literal at a slash inside a bracket.
+gh_spans() {
+	awk -v kind="$1" '
+		BEGIN {
+			quoted = "\047[^\047]*\047"
+			start = "(^|[ \t;|&(])gh[ \t]"
+			sub_arg = "^gh[ \t]+(pr|issue)[ \t]+[A-Za-z-]+[ \t]+[^ \t*]"
+			api_arg = "^gh[ \t]+api[ \t]+[^ \t*]"
+			repo3 = "[ \t](-R|--repo)[ \t=]*[^ \t/]+/[^ \t/]+/[^ \t/]+"
+			url = "[ \t](https://|http://|<url>([ \t]|$))"
+		}
+		/^[ \t]*```/ { fence = !fence; next }
+		fence { next }
+		{
+			n = split($0, a, "`")
+			bad = 0
+			for (i = 2; i < n; i += 2) {
+				s = a[i]
+				out = ""
+				while (match(s, quoted)) {
+					q = substr(s, RSTART + 1, RLENGTH - 2)
+					if (q == "" || q ~ "[ \t;|&)]") q = "Q"
+					out = out substr(s, 1, RSTART - 1) q
+					s = substr(s, RSTART + RLENGTH)
+				}
+				s = out s
+				while (match(s, start)) {
+					s = substr(s, RSTART)
+					if (substr(s, 1, 2) != "gh") s = substr(s, 2)
+					c = s
+					if (match(c, "[;|&)]")) c = substr(c, 1, RSTART - 1)
+					if (kind == "repo" && c ~ sub_arg && c !~ repo3 && c !~ url) bad = 1
+					if (kind == "api" && c ~ api_arg && !index(c, "--hostname")) bad = 1
+					s = substr(s, 3)
+				}
+			}
+			if (bad) print NR ":"
+		}'
+}
+
+# Self-test of gh_spans on fixed lines, against fixed expected line numbers.
+cat > "$tmp/gh-sample" <<'SAMPLE'
+`gh api` GET calls and `gh issue view` has no parent field
+`gh pr view <n> -R <host>/<owner>/<repo> --json x`
+`gh api --hostname <host> --paginate repos/o/r/pulls/1/comments`
+`gh api --hostname <host> graphql -f query='x y'`
+`gh pr view <id> --json baseRefName`
+`gh pr view 1 -R o/r --json x` and `gh api repos/o/r`
+`gh issue view 1 --repo=o/r`
+`gh api graphql -f a=b`
+`Bash(gh pr view *)` and `Bash(gh api *)`
+`gh issue view <n> --json title`
+`gh pr diff 5 -R o/r`
+`gh pr view 5 -Ro/r`
+`gh api search/issues -f q=x`
+`set -o pipefail; gh api repos/o/r/pulls`
+`gh pr view <url> --json baseRefName`
+`gh pr view https://github.com/o/r/pull/1`
+`gh pr view 5 -Rh/o/r` and `gh issue view 5 --repo=h/o/r`
+`jq . | gh api --hostname h repos/x`
+`gh api --jq '.[] | gh api repos/x' --hostname h repos/o`
+`gh pr` commands
+`x=$(gh api repos/o/r)`
+`ghost api x`
+`gh pr view 7 -R 'github.com/o/r'`
+`gh pr view 'https://github.com/o/r/pull/1' --json url`
+`x` then `gh pr view 5 --json a`
+`gh pr view 5 --jq '.url | test("https://x")'`
+`gh pr view 5 --body x-https://y`
+```sh
+`gh api repos/o/r`
+```
+`gh issue view 5 -R h/o/r`
+SAMPLE
+gh_got=$(gh_spans repo < "$tmp/gh-sample" | tr '\n' ' ')
+[ "$gh_got" = "5: 6: 7: 10: 11: 12: 25: 26: 27: " ] ||
+	fail "tests/lint.sh: gh host self-test, kind repo: got lines $gh_got"
+gh_got=$(gh_spans api < "$tmp/gh-sample" | tr '\n' ' ')
+[ "$gh_got" = "6: 8: 13: 14: 21: " ] ||
+	fail "tests/lint.sh: gh host self-test, kind api: got lines $gh_got"
+
+# Every gh read names its host.
+for f in $(listed '^(agents|skills|commands)/'); do
+	tr -d '\r' < "$f" | gh_spans repo > "$tmp/grep" ||
+		fail "$f: gh host check (repo) did not run"
+	hits "$f" "gh pr or gh issue names no host; pass -R <host>/<owner>/<repo> or a URL" < "$tmp/grep"
+	tr -d '\r' < "$f" | gh_spans api > "$tmp/grep" ||
+		fail "$f: gh host check (api) did not run"
+	hits "$f" "gh api names no host; add --hostname <host>" < "$tmp/grep"
 done
 
 if [ "$fails" -gt 0 ]; then
