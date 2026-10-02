@@ -4,6 +4,7 @@
 #
 # Usage:
 #   sh working-tree.sh build <repo>
+#   sh working-tree.sh check <repo>
 #
 # Portability: POSIX sh (dash, bash, Git Bash), and awk in forms mawk and gawk accept.
 # Every intermediate goes to a file in one temporary directory, removed on every exit, and
@@ -11,12 +12,21 @@
 #
 # build: GIT_DIR, GIT_WORK_TREE, and GIT_INDEX_FILE from the caller are unset first, and
 # every git call runs with GIT_OPTIONAL_LOCKS=0. The commit is built in a temporary index
-# inside the script's own temporary directory: `read-tree HEAD`, `add -A`, `write-tree`,
-# then `commit-tree` with parent HEAD, which is resolved once, first. Author and committer
-# are `cca <cca@example.invalid>`, both dates `@946684800 +0000`, the message
-# `cca: working tree`, `commit-tree` is passed --no-gpg-sign, and fsmonitor is off, so an
-# unchanged working tree and HEAD give the same commit sha. Filters are never disabled:
-# the tree holds what the user's own commit would.
+# inside the script's own temporary directory, a copy (`cp -p`, so its mtime is kept) of
+# the repository's own index, so the tree is what `git add -A && git commit` would make
+# from the user's own index, a file staged with `git add -f` despite an ignore rule
+# included. A repository with no index file starts from `read-tree HEAD` instead. Then
+# `add -A`, `write-tree`, and `commit-tree` with parent HEAD, which is resolved once,
+# first. The git steps that touch the temporary index run with core.splitIndex=false and
+# core.untrackedCache=false, so no shared index or cache lands in .git. Author and
+# committer are `cca <cca@example.invalid>`, both dates `@946684800 +0000`, the message
+# `cca: working tree`, `commit-tree` is passed --no-gpg-sign, and fsmonitor is off, so
+# an unchanged working tree and HEAD give the same commit sha. Filters are never
+# disabled: the tree holds what the user's own commit would.
+#
+# check: runs the refusal checks below and nothing else. It writes nothing (no temporary
+# index, no object) and runs no filter, hook, or program: exit 0 with nothing printed, or
+# exit 1 or 2 as `build` does. `build` runs the same checks first.
 #
 # Refusals: exit 1, on stderr, before any write, one line per reason that holds, in this
 # order. A reason that names a path names the first one.
@@ -45,7 +55,7 @@
 # The only writes outside the temporary directory are the objects `add -A`, `write-tree`,
 # and `commit-tree` put in the repository's object store. The commit has no ref.
 #
-# Exit status:
+# Exit status (`check` prints nothing on stdout and exits 0 where `build` would build):
 #   2  the arguments are wrong, <repo> is not a git work tree, or a git step failed (one
 #      line on stderr; nothing is printed on stdout)
 #   1  a refusal
@@ -79,6 +89,7 @@ die() {
 
 usage() {
 	echo "usage: working-tree.sh build <repo>" >&2
+	echo "       working-tree.sh check <repo>" >&2
 	exit 2
 }
 
@@ -97,8 +108,10 @@ cfgset() {
 	[ "$cs_rc" -eq 0 ]
 }
 
+# build <build|check> <repo>
 build() {
-	repo=$1
+	mode=$1
+	repo=$2
 	top=$(git -C "$repo" rev-parse --show-toplevel 2> /dev/null) ||
 		die "not a git work tree: $repo"
 	r=$tmp/r
@@ -213,13 +226,25 @@ build() {
 		exit 1
 	fi
 
-	# The build, in a temporary index of its own.
+	[ "$mode" = build ] || exit 0
+
+	# The build, in a temporary index of its own, a copy of the repository's index. The
+	# path is absolute or relative to the top level. Without an index file, start from HEAD.
 	idx=$tmp/index
-	GIT_INDEX_FILE=$idx g read-tree "$head" ||
-		die "git read-tree failed"
-	GIT_INDEX_FILE=$idx g add -A || die "git add failed"
-	tree=$(GIT_INDEX_FILE=$idx g write-tree) ||
-		die "git write-tree failed"
+	# No shared index and no untracked cache may be written into .git.
+	ti='-c core.splitIndex=false -c core.untrackedCache=false'
+	real=$(g rev-parse --git-path index) || die "git rev-parse failed"
+	case $real in
+	/* | [A-Za-z]:/*) ;;
+	*) real=$top/$real ;;
+	esac
+	if [ -f "$real" ]; then
+		cp -p "$real" "$idx" || die "cannot copy the index"
+	else
+		GIT_INDEX_FILE=$idx g $ti read-tree "$head" || die "git read-tree failed"
+	fi
+	GIT_INDEX_FILE=$idx g $ti add -A || die "git add failed"
+	tree=$(GIT_INDEX_FILE=$idx g $ti write-tree) || die "git write-tree failed"
 	commit=$(GIT_AUTHOR_NAME=cca GIT_AUTHOR_EMAIL=cca@example.invalid \
 		GIT_AUTHOR_DATE='@946684800 +0000' \
 		GIT_COMMITTER_NAME=cca GIT_COMMITTER_EMAIL=cca@example.invalid \
@@ -240,9 +265,9 @@ build() {
 }
 
 case ${1:-} in
-build)
+build | check)
 	[ $# -eq 2 ] || usage
-	build "$2"
+	build "$1" "$2"
 	;;
 *) usage ;;
 esac

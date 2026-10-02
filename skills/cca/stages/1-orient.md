@@ -85,7 +85,13 @@ step 1c, right after the baseline, for the same reason.
    `HEAD` for a detached head) equals it. Otherwise stop before stage 1:
    `bundle <name>: head working-tree needs <branch> checked out, found <x>`. With a
    manifest `branch` the check runs here; for a GitHub PR bundle without one it runs in
-   section C, step 3, against `headRefName`.
+   section C, step 3, against `headRefName`. Right after that check, for each
+   `head: working-tree` bundle, run
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh check <repo>` with the
+   resolved absolute script path. It runs the refusal checks of step 1c and nothing else:
+   it writes nothing and runs no filter, hook, or program. Exit 1 or 2 stops before
+   stage 1, showing the script's lines (on stderr). The refusals are thus checked before
+   step 1b's baseline, whose `git status` could otherwise run a filter.
 5. Select each audited repo's remote once (bundles, references, and sources of truth);
    every `<remote>` below is this one. For every GitHub PR bundle, however it was
    declared, it is the remote whose URL names the PR's owner and repo
@@ -172,7 +178,8 @@ A claims file may be a handoff, written in the format of
    step 1c builds, and step 1a fetches no head for it. For a GitHub PR, `headRefOid` is
    recorded for information only, and the brief says so when it differs from the local
    `HEAD`. The checked-out branch check of A.4 runs here for a bundle that has no
-   manifest `branch`, against `headRefName`.
+   manifest `branch`, against `headRefName`, and then so does the `working-tree.sh check`
+   of A.4, still before step 1b.
 
 ## D. Run directory, run id, and state files
 
@@ -308,10 +315,11 @@ c. For each bundle with `head: working-tree`, build its head now, right after th
    and the build. Run
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh build <repo>` with the
    resolved absolute script path. It builds a commit from the working tree in a
-   temporary index, so the repo's index, refs, and files are untouched; its only writes
-   to the repo are git objects. Exit 0 prints, on stdout, `head <sha>`, `parent <sha>`,
-   `tree <sha>`, and one `untracked <path>` line per untracked file that is not ignored;
-   keep all four. The head commit has no ref, and the same working tree and `HEAD` give
+   temporary index copied from the repo's own, so the repo's index, refs, and files are
+   untouched, and a file staged despite an ignore rule is kept; its only writes to the
+   repo are git objects. It runs the same refusal checks as A.4's `check` first. Exit 0
+   prints, on stdout, `head <sha>`, `parent <sha>`, `tree <sha>`, and one
+   `untracked <path>` line per untracked file that is not ignored; keep all four. The head commit has no ref, and the same working tree and `HEAD` give
    the same sha. Exit 1 is a refusal (a missing `HEAD` commit, a sparse checkout,
    skip-worktree or assume-unchanged paths, unmerged paths, a dirty submodule or an
    untracked nested repository, a Git LFS or program filter, or a path git prints

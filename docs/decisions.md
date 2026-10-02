@@ -489,6 +489,16 @@ Review findings, by round, and how each was settled:
    so it checks first and exits 1 having changed nothing.
 9. Round 10 found nothing in a full reread of the `live.sh` contract and its tests.
 
+The final review of the branch against `main` found 2, both taken:
+
+1. The stage 1 baseline ran `git status` before `working-tree.sh` refused a program
+   filter, so a clean filter or an fsmonitor hook could run first. `working-tree.sh check`
+   runs the refusals alone, writing nothing, in A.4 and before resume's snapshot, and
+   `readonly.sh` runs its index-reading git calls with fsmonitor off.
+2. Building from `read-tree HEAD` dropped a file staged with `git add -f` despite an
+   ignore rule. The temporary index is now a copy of the repo's own index (`cp -p`), so
+   the head is what `git add -A && git commit` would make.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
@@ -501,6 +511,10 @@ Review findings, by round, and how each was settled:
   `/cca:handoff` writes a handoff.
 - Exact token accounting.
 - A PreToolUse hook that enforces the read-only boundary mechanically.
+- `readonly.sh` takes its snapshots with `git status`, which runs a clean or process
+  filter on a modified file of a dirty checkout, in any audit (found in the 0.3.0 final
+  review; older than 0.3.0). A `head: working-tree` bundle is safe, since its refusals
+  run first. Other repos need a snapshot that never runs a filter.
 - Bounded loading for every agent input (2026-09-30 review). Today the unit is the
   450,000-byte chunk or ledger slice, an ordinary corpus file is read in full, a single
   finding larger than the split threshold is passed whole as an `over threshold` part,

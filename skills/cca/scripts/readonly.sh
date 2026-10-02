@@ -13,7 +13,8 @@
 # snapshot: creates <out prefix>.marker (an empty file, written fresh), then writes six
 # files, each renamed into place only when every part succeeded. Paths are relative to the
 # repository's top level. Every git call runs with GIT_OPTIONAL_LOCKS=0, so none rewrites
-# the repository's index.
+# the repository's index. The calls that read the index run with core.fsmonitor=false, so
+# a configured hook never runs.
 # - .status:  git status --porcelain=v2 --branch --untracked-files=all
 #             --ignore-submodules=none, without its `# branch.ab` line (that follows the
 #             upstream's remote-tracking ref, which .refs records). See nested
@@ -150,7 +151,7 @@ collect() {
 		cpre=$1/
 	fi
 	# --ignore-submodules=none so a configured `ignore` cannot hide a submodule's changes.
-	git -c core.quotePath=false -C "$cdir" status --porcelain=v2 --branch \
+	git -c core.quotePath=false -c core.fsmonitor=false -C "$cdir" status --porcelain=v2 --branch \
 		--untracked-files=all --ignore-submodules=none > "$tmp/st.one" < /dev/null ||
 		die "git status failed${cpre:+ in $1}"
 
@@ -207,7 +208,7 @@ collect() {
 	check_quoted "$tmp/bad"
 
 	# The ignored inventory.
-	git -c core.quotePath=false -C "$cdir" status --porcelain=v2 --ignored \
+	git -c core.quotePath=false -c core.fsmonitor=false -C "$cdir" status --porcelain=v2 --ignored \
 		--untracked-files=all --ignore-submodules=none > "$tmp/st.ign" < /dev/null ||
 		die "git status --ignored failed${cpre:+ in $1}"
 	BADF=$tmp/bad.ign PRE=$cpre RUNPRE=${relrun:+$relrun/} IC=$ic awk '
@@ -230,7 +231,7 @@ collect() {
 
 	# The nested repositories: a checked-out submodule (a gitlink in the index whose
 	# directory has a .git), and an untracked directory that has a .git.
-	git -c core.quotePath=false -C "$cdir" ls-files -s > "$tmp/ls" < /dev/null ||
+	git -c core.quotePath=false -c core.fsmonitor=false -C "$cdir" ls-files -s > "$tmp/ls" < /dev/null ||
 		die "git ls-files failed${cpre:+ in $1}"
 	BADF=$tmp/bad PRE=$cpre awk '
 		BEGIN { badf = ENVIRON["BADF"]; pre = ENVIRON["PRE"] }
@@ -557,7 +558,7 @@ check() {
 			}' "$tmp/groups" > "$tmp/group" || die "awk failed"
 			if [ -s "$tmp/group" ]; then
 				tr '\n' '\0' < "$tmp/group" > "$tmp/cand.nul" || die "tr failed"
-				git -C "$gdir" check-ignore -z --stdin < "$tmp/cand.nul" > "$tmp/ign.nul" 2> /dev/null
+				git -c core.fsmonitor=false -C "$gdir" check-ignore -z --stdin < "$tmp/cand.nul" > "$tmp/ign.nul" 2> /dev/null
 				[ $? -le 1 ] || die "git check-ignore failed"
 				tr '\0' '\n' < "$tmp/ign.nul" |
 					PRE=$gpre awk '{ print ENVIRON["PRE"] $0 }' >> "$tmp/cand.ign" ||

@@ -48,7 +48,11 @@ never loses a finished one. With `--live`, it first imports approved live check 
    `baseRefOid` is not compared, since it is GitHub's cached value. For any other
    bundle, the shas its `branch` and `base` refs resolve to. A bundle with
    `head: working-tree` has no ref for its head, so its head is rebuilt, and the sha
-   printed is the current head: create `<run dir>/tmp/` and run
+   printed is the current head: first run
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh check <repo>`, which
+   writes nothing and runs no filter, hook, or program, so a refusal (exit 1) or exit 2
+   stops resume with its lines before the snapshot's `git status` could run a filter;
+   then create `<run dir>/tmp/` and run
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh snapshot <repo> <run dir> <run dir>/tmp/wt-<name>`,
    then `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh build <repo>` as
    `1-orient.md` step 1c does, then

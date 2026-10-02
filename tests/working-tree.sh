@@ -20,9 +20,12 @@
 # Cases:
 #  1 build on the solo app             2 a second build
 #  3 a tracked file edited             4 commit.gpgSign=true in local config
-#  5 GIT_INDEX_FILE set by the caller  4b core.fsmonitor hook not run  6 refusals (6a to 6l), each with the object count
+#  5 GIT_INDEX_FILE set by the caller  4b core.fsmonitor hook not run
+#  6 refusals (6a to 6l), each with the object count
 #  7 a submodule whose HEAD moved      8 a failed git step (8a, 8b)
 #  9 not a work tree, and usage errors
+# 10 a staged file that matches an ignore rule   11 no index file
+# 12 `check`: no output and no write, and the same refusal lines as `build`
 #
 # Prints one line per mismatch, then `working-tree test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -352,7 +355,7 @@ run build "$A"
 [ "$(idx "$A")" = "$i0" ] || mismatch "case 8b: the index changed"
 
 # 9. a path that is not a git work tree, and usage errors: exit 2, nothing on stdout.
-usage="usage: working-tree.sh build <repo>\n"
+usage="usage: working-tree.sh build <repo>\n       working-tree.sh check <repo>\n"
 case_id="case 9"
 mkdir "$root/plain"
 run build "$root/plain"
@@ -367,6 +370,60 @@ run build "$base" extra
 expect "case 9, extra argument" 2 '' "$usage"
 run snapshot "$base"
 expect "case 9, unknown mode" 2 '' "$usage"
+
+# 10. a file that matches an ignore rule but is staged (`git add -f`), not committed: the
+# build starts from the repo's own index, so the file is in the built tree.
+case_id="case 10"
+fresh
+mkdir -p "$A/.test-output"
+printf 'staged\n' > "$A/.test-output/keep.txt"
+git -C "$A" add -f .test-output/keep.txt
+i0=$(idx "$A")
+run build "$A"
+expect "case 10" 0 "$(lines 38bd28c7b7222e6064df2e0e4a667ba31bc58f2b 5e0ec0a263096b090c7abdcfcd4c74cd27864dfe)\n" ''
+[ "$(idx "$A")" = "$i0" ] || mismatch "case 10: the index changed"
+n=$(git -C "$A" ls-tree -r --name-only 5e0ec0a263096b090c7abdcfcd4c74cd27864dfe | grep -c '^\.test-output/keep\.txt$')
+[ "$n" = 1 ] || mismatch "case 10: the staged ignored file is not in the tree"
+
+# 11. no index file: the build starts from HEAD, so the head and tree are the case 1 ones.
+# With no index every file is untracked, so the untracked list is every file.
+case_id="case 11"
+fresh
+rm "$A/.git/index"
+run build "$A"
+expect "case 11" 0 "head $head1\nparent $parent\ntree $tree1\nuntracked .gitignore\nuntracked README.md\nuntracked data/users.csv\nuntracked migrations/001_create_users.sh\nuntracked migrations/002_add_status.sh\nuntracked notes/deactivate-draft.txt\nuntracked run-tests.sh\nuntracked src/users.sh\nuntracked tests/test_users.sh\n" ''
+[ ! -e "$A/.git/index" ] || mismatch "case 11: an index file was written"
+
+# 12. `check`: the refusal checks only. Nothing is printed and nothing is written for a
+# repo that would build; a refusal gives the lines `build` gives, no program runs, and the
+# object count is unchanged.
+case_id="case 12"
+fresh
+n0=$(loose "$A")
+run check "$A"
+expect "case 12, clean" 0 '' ''
+[ "$(loose "$A")" = "$n0" ] || mismatch "case 12, clean: the object count changed"
+printf '*.bin filter=lfs diff=lfs merge=lfs -text\n' > "$A/.gitattributes"
+printf 'binary\n' > "$A/a.bin"
+n0=$(loose "$A")
+run check "$A"
+expect "case 12, lfs" 1 '' "$r Git LFS filter on a.bin\n"
+[ "$(loose "$A")" = "$n0" ] || mismatch "case 12, lfs: the object count changed"
+fresh
+printf '*.dat filter=mark\n' > "$A/.gitattributes"
+printf 'data\n' > "$A/x.dat"
+git -C "$A" config filter.mark.clean "touch '$root/filter-ran12'; cat"
+n0=$(loose "$A")
+run check "$A"
+expect "case 12, filter driver" 1 '' "$r filter 'mark' runs a program on x.dat\n"
+[ "$(loose "$A")" = "$n0" ] || mismatch "case 12, filter driver: the object count changed"
+[ ! -e "$root/filter-ran12" ] || mismatch "case 12: the filter ran"
+run check "$root/plain"
+expect "case 12, not a work tree" 2 '' "working-tree: not a git work tree: $root/plain\n"
+run check
+expect "case 12, no repo" 2 '' "$usage"
+run check "$base" extra
+expect "case 12, extra argument" 2 '' "$usage"
 
 if [ "$bad" -gt 0 ]; then
 	exit 1
