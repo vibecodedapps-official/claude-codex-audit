@@ -38,20 +38,30 @@
 #   working-tree: refused: no HEAD commit
 #   working-tree: refused: no index file in <path>
 #   working-tree: refused: sparse checkout is on
-#   working-tree: refused: <n> paths are skip-worktree or assume-unchanged, first <path>
+#   working-tree: refused: sparse checkout is on in <path>
+#   working-tree: refused: <n> flagged paths cannot be held at the index version, first <path>
 #   working-tree: refused: unmerged paths, first <path>
 #   working-tree: refused: submodule <path> has uncommitted changes or untracked files
 #   working-tree: refused: untracked nested repository <path>
 #   working-tree: refused: Git LFS filter on <path>
 #   working-tree: refused: filter '<driver>' runs a program on <path>
 #   working-tree: refused: unsupported path (git prints it quoted): <path>
-# A skip-worktree path missing on disk would read as a deletion. A dirty submodule's
-# files, and an untracked nested repository's commits, are not in the parent's tree. A
-# filter driver with a `clean` or `process` command in any config scope runs a program
-# inside `add -A`, which may write or reach a service. A driver with neither key runs
-# nothing, so git stores the file as is. Git LFS is always refused. When a filter reason
-# holds, `git status` is not run, since it would run the filter, so the two submodule and
-# nested repository reasons are then not reported.
+# A flagged path (skip-worktree or assume-unchanged, `ls-files -v` tag S, h, or s) is
+# held at its index version: the build copies the index with its flags, so `add -A`
+# leaves the entry alone whether the file is edited or missing on disk. Five cases break
+# that or cannot be verified, so they are refused: a flagged gitlink hides the submodule
+# from the parent's `git status`, so the dirty submodule reason would not see it;
+# `write-tree` leaves out an intent-to-add entry; when the path is a directory on disk
+# (not a symlink), or a leading component of it is a symlink or anything but a directory,
+# `add -A` adds what is on disk and drops the flagged entry; and a path git prints quoted
+# cannot be tested on disk, so it is an unverifiable quoted path (a quoted file in a
+# checked-out submodule is not refused as a quoted path). A dirty submodule's files, and
+# an untracked nested repository's commits, are not in the parent's tree. A filter driver
+# with a `clean` or `process` command in any config scope runs a program inside `add -A`,
+# which may write or reach a service. A driver with neither key runs nothing, so git
+# stores the file as is. Git LFS is always refused. When a filter reason holds,
+# `git status` is not run, since it would run the filter, so the two submodule and nested
+# repository reasons are then not reported.
 # The filter scan covers the top level and then each checked-out submodule (a gitlink whose
 # directory holds a .git), depth first, each with its own paths, attributes, and config,
 # before any `git status`, which would run a submodule's filter on a modified file. A
@@ -66,15 +76,23 @@
 # `git status`. It is not checked without a HEAD commit. A submodule path git quotes, at
 # any depth, is never scanned, so it is refused as a quoted path (the top level's first
 # quoted path first, else the first such submodule, with its prefix) and also skips
-# `git status`, which would recurse into it. The skip-worktree and assume-unchanged
-# check also runs in every checked-out submodule: the count is summed over the
-# repositories, and the first path is the first in scan order, with its prefix.
+# `git status`, which would recurse into it. The sparse checkout check also runs in every
+# checked-out submodule: one line, for the first repository in scan order that has it on,
+# naming a submodule by its path. So does the flagged path check: the count is summed
+# over the repositories, and the first path is the first in scan order, with its prefix.
+# After `write-tree`, each flagged path of the top level must be in the tree with the mode
+# and object of its entry in the copied index, else exit 2 (`working-tree: flagged path
+# <path> is not at its index version in the built tree`); the refusals make this safety
+# net unreachable.
 #
 # Output, exit 0, on stdout:
 #   head <sha>
 #   parent <sha>
 #   tree <sha>
 #   untracked <path>          one per untracked, not ignored file, sorted
+#   flagged <path>            one per flagged path, held at its index version, in scan
+#                             order (the top level, then each checked-out submodule depth
+#                             first, each in `ls-files` order), with the submodule prefix
 # The only writes outside the temporary directory are the objects `add -A`, `write-tree`,
 # and `commit-tree` put in the repository's object store. The commit has no ref.
 #
@@ -179,6 +197,27 @@ list_repos() {
 	done < "$lrf"
 }
 
+# held_on_disk <dir> <path>: success when `add -A` keeps the flagged <path> of the
+# repository in <dir> at its index entry, as far as the disk goes: no leading component is
+# a symlink or exists as anything but a directory, and the path is not a directory (a
+# symlink is not). A missing component or path is held.
+held_on_disk() {
+	hd_rest=$2
+	hd_pre=$1
+	while :; do
+		case $hd_rest in
+		*/*) ;;
+		*) break ;;
+		esac
+		hd_pre=$hd_pre/${hd_rest%%/*}
+		hd_rest=${hd_rest#*/}
+		if [ -h "$hd_pre" ] || { [ -e "$hd_pre" ] && [ ! -d "$hd_pre" ]; }; then
+			return 1
+		fi
+	done
+	[ -h "$1/$2" ] || [ ! -d "$1/$2" ]
+}
+
 # build <build|check> <repo>
 build() {
 	mode=$1
@@ -199,16 +238,20 @@ build() {
 		echo "working-tree: refused: no HEAD commit" > "$r/1"
 	fi
 
-	# 2. sparse checkout.
-	if [ "$(g config --bool --get core.sparseCheckout 2> /dev/null)" = true ]; then
-		echo "working-tree: refused: sparse checkout is on" > "$r/2"
-	fi
-
 	# The top level, then each checked-out submodule, depth first.
 	: > "$tmp/repos"
 	: > "$tmp/qsubs"
 	lr=0
 	list_repos "$top" ""
+
+	# 2. sparse checkout, in the first repository in scan order that has it on.
+	while IFS=$tab read -r rd rp; do
+		if [ "$(gd "$rd" config --bool --get core.sparseCheckout 2> /dev/null)" = true ]; then
+			sp=${rp%/}
+			printf '%s\n' "working-tree: refused: sparse checkout is on${sp:+ in $sp}" > "$r/2"
+			break
+		fi
+	done < "$tmp/repos"
 
 	# 1b. no index file in the top level or a checked-out submodule: a checked-out
 	# repository always has one, and the build copies it. Written after the HEAD line, and
@@ -222,30 +265,85 @@ build() {
 		fi
 	done < "$tmp/repos"
 
-	# 3. skip-worktree or assume-unchanged paths, in every repository: `ls-files -v` tags
-	# S, h, and s. The count is summed, and the first path is the first in scan order.
+	# 3. skip-worktree or assume-unchanged paths (`ls-files -v` tags S, h, and s) the build
+	# cannot hold at the index version, in every repository: a gitlink, an intent-to-add
+	# entry, a directory on disk, a leading component on disk that is a symlink or not a
+	# directory, or a path git prints quoted, which cannot be tested. An intent-to-add path
+	# is one with a `diff-index --cached --name-status` line in the --ita-visible-in-index
+	# run or the --ita-invisible-in-index run that the other run lacks; it reads no work
+	# tree and runs no filter, and it is read only for a repository with a HEAD commit and
+	# a flagged entry whose object is the empty blob. The count is summed, and
+	# the first path is the first in scan order. Every flagged path of a submodule goes to
+	# $tmp/flagged for the output; the top level's are read from the copied index.
 	nflag=0
 	firstflag=
+	: > "$tmp/flagged"
 	while IFS=$tab read -r rd rp; do
-		gd "$rd" ls-files -v > "$tmp/lsv" || die "git ls-files failed${rp:+ in $rp}"
-		PRE=$rp awk '
+		gd "$rd" ls-files -s -v > "$tmp/lsv" || die "git ls-files failed${rp:+ in $rp}"
+		# The flagged entries, each line as `ls-files -s -v` prints it:
+		# `tag mode sha stage<TAB>path`.
+		awk '
 			{
-				c = substr($0, 1, 1)
-				if (c == "S" || c == "h" || c == "s") {
-					n++
-					if (n == 1) p = substr($0, 3)
-				}
+				t = substr($0, 1, 1)
+				if (t == "S" || t == "h" || t == "s") print
 			}
-			END { if (n > 0) print n "\t" ENVIRON["PRE"] p }
-		' "$tmp/lsv" > "$tmp/flags" || die "awk failed"
-		if [ -s "$tmp/flags" ]; then
-			IFS=$tab read -r fn fp < "$tmp/flags"
-			[ "$nflag" -gt 0 ] || firstflag=$fp
-			nflag=$((nflag + fn))
+		' "$tmp/lsv" > "$tmp/flagv" || die "awk failed"
+		[ -s "$tmp/flagv" ] || continue
+		# Every intent-to-add entry has the empty blob as its object (SHA-1 or SHA-256), so
+		# a repository without one among its flagged entries needs no `diff-index`.
+		: > "$tmp/itai"
+		: > "$tmp/itav"
+		awk '
+			$3 == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391" ||
+			$3 == "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813" { print; exit }
+		' "$tmp/flagv" > "$tmp/emptyb" || die "awk failed"
+		if [ -s "$tmp/emptyb" ] && fh=$(gd "$rd" rev-parse --verify -q 'HEAD^{commit}'); then
+			gd "$rd" diff-index --cached --name-status --no-renames --ita-invisible-in-index \
+				"$fh" -- > "$tmp/itai" || die "git diff-index failed${rp:+ in $rp}"
+			gd "$rd" diff-index --cached --name-status --no-renames --ita-visible-in-index \
+				"$fh" -- > "$tmp/itav" || die "git diff-index failed${rp:+ in $rp}"
 		fi
+		# `kind<TAB>path` per flagged entry: g a gitlink, i intent-to-add, else d (test on
+		# disk). A path is intent-to-add when a `status<TAB>path` line of one run is not
+		# among the other run's lines, in either direction: an entry HEAD lacks prints `A`
+		# only when visible; one over a tracked file prints `M` visible and `D` invisible;
+		# one over a tracked empty file of the same mode prints only `D`, invisible. A path
+		# staged otherwise prints the same line in both runs.
+		awk '
+			FILENAME == ARGV[1] { inv[$0] = 1; next }
+			FILENAME == ARGV[2] {
+				vis[$0] = 1
+				if (!($0 in inv)) ita[substr($0, index($0, "\t") + 1)] = 1
+				next
+			}
+			!done {
+				for (l in inv)
+					if (!(l in vis)) ita[substr(l, index(l, "\t") + 1)] = 1
+				done = 1
+			}
+			{
+				p = substr($0, index($0, "\t") + 1)
+				k = "d"
+				if ($2 == "160000") k = "g"
+				else if (p in ita) k = "i"
+				print k "\t" p
+			}
+		' "$tmp/itai" "$tmp/itav" "$tmp/flagv" > "$tmp/flags" || die "awk failed"
+		while IFS=$tab read -r fk fp; do
+			[ -z "$rp" ] || printf '%s%s\n' "$rp" "$fp" >> "$tmp/flagged"
+			# A quoted path cannot be tested on disk, so it is not held.
+			if [ "$fk" = d ]; then
+				case $fp in
+				'"'*) ;;
+				*) held_on_disk "$rd" "$fp" && continue ;;
+				esac
+			fi
+			[ "$nflag" -gt 0 ] || firstflag=$rp$fp
+			nflag=$((nflag + 1))
+		done < "$tmp/flags"
 	done < "$tmp/repos"
 	if [ "$nflag" -gt 0 ]; then
-		printf '%s\n' "working-tree: refused: $nflag paths are skip-worktree or assume-unchanged, first $firstflag" > "$r/3"
+		printf '%s\n' "working-tree: refused: $nflag flagged paths cannot be held at the index version, first $firstflag" > "$r/3"
 	fi
 
 	# 4. unmerged paths.
@@ -343,8 +441,45 @@ build() {
 	# No shared index and no untracked cache may be written into .git.
 	ti='-c core.splitIndex=false -c core.untrackedCache=false'
 	cp -p "$(index_file "$top")" "$idx" || die "cannot copy the index"
+	# `mode sha<TAB>path` of each flagged path of the top level, from the copied index the
+	# tree is built from, checked against the tree after `write-tree` and printed as the
+	# top level's `flagged` lines. The refusals (3) should make a mismatch unreachable;
+	# this is a safety net.
+	GIT_INDEX_FILE=$idx g $ti ls-files -s -v > "$tmp/lsc" || die "git ls-files failed"
+	awk '
+		{
+			t = substr($0, 1, 1)
+			if (t == "S" || t == "h" || t == "s")
+				print $2 " " $3 "\t" substr($0, index($0, "\t") + 1)
+		}
+	' "$tmp/lsc" > "$tmp/held" || die "awk failed"
 	GIT_INDEX_FILE=$idx g $ti add -A || die "git add failed"
 	tree=$(GIT_INDEX_FILE=$idx g $ti write-tree) || die "git write-tree failed"
+	if [ -s "$tmp/held" ]; then
+		g ls-tree -r "$tree" > "$tmp/lstree" || die "git ls-tree failed"
+		# The first recorded path whose `mode sha` the tree does not hold.
+		awk '
+			NR == FNR {
+				i = index($0, "\t")
+				want[substr($0, i + 1)] = substr($0, 1, i - 1)
+				order[++n] = substr($0, i + 1)
+				next
+			}
+			{
+				i = index($0, "\t")
+				split(substr($0, 1, i - 1), e, " ")
+				have[substr($0, i + 1)] = e[1] " " e[3]
+			}
+			END {
+				for (j = 1; j <= n; j++)
+					if (have[order[j]] != want[order[j]]) { print order[j]; exit }
+			}
+		' "$tmp/held" "$tmp/lstree" > "$tmp/notheld" || die "awk failed"
+		if [ -s "$tmp/notheld" ]; then
+			IFS= read -r line < "$tmp/notheld"
+			die "flagged path $line is not at its index version in the built tree"
+		fi
+	fi
 	commit=$(GIT_AUTHOR_NAME=cca GIT_AUTHOR_EMAIL=cca@example.invalid \
 		GIT_AUTHOR_DATE='@946684800 +0000' \
 		GIT_COMMITTER_NAME=cca GIT_COMMITTER_EMAIL=cca@example.invalid \
@@ -359,6 +494,9 @@ build() {
 		echo "parent $head"
 		echo "tree $tree"
 		sed 's/^/untracked /' "$tmp/untracked.sorted"
+		# The top level's from the copied index, then the submodules' from step 3.
+		awk '{ print "flagged " substr($0, index($0, "\t") + 1) }' "$tmp/held" &&
+			sed 's/^/flagged /' "$tmp/flagged"
 	} > "$tmp/final" || die "cannot write the output"
 	cat "$tmp/final"
 	exit 0

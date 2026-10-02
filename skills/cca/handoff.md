@@ -157,6 +157,10 @@ These rules are for the writer (`/cca:handoff`, or a person writing one by hand)
 
 - Write from the record only: the commit bodies, the forge fields and comments, and the
   session's own checkpoint record. Never invent an option, a reason, or an owner.
+- `parent` and `links` come only from the forge record: an export's `links` (and its
+  parent link, or a parent in `fields`), or for a GitHub ticket its parent read and the
+  pull requests that close it. Never infer them from PR or commit text. The handoff and
+  the hygiene check, which reads the same forge data, cannot disagree.
 - Where the record shows no alternative was weighed, write `options: none recorded`, and
   for a taken decision `status: default taken`. Keep a deferral's status: a deferred
   decision stays `deferred` or `deferred to <owner>`.

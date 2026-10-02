@@ -360,15 +360,20 @@ c. For each bundle with `head: working-tree`, build its head now, right after th
    index copied from the repo's own, so the repo's index, refs, and files are untouched,
    and a file staged despite an ignore rule is kept; its only writes to the repo are git
    objects. It runs the same refusal checks as A.4's `check` first. Exit 0 prints, on
-   stdout, `head <sha>`, `parent <sha>`, `tree <sha>`, and one `untracked <path>` line per
-   untracked file that is not ignored; keep all four. The head commit has no ref, and the
-   same working tree and `HEAD` give the same sha. Exit 1 is a refusal (a missing `HEAD`
-   commit, a repo or checked-out submodule with no index file, a sparse checkout,
-   skip-worktree or assume-unchanged paths, unmerged paths, a dirty submodule or an
-   untracked nested repository, a Git LFS or program filter, or a path git prints quoted):
-   the script writes one line per reason on stderr, before it writes anything; end the run
-   `blocked` and show those lines. Exit 2 (usage, not a work tree, or a git step failed;
-   one line on stderr) ends the run `blocked` the same way.
+   stdout, `head <sha>`, `parent <sha>`, `tree <sha>`, one `untracked <path>` line per
+   untracked file that is not ignored, and one `flagged <path>` line per skip-worktree or
+   assume-unchanged path, which the head holds at its index version (the top level first,
+   then each checked-out submodule, its paths with the submodule's prefix); keep every
+   line. The head commit has no ref, and the same working tree and `HEAD` give the same
+   sha. Exit 1 is a refusal (a missing `HEAD` commit, a repo or checked-out submodule with
+   no index file, a sparse checkout in the top level or a checked-out submodule, flagged
+   paths the build cannot hold at the index version or cannot check on disk, unmerged
+   paths, a dirty submodule or an untracked nested repository, a Git LFS or program
+   filter, or a path git prints quoted): the script writes one line per reason on
+   stderr, before it writes anything; end the run `blocked` and show those lines. Exit 2
+   (usage, not a work tree, a git step failed, or, after objects are written, a flagged
+   path of the top level is not at its index version in the built tree; one line on
+   stderr) ends the run `blocked` the same way.
 
 ### 2. Forge data
 
@@ -493,10 +498,15 @@ pinned sha, decide how agents read it:
    or assume-unchanged). Agents read the
    checkout and search per the direct-read rules in `common.md`. A bundle with
    `head: working-tree` is direct when `git -C <repo> rev-parse HEAD` is the `parent`
-   sha step 1c printed and no path is flagged `S`, `h`, or `s`; its modified and
-   untracked files are part of the head, so the status condition does not apply. Its
-   mode in the brief is `direct (working tree)`, and agents search it with
-   `git -C <repo> grep <pattern> <head sha>` (`common.md`).
+   sha step 1c printed and step 1c printed no `flagged` line, which covers the
+   checked-out submodules too; its modified and untracked files are part of the head, so
+   the status condition does not apply. Its mode in the brief is
+   `direct (working tree)`, and agents search it with
+   `git -C <repo> grep <pattern> <head sha>` (`common.md`). A working-tree bundle with a
+   `flagged` line is read from an export of its head, which holds the untracked files
+   too and the flagged paths at their index version, never the local flagged files. A
+   flagged path in a checked-out submodule is pinned by the submodule's commit and absent
+   from the export, as every submodule path is.
 2. **Export**: otherwise. First size it: the sum of blob sizes from
    `git -C <repo> ls-tree -r -l --full-tree <sha>`. Over 1 GB (1,073,741,824 bytes),
    ask the user first and record the answer in `approvals` with kind
@@ -686,6 +696,8 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
    head and the pinned base; a `head: working-tree` bundle also gets its `parent` sha, its
    `tree` sha, that the head is a built commit with no ref, the files "untracked at audit
    time" one per line (part of the head, but possibly left out of the user's own commit),
+   the paths "flagged at audit time, held at the index version" one per line, from
+   step 1c's `flagged` lines (the head holds the index version, not the local file),
    the groups note of step 8, and for a GitHub PR the `headRefOid` and, when it differs
    from the local `HEAD`, a line saying so); Combined state; Sources of truth (the order
    used, each with its sha and class, and whether it replaced the default); References

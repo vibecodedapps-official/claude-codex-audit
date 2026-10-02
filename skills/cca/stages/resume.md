@@ -71,7 +71,7 @@ never loses a finished one. With `--live`, it first imports approved live check 
    then create `<run dir>/tmp/` and run
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh snapshot <repo> <run dir> <run dir>/tmp/wt-<name>`,
    then `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh build <repo>` as
-   `1-orient.md` step 1c does, then
+   `1-orient.md` step 1c does, keeping its `flagged` lines for step 6, then
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh check <repo> <run dir> <run dir>/tmp/wt-<name> <run dir>/tmp/wt-<name> <run dir>/tmp/wt-<name>-check`
    (resolved absolute script paths). A `blocked` line (exit 1) or exit 2 from the check
    stops resume, so the build cannot leave a change that the baseline of step 8 would
@@ -197,8 +197,12 @@ never loses a finished one. With `--live`, it first imports approved live check 
      `git -C <repo> --no-optional-locks status --porcelain --untracked-files=no` is not
      empty, or `git -C <repo> ls-files -v` shows a path flagged `S`, `h`, or `s`. For a
      tree the brief maps as `direct (working tree)`, the condition is instead that
-     `git -C <repo> rev-parse HEAD` is the recorded `head_parent` and no path is flagged
-     `S`, `h`, or `s`. Rerunning stage 1 re-exports it.
+     `git -C <repo> rev-parse HEAD` is the recorded `head_parent` and step 3's rebuild
+     printed no `flagged` line, so a path flagged since, in a checked-out submodule too,
+     reruns stage 1. Rerunning stage 1 re-exports it;
+   - stage 1, for a `head: working-tree` bundle in any mode, `export` included, when the
+     `flagged` lines of step 3's rebuild differ from the paths the brief lists as flagged
+     at audit time, so the brief, Coverage, and the check labels never miss one.
    A `not_applicable` stage whose inputs have not changed is reused. When the first
    stage to rerun is not 1, or nothing needs a rerun, remove every
    `forge/<bundle>/pr.json.new` now. When nothing needs a rerun and no `--from` was

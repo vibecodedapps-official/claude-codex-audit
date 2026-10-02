@@ -117,8 +117,14 @@ and the sha it is pinned at.
   Search it only with `git -C <repo> grep <pattern> <head sha>`, never with `rg` over
   `git ls-files`, which misses the untracked files. The files the brief lists as
   untracked at audit time are part of the head and valid evidence, cited at the head sha
-  as `repo@sha:path:line`; an ignored or outside path is still invalid.
+  as `repo@sha:path:line`; an ignored or outside path is still invalid. When the brief
+  lists a path as flagged at audit time, the bundle is read from an export of its head
+  instead (mode `export`), which holds the untracked files too and each flagged path at
+  its index version, not the local file. A flagged path in a submodule is absent, as
+  every submodule path is.
 - **Exported tree** (`<run dir>/trees/<name>/`): tracked files only, at the pinned sha.
+  The export of a working-tree bundle's head also holds the files the brief lists as
+  untracked at audit time, which are valid evidence as the item above says.
   A symlink is a regular file holding its target; do not resolve it. Submodules are
   listed in the brief and absent. Git LFS files are their pointer files. Cite as
   `repo@sha:path:line` with the repo-relative path, not the export path. No test or lint

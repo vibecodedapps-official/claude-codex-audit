@@ -182,8 +182,11 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
          ref, refresh declined" line;
        - each `head: working-tree` bundle: the loose objects `working-tree.sh build`
          wrote to the repo's object store (an allowed write), that the head commit has
-         no ref and `git gc` may prune it after its prune window, and the files
-         untracked at audit time (from the brief);
+         no ref and `git gc` may prune it after its prune window, the files
+         untracked at audit time, and the paths flagged at audit time (both from the
+         brief); a flagged path is held at its index version, so its local content is
+         not in the head, and a change to one during the run may escape the read-only
+         check, which does not compare it;
        - stage 6: whether the mandatory ids were requested in batches (`batched`) and,
          from `missing_positions`, every mandatory id left without a position (those
          Codex was asked for and left unanswered after the follow-up, and those of a

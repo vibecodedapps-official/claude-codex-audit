@@ -15,13 +15,23 @@
 # is the parent of every build. The synthetic head and tree are the script's output for
 # the fixture with its one untracked file (notes/deactivate-draft.txt), written down once.
 # Every file the fixture writes is a regular file without the executable bit, and git runs
-# with core.autocrlf unset, so a literal does not depend on the operating system.
+# with core.autocrlf unset, so a literal does not depend on the operating system. The
+# other literals (cases 3, 6o, 7, 10, 18) were written down the same way, once, from a
+# run: every input is pinned (the fixture, the identity and dates of `g`, and the script's
+# own identity and date), so they are the same on every machine too. A flagged path is
+# held at its index version, so a build with flagged paths gives the head and tree of the
+# same repo without the flags and edits (6c, 6d, 6m, 18).
 #
 # Cases:
 #  1 build on the solo app             2 a second build
 #  3 a tracked file edited             4 commit.gpgSign=true in local config
 #  5 GIT_INDEX_FILE set by the caller  4b core.fsmonitor hook not run
-#  6 refusals (6a to 6l), each with the object count
+#  6 refusals (6a, 6b, 6e to 6l; 6n flagged paths the build cannot hold, and 6q sparse
+#    checkout in a submodule, in `check` and `build`), each with the object count;
+#    flagged paths built and listed (6c skip-worktree unedited, edited, deleted; 6d
+#    assume-unchanged edited; 6m a deleted one, and two paths; 6o a file staged then
+#    flagged holds the staged blob; 6p a copy of the script without refusal 3 reaches the
+#    safety net and exits 2)
 #  7 a submodule whose HEAD moved      8 a failed git step (8a, 8b)
 #  9 not a work tree, and usage errors
 # 10 a staged file that matches an ignore rule   11 no index file
@@ -29,7 +39,7 @@
 # 13 a submodule's own program filter, refused with the submodule prefix
 # 14 a repo hook is not run         15 a renamed submodule with a change is refused
 # 16 a driver named `set`            17 no index file, an ignored tracked file with a filter
-# 18 an assume-unchanged file in a submodule
+# 18 flagged files in the top level and a submodule, built and listed in scan order
 # 19 a quoted submodule path with a program filter (19a top level, 19b in a submodule)
 #
 # Prints one line per mismatch, then `working-tree test: ok` when there were none. Exit 0
@@ -243,15 +253,29 @@ git -C "$A" config --unset filter.mark.clean
 run build "$A"
 [ "$rc" = 0 ] || mismatch "case 6b, no clean command: exit $rc, expected 0"
 
+# 6c and 6d are not refusals: a flagged path is held at its index version, so the build
+# gives the case 1 lines plus a `flagged` line. 6c: skip-worktree, unedited, edited, and
+# deleted, with the index unchanged. 6d: assume-unchanged, edited.
 case_id="case 6c"
 fresh
 git -C "$A" update-index --skip-worktree README.md
-refuse "case 6c, skip-worktree" "$A" "$r 1 paths are skip-worktree or assume-unchanged, first README.md\n"
+i0=$(idx "$A")
+run build "$A"
+expect "case 6c, unedited" 0 "$(lines "$head1" "$tree1")\nflagged README.md\n" ''
+printf '%s\n' 'Local edit, not committed.' >> "$A/README.md"
+run build "$A"
+expect "case 6c, edited" 0 "$(lines "$head1" "$tree1")\nflagged README.md\n" ''
+rm "$A/README.md"
+run build "$A"
+expect "case 6c, deleted" 0 "$(lines "$head1" "$tree1")\nflagged README.md\n" ''
+[ "$(idx "$A")" = "$i0" ] || mismatch "case 6c: the index changed"
 
 case_id="case 6d"
 fresh
 git -C "$A" update-index --assume-unchanged src/users.sh
-refuse "case 6d, assume-unchanged" "$A" "$r 1 paths are skip-worktree or assume-unchanged, first src/users.sh\n"
+printf '%s\n' '# Local edit, not committed.' >> "$A/src/users.sh"
+run build "$A"
+expect "case 6d" 0 "$(lines "$head1" "$tree1")\nflagged src/users.sh\n" ''
 
 case_id="case 6e"
 fresh
@@ -316,6 +340,166 @@ fresh
 blob=$(git -C "$A" rev-parse HEAD:README.md)
 git -C "$A" -c core.protectNTFS=false update-index --add --cacheinfo "100644,$blob,notes/a${tab}b"
 refuse "case 6l, quoted tracked path" "$A" "$r unsupported path (git prints it quoted): \"notes/a\\\\tb\"\n"
+
+# 6m. a deleted assume-unchanged file, then a second path flagged skip-worktree and
+# edited: built, one `flagged` line per path in `ls-files` order, and `check` silent.
+case_id="case 6m"
+fresh
+git -C "$A" update-index --assume-unchanged src/users.sh
+rm "$A/src/users.sh"
+run check "$A"
+expect "case 6m, one path, check" 0 '' ''
+run build "$A"
+expect "case 6m, one path" 0 "$(lines "$head1" "$tree1")\nflagged src/users.sh\n" ''
+git -C "$A" update-index --skip-worktree README.md
+printf '%s\n' 'Local edit, not committed.' >> "$A/README.md"
+run check "$A"
+expect "case 6m, two paths, check" 0 '' ''
+run build "$A"
+expect "case 6m, two paths" 0 "$(lines "$head1" "$tree1")\nflagged README.md\nflagged src/users.sh\n" ''
+
+# 6n. a flagged path the build cannot hold at its index version, refused by `check` and
+# `build` with one line and no object written. refuse_both <case> <repo> <stderr>.
+refuse_both() {
+	n0=$(loose "$2")
+	for rb_mode in check build; do
+		run "$rb_mode" "$2"
+		expect "$1, $rb_mode" 1 '' "$3"
+		[ "$(loose "$2")" = "$n0" ] || mismatch "$1, $rb_mode: the object count changed"
+	done
+}
+held="flagged paths cannot be held at the index version, first"
+
+# A flagged file replaced by a directory holding a file.
+case_id="case 6n"
+fresh
+git -C "$A" update-index --skip-worktree README.md
+rm "$A/README.md"
+mkdir "$A/README.md"
+printf 'child\n' > "$A/README.md/child"
+refuse_both "case 6n, a directory" "$A" "$r 1 $held README.md\n"
+
+# A flagged file whose parent directory is replaced by a file.
+fresh
+git -C "$A" update-index --assume-unchanged src/users.sh
+rm -r "$A/src"
+printf 'file\n' > "$A/src"
+refuse_both "case 6n, a file as the parent" "$A" "$r 1 $held src/users.sh\n"
+
+# A flagged intent-to-add entry, which `write-tree` leaves out.
+fresh
+printf 'new\n' > "$A/notes/new.txt"
+git -C "$A" add -N notes/new.txt
+git -C "$A" update-index --skip-worktree notes/new.txt
+refuse_both "case 6n, intent-to-add" "$A" "$r 1 $held notes/new.txt\n"
+
+# A path HEAD tracks, removed from the index and added back as intent-to-add, then
+# flagged: `diff-index` prints its name with and without the intent-to-add entry, only
+# with another status.
+fresh
+git -C "$A" rm -q --cached README.md
+git -C "$A" add -N README.md
+git -C "$A" update-index --skip-worktree README.md
+refuse_both "case 6n, intent-to-add over a tracked path" "$A" "$r 1 $held README.md\n"
+
+# The same over a tracked empty file: the intent-to-add entry has the object and mode
+# HEAD has, so only the run without it prints the path (as a deletion).
+fresh
+: > "$A/notes/empty.txt"
+g -C "$A" add notes/empty.txt
+g -C "$A" commit -q -m empty
+git -C "$A" rm -q --cached notes/empty.txt
+git -C "$A" add -N notes/empty.txt
+git -C "$A" update-index --skip-worktree notes/empty.txt
+refuse_both "case 6n, intent-to-add over a tracked empty file" "$A" "$r 1 $held notes/empty.txt\n"
+
+# A flagged gitlink, which hides the submodule from the parent's status.
+fresh
+add_sub
+git -C "$A" update-index --skip-worktree sub
+refuse_both "case 6n, a gitlink" "$A" "$r 1 $held sub\n"
+
+# A flagged path in a submodule, and then one in the top level too: the count is summed,
+# and the first path is the first in scan order, with its prefix.
+fresh
+add_sub
+printf 'new\n' > "$A/sub/n.txt"
+git -C "$A/sub" add -N n.txt
+git -C "$A/sub" update-index --assume-unchanged n.txt
+refuse_both "case 6n, in a submodule" "$A" "$r 1 $held sub/n.txt\n"
+git -C "$A" update-index --skip-worktree README.md
+rm "$A/README.md"
+mkdir "$A/README.md"
+printf 'child\n' > "$A/README.md/child"
+refuse_both "case 6n, summed" "$A" "$r 2 $held README.md\n"
+
+# A flagged path git prints quoted, in a submodule, where the quoted path refusal does not
+# reach: it cannot be tested on disk, so it is refused. The entry is put in the index
+# without a file, as in 6l, committed in the submodule, and flagged, so it runs on every
+# file system.
+fresh
+add_sub
+blob=$(git -C "$A/sub" rev-parse HEAD:s.txt)
+git -C "$A/sub" -c core.protectNTFS=false update-index --add --cacheinfo "100644,$blob,a${tab}b"
+g -C "$A/sub" commit -q -m tab
+git -C "$A/sub" -c core.protectNTFS=false update-index --skip-worktree "a${tab}b"
+g -C "$A" update-index --cacheinfo "160000,$(g -C "$A/sub" rev-parse HEAD),sub"
+g -C "$A" commit -q -m sub2
+refuse_both "case 6n, a quoted path" "$A" "$r 1 $held sub/\"a\\\\tb\"\n"
+
+# A symlink as a leading component. A file system or git that makes no symlink skips the
+# case, and the skip is printed.
+fresh
+git -C "$A" update-index --skip-worktree src/users.sh
+mv "$A/src" "$A/src.real"
+if ln -s src.real "$A/src" 2> /dev/null && [ -h "$A/src" ]; then
+	refuse_both "case 6n, a symlink as the parent" "$A" "$r 1 $held src/users.sh\n"
+else
+	echo "working-tree test: skipped case 6n, a symlink as the parent: no symlink was made"
+fi
+
+# 6o. a file staged, then flagged skip-worktree, then edited again: built, and the tree
+# holds the staged blob, not the HEAD one or the one on disk.
+case_id="case 6o"
+fresh
+printf '%s\n' 'Staged line.' >> "$A/README.md"
+git -C "$A" add README.md
+git -C "$A" update-index --skip-worktree README.md
+printf '%s\n' 'Edit after the flag.' >> "$A/README.md"
+run build "$A"
+expect "case 6o" 0 "$(lines 674815062fc5c9d1520dc04b1a0036eeff451fc9 b4175eb563d079abe6a8973daf894166c7326d1f)\nflagged README.md\n" ''
+n=$(git -C "$A" ls-tree b4175eb563d079abe6a8973daf894166c7326d1f README.md) || mismatch "case 6o: ls-tree failed"
+[ "$n" = "$(printf '100644 blob cae47f9d255c52d5cb83e25eb2ceea54b66b4a5b\tREADME.md')" ] ||
+	mismatch "case 6o: the tree does not hold the staged blob: $n"
+
+# 6p. the safety net after `write-tree`: a copy of the script with refusal 3's line
+# replaced by `:` builds the 6n directory repo, and the tree check exits 2 with nothing on
+# stdout. A copy equal to the script means the line was not found, which fails the case.
+case_id="case 6p"
+fresh
+git -C "$A" update-index --skip-worktree README.md
+rm "$A/README.md"
+mkdir "$A/README.md"
+printf 'child\n' > "$A/README.md/child"
+sed 's/^.*flagged paths cannot be held at the index version.*"$r\/3"$/:/' "$wt" > "$root/wt-p.sh"
+if cmp -s "$wt" "$root/wt-p.sh"; then
+	mismatch "case 6p: refusal 3's line was not found in the script"
+else
+	wt0=$wt
+	wt=$root/wt-p.sh
+	run build "$A"
+	wt=$wt0
+	expect "case 6p" 2 '' "working-tree: flagged path README.md is not at its index version in the built tree\n"
+fi
+
+# 6q. sparse checkout on in a checked-out submodule, with a path of it skip-worktree:
+# refused like the top level's (6e), naming the submodule.
+case_id="case 6q"
+fresh
+add_sub
+git -C "$A/sub" config core.sparseCheckout true
+git -C "$A/sub" update-index --skip-worktree s.txt
+refuse_both "case 6q, sparse checkout in a submodule" "$A" "$r sparse checkout is on in sub\n"
 
 # 7. a submodule whose HEAD moved but is otherwise clean: built, and the tree records the
 # new commit. The parent is the commit that adds the gitlink, made with the pinned identity.
@@ -536,16 +720,25 @@ for mode in check build; do
 	[ "$(loose "$A")" = "$n0" ] || mismatch "case 17, $mode: the object count changed"
 done
 
-# 18. an assume-unchanged file edited in a submodule: refused, with the submodule prefix.
+# 18. a skip-worktree file edited in the top level and an assume-unchanged file edited in
+# a submodule: `check` silent, and `build` gives the head and tree of the same repo
+# without the flags and edits, then one `flagged` line each, the top level first and the
+# submodule path with its prefix. The parent is case 7's, the commit that adds the gitlink.
 case_id="case 18"
 fresh
 add_sub
+parent=aebccb87d9e1aedcc385077ab8e7fb3c5fdd9d08
+run build "$A"
+expect "case 18, no flags" 0 "$(lines f08748ff8ea56abe2d0bcf8528357b7856f6a17a a6f2db975cb09e816d98b7ffc566a62a93000069)\n" ''
+git -C "$A" update-index --skip-worktree README.md
+printf '%s\n' 'Local edit, not committed.' >> "$A/README.md"
 git -C "$A/sub" update-index --assume-unchanged s.txt
 printf '%s\n' 'edit' >> "$A/sub/s.txt"
-for mode in check build; do
-	run "$mode" "$A"
-	expect "case 18, $mode" 1 '' "$r 1 paths are skip-worktree or assume-unchanged, first sub/s.txt\n"
-done
+run check "$A"
+expect "case 18, check" 0 '' ''
+run build "$A"
+expect "case 18, build" 0 "$(lines f08748ff8ea56abe2d0bcf8528357b7856f6a17a a6f2db975cb09e816d98b7ffc566a62a93000069)\nflagged README.md\nflagged sub/s.txt\n" ''
+parent=0c23936980b254c4abd489d3ecfd296f5e7bc0db
 
 # 19. a checked-out submodule whose path git quotes (a DEL in the name), with its own
 # program filter on a same-size edit: the scan cannot enter it, so it is refused as a

@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `skills/cca/work-items.md` says what `work-items.sh` already enforces: a required
+  top-level string field, `comment_id` included, must not be empty (`set_field`'s
+  `value` may be).
+- "Writing a handoff" in `skills/cca/handoff.md` says `parent` and `links` come only from
+  the forge record, never from PR or commit text, as `/cca:handoff` already did.
+
+### Changed
+
+- A `head: working-tree` bundle whose repo has skip-worktree or assume-unchanged paths is
+  built, not refused. The head holds each flagged path at its index version, whatever
+  its file on disk holds, and `working-tree.sh build` prints one `flagged <path>` line
+  per such path, submodules included. The brief and the report's Coverage list them, and
+  the bundle is read from an export of its head, never from the local files. A flagged
+  path the build cannot hold at its index version is still refused: a flagged submodule
+  or intent-to-add entry, a path that is a directory on disk or lies under a symlink or
+  a file, or a path git prints quoted, which cannot be checked on disk. The read-only
+  check does not compare a flagged file's content, so a change to one during the run may
+  escape it; Coverage says so. Resume reruns stage 1 when a directly read working-tree
+  bundle now has a flagged path, in a submodule too. A sparse checkout is now refused in
+  a checked-out submodule too, not only in the top level.
+
 ## 0.3.1 - 2026-10-02
 
 ### Fixed

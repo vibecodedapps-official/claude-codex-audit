@@ -195,7 +195,10 @@ session.
   declined" in the brief): the base commit list and overlap set are as of that ref.
 - Each `head: working-tree` bundle: the loose objects `working-tree.sh build` wrote to
   the repo's object store (an allowed write), that the head commit has no ref and
-  `git gc` may prune it after its prune window, and the files untracked at audit time.
+  `git gc` may prune it after its prune window, the files untracked at audit time, and
+  the paths flagged at audit time, each held at its index version: its local content is
+  not in the head, and a change to one during the run may escape the read-only check,
+  which does not compare it.
 - Stage 6: whether the mandatory ids were requested in batches (`batched`) and, from
   `missing_positions`, every mandatory id left without a position (those Codex was
   asked for and left unanswered after the follow-up, and those of a fallback batch
