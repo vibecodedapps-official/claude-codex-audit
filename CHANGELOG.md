@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.4.0 - 2026-10-02
+
+Adds `result_file` to `--live` results and builds working-tree bundles that have
+skip-worktree or assume-unchanged paths. No full multi-agent audit has run yet; the
+agent-driven cases in `docs/acceptance.md` are still `not run`.
+
+### Added
+
+- A `--live` entry can give `result_file: <path>` in place of a one-line `result`, so a
+  result that is more than one line, such as the rows a query returns, is kept verbatim.
+  The path is relative to the `--live` file and stays under its directory. `live.sh
+  import` copies each file to `live/results-<k>/<heading line>.txt` and writes
+  `SHA256SUMS` from the copies, committed with the results file. `import`, `active`, and
+  `assemble` stop with a named line when a copy of an active import is missing or no
+  longer matches its hash. The derivation, the second opinion, the late adversary, and
+  the report read the copy, and the report gives its path and hash.
+
+### Fixed
+
+- `skills/cca/work-items.md` says what `work-items.sh` already enforces: a required
+  top-level string field, `comment_id` included, must not be empty (`set_field`'s
+  `value` may be).
+- "Writing a handoff" in `skills/cca/handoff.md` says `parent` and `links` come only from
+  the forge record, never from PR or commit text, as `/cca:handoff` already did.
+
+### Changed
+
+- A `head: working-tree` bundle whose repo has skip-worktree or assume-unchanged paths is
+  built, not refused. The head holds each flagged path at its index version, whatever
+  its file on disk holds, and `working-tree.sh build` prints one `flagged <path>` line
+  per such path, submodules included. The brief and the report's Coverage list them, and
+  the bundle is read from an export of its head, never from the local files. A flagged
+  path the build cannot hold at its index version is still refused: a flagged submodule
+  or intent-to-add entry, a path that is a directory on disk or lies under a symlink or
+  a file, or a path git prints quoted, which cannot be checked on disk. The read-only
+  check does not compare a flagged file's content, so a change to one during the run may
+  escape it; Coverage says so. Resume reruns stage 1 when a directly read working-tree
+  bundle now has a flagged path, in a submodule too. A sparse checkout is now refused in
+  a checked-out submodule too, not only in the top level.
+- `working-tree.sh build` no longer prints git's line-ending warnings on stderr under the
+  default `core.safecrlf`; a repo that sets `core.safecrlf=true` keeps it. Stage 1 treats
+  a stderr line with exit 0 as a warning, not a refusal. The README says that one flagged
+  path makes the bundle an export, where no test runs, and how to clear a flag first.
+- A run started under 0.3.1 and resumed under 0.4.0 reruns from stage 1.
+
 ## 0.3.1 - 2026-10-02
 
 ### Fixed

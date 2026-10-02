@@ -85,7 +85,8 @@ With `jq`, it checks that:
 
 - every line parses as one JSON object;
 - the common keys and the operation's fields are present, with the right types, and no
-  other key is (an unknown operation reports only `unknown op`);
+  other key is (an unknown operation reports only `unknown op`); required top-level
+  string fields, including `comment_id`, are non-empty, except `set_field`'s `value`;
 - ids run `W1` upward with no gap;
 - every placeholder rule above holds, including the forge-id-only targets;
 - `fields` of `set_fields` is a non-empty object with no null value;

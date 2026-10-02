@@ -6,7 +6,8 @@
 #                                  validate a --live file against the report; print
 #                                  "live: ok", exit 0
 #   sh live.sh import <file> <report.md> <run dir>
-#                                  validate a copy and keep it as live/results-<k>.md
+#                                  validate a copy and keep it as live/results-<k>.md,
+#                                  each result_file copied under live/results-<k>/
 #   sh live.sh active <run dir>    list the approvals to record, the findings to carry,
 #                                  and the winner of each id, as tab-separated lines
 #   sh live.sh carry <run dir> <id>
@@ -41,7 +42,7 @@ usage() {
 }
 
 fail2() {
-	echo "live: $*" >&2
+	printf '%s\n' "live: $*" >&2
 	exit 2
 }
 
@@ -85,12 +86,8 @@ cr_mark() {
 # ---------------------------------------------------------------------------
 # check: the report, and the awk program that validates a live file against it.
 
-# load_report <report>: sets report, run_id, rev_hex, rev_bad.
-load_report() {
-	report=$1
-	if [ ! -f "$report" ] || [ ! -r "$report" ]; then
-		fail2 "cannot read $report"
-	fi
+# need_sha: sets shacmd, or exits 2 when neither sha256sum nor shasum is found.
+need_sha() {
 	if command -v sha256sum >/dev/null 2>&1; then
 		shacmd=sha256sum
 	elif command -v shasum >/dev/null 2>&1; then
@@ -98,6 +95,15 @@ load_report() {
 	else
 		fail2 "no sha256sum or shasum"
 	fi
+}
+
+# load_report <report>: sets report, run_id, rev_hex, rev_bad.
+load_report() {
+	report=$1
+	if [ ! -f "$report" ] || [ ! -r "$report" ]; then
+		fail2 "cannot read $report"
+	fi
+	need_sha
 	first=$(head -n 1 "$report") || fail2 "cannot read $report"
 	first=${first%"$cr"}
 	case $first in
@@ -236,6 +242,11 @@ function close_entry(   i, k) {
 	for (i = 1; i <= 6; i++) {
 		k = kname[i]
 		if (k == "env" && !eclaim) continue
+		if (k == "result") {
+			if (!("result" in HASK) && !("result_file" in HASK))
+				err(ehl, "missing key 'result' or 'result_file'")
+			continue
+		}
 		if (!(k in HASK)) err(ehl, "missing key '" k "'")
 	}
 }
@@ -261,7 +272,7 @@ function open_entry(id) {
 	}
 }
 
-function key_line(k, v,   i) {
+function key_line(k, v,   i, n, parts, up) {
 	i = kidx[k]
 	if (i == "") {
 		err(ln, "unknown key '" k "'")
@@ -269,6 +280,10 @@ function key_line(k, v,   i) {
 	}
 	if (k in HASK) {
 		err(ln, "duplicate key '" k "'")
+		return
+	}
+	if ((k == "result" && ("result_file" in HASK)) || (k == "result_file" && ("result" in HASK))) {
+		err(ln, "keys 'result' and 'result_file' are both given")
 		return
 	}
 	HASK[k] = 1
@@ -291,6 +306,18 @@ function key_line(k, v,   i) {
 	} else if (k == "approved_at") {
 		if (v !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)
 			err(ln, "approved_at must start with YYYY-MM-DD")
+	} else if (k == "result_file") {
+		# Only a path under the live file's directory, so a live file cannot send an
+		# unrelated file (a key, an .env) to the reviewers. The shell tests the file once
+		# the format has no error.
+		v = trim(v)
+		n = split(v, parts, /[\/\\]/)
+		up = 0
+		for (i = 1; i <= n; i++) if (parts[i] == "..") up = 1
+		if (v ~ /^[\/\\]/ || v ~ /^[A-Za-z]:/ || up)
+			err(ln, "result_file '" v "' is not a relative path under the live file's directory")
+		else
+			print ehl "\t" ln "\t" v > files
 	}
 }
 
@@ -334,6 +361,7 @@ BEGIN {
 	name = ENVIRON["LIVE_NAME"]
 	run = ENVIRON["LIVE_RUN"]
 	rev = ENVIRON["LIVE_REV"]
+	files = ENVIRON["LIVE_FILES"]
 	kname[1] = "query"
 	kname[2] = "env"
 	kname[3] = "where"
@@ -341,6 +369,8 @@ BEGIN {
 	kname[5] = "approved_by"
 	kname[6] = "approved_at"
 	for (i = 1; i <= 6; i++) kidx[kname[i]] = i
+	# result_file takes result's place: an entry has one of the two.
+	kidx["result_file"] = 4
 }
 
 FNR == 1 { fidx++ }
@@ -374,16 +404,33 @@ END {
 EOF
 }
 
-# run_check <path> <name>: validate the live file at <path>, naming it <name> in the
-# messages. Prints the errors; returns 0 when none, 1 when there are errors.
+# run_check <path> <name> <dir>: validate the live file at <path>, naming it <name> in
+# the messages, with each result_file taken relative to <dir>. Prints the errors; returns
+# 0 when none, 1 when there are errors. Leaves in $tmp/files one line per result_file,
+# `<heading line><TAB><line><TAB><path>`. The files are tested only when the format has
+# no error, so the lines stay in line order.
 run_check() {
 	if [ "$rev_bad" = 1 ]; then
 		echo "live $report:1: the revision line does not match the SHA-256 of the report body"
 		return 1
 	fi
-	LIVE_NAME=$2 LIVE_RUN=$run_id LIVE_REV="sha256:$rev_hex" awk -f "$tmp/check.awk" "$report" "$1"
+	: > "$tmp/files" || fail2 "cannot write a temp file"
+	LIVE_NAME=$2 LIVE_RUN=$run_id LIVE_REV="sha256:$rev_hex" LIVE_FILES=$tmp/files awk -f "$tmp/check.awk" "$report" "$1"
 	rcc=$?
 	[ "$rcc" -le 1 ] || fail2 "awk failed while checking $2"
+	[ "$rcc" = 0 ] || return 1
+	while IFS=$tab read -r fh fl fp; do
+		rp=$3/$fp
+		if [ ! -f "$rp" ] || [ ! -r "$rp" ]; then
+			printf '%s
+' "live $2:$fl: result_file '$fp' is not a readable file"
+			rcc=1
+		elif [ ! -s "$rp" ]; then
+			printf '%s
+' "live $2:$fl: result_file '$fp' is empty"
+			rcc=1
+		fi
+	done < "$tmp/files"
 	return "$rcc"
 }
 
@@ -415,11 +462,26 @@ list_ks() {
 	sort -n "$tmp/all.raw" > "$tmp/all.ks" || fail2 "cannot sort the results files"
 }
 
+# rm_pending: remove what an import left uncommitted: each results-*.md.pending, each
+# results-<k>.pending/ directory, and each results-<k>/ directory without its
+# results-<k>.md (an import stopped between its two renames).
 rm_pending() {
 	[ -d "$live" ] || return 0
 	for pf in "$live"/results-*.md.pending; do
 		[ -e "$pf" ] || continue
 		rm -f "$pf" 2>/dev/null || fail2 "cannot remove $pf"
+	done
+	for pd in "$live"/results-*; do
+		[ -d "$pd" ] || continue
+		pb=${pd##*/}
+		pk=${pb#results-}
+		pk=${pk%.pending}
+		case $pk in
+		'' | 0* | *[!0-9]*) continue ;;
+		esac
+		if [ "$pb" = "results-$pk.pending" ] || [ ! -e "$live/results-$pk.md" ]; then
+			rm -rf "$pd" 2>/dev/null || fail2 "cannot remove $pd"
+		fi
 	done
 }
 
@@ -539,6 +601,55 @@ derived_check() {
 	return 0
 }
 
+# verify_copies: for each active import in $tmp/active.ks whose entries have a
+# result_file, check that live/results-<k>/SHA256SUMS lists exactly the copies those
+# entries imply (<heading line>.txt, in line order) and that each copy matches its hash.
+# Prints the errors and returns 1 when one fails.
+verify_copies() {
+	vbad=0
+	while read -r vk; do
+		awk '
+			{
+				l = $0
+				if (substr(l, length(l), 1) == "\r") l = substr(l, 1, length(l) - 1)
+				if (substr(l, 1, 3) == "## ") { hl = FNR; next }
+				if (hl && substr(l, 1, 15) == "- result_file: ") print hl ".txt"
+			}' "$live/results-$vk.md" > "$tmp/want" || fail2 "cannot read $live/results-$vk.md"
+		[ -s "$tmp/want" ] || continue
+		vs=$live/results-$vk/SHA256SUMS
+		if [ ! -f "$vs" ]; then
+			echo "live: live/results-$vk/SHA256SUMS is missing"
+			vbad=1
+			continue
+		fi
+		awk '{ print substr($0, 67) }' "$vs" > "$tmp/got" || fail2 "cannot read $vs"
+		if ! cmp -s "$tmp/want" "$tmp/got"; then
+			echo "live: live/results-$vk/SHA256SUMS does not list the result files of live/results-$vk.md"
+			vbad=1
+			continue
+		fi
+		[ -n "${shacmd:-}" ] || need_sha
+		while IFS= read -r vl || [ -n "$vl" ]; do
+			vh=${vl%% *}
+			vn=${vl#*  }
+			vf=$live/results-$vk/$vn
+			if [ ! -f "$vf" ]; then
+				printf '%s
+' "live: live/results-$vk/$vn is missing"
+				vbad=1
+				continue
+			fi
+			vo=$($shacmd < "$vf") || fail2 "cannot hash $vf"
+			if [ "${vo%% *}" != "$vh" ]; then
+				printf '%s
+' "live: live/results-$vk/$vn does not match live/results-$vk/SHA256SUMS"
+				vbad=1
+			fi
+		done < "$vs"
+	done < "$tmp/active.ks"
+	[ "$vbad" = 0 ]
+}
+
 # build_state <with approvals 0|1>: read the state under $live and compute, in $tmp,
 # active.out (the lines `active` prints) and winners.tsv (id, source, earlier, state, tab
 # separated, in winner order). Prints the errors and returns 1 when the retirement
@@ -574,6 +685,7 @@ build_state() {
 	awk '{ print "K " $0 }' "$tmp/all.ks" > "$tmp/all.K" || fail2 "awk failed"
 	cat "$tmp/ret.R" "$tmp/all.K" > "$tmp/combo" || fail2 "cannot write a temp file"
 	awk '$1 == "R" { r[$2] = 1; next } !($2 in r) { print $2 }' "$tmp/combo" > "$tmp/active.ks" || fail2 "awk failed"
+	verify_copies || return 1
 	while read -r ak; do
 		awk -v k="$ak" '
 			function trim(s) {
@@ -658,7 +770,8 @@ mode_check() {
 	[ -f "$1" ] && [ -r "$1" ] || fail2 "cannot read $1"
 	load_report "$2"
 	write_check_awk
-	if run_check "$1" "$1"; then
+	cdir=$(dirname "$1") || fail2 "cannot read $1"
+	if run_check "$1" "$1" "$cdir"; then
 		echo "live: ok"
 		exit 0
 	fi
@@ -675,18 +788,52 @@ mode_import() {
 	write_check_awk
 	rm_pending
 	list_ks
+	# State that would stop the reconcile after this import (a malformed record or derived
+	# file, a broken result copy) would let each retry commit another import: check first.
+	if [ -d "$live" ]; then
+		build_state 0 || exit 1
+	fi
 	hi=$(tail -n 1 "$tmp/all.ks") || fail2 "cannot read a temp file"
 	[ -n "$hi" ] || hi=0
 	ik=$((hi + 1))
 	mkdir -p "$live" 2>/dev/null || fail2 "cannot create $live"
 	pend=$live/results-$ik.md.pending
+	pdir=$live/results-$ik.pending
 	cp "$file" "$pend" 2>/dev/null || fail2 "cannot copy $file to $pend"
-	if run_check "$pend" "$file"; then
+	cdir=$(dirname "$file") || fail2 "cannot read $file"
+	if run_check "$pend" "$file" "$cdir"; then
 		:
 	else
 		rm -f "$pend" 2>/dev/null || fail2 "cannot remove $pend"
 		exit 1
 	fi
+	# Each result_file is copied to results-<k>/<heading line>.txt, and SHA256SUMS hashes
+	# the copies. The copies are tested again, since a file can change after its check.
+	if [ -s "$tmp/files" ]; then
+		mkdir "$pdir" 2>/dev/null || fail2 "cannot create $pdir"
+		: > "$tmp/sums" || fail2 "cannot write a temp file"
+		cbad=0
+		while IFS=$tab read -r fh fl fp; do
+			rp=$cdir/$fp
+			cp "$rp" "$pdir/$fh.txt" 2>/dev/null || fail2 "cannot copy $fp to $pdir/$fh.txt"
+			if [ ! -s "$pdir/$fh.txt" ]; then
+				printf '%s
+' "live $file:$fl: result_file '$fp' is empty"
+				cbad=1
+				continue
+			fi
+			fs=$($shacmd < "$pdir/$fh.txt") || fail2 "cannot hash $pdir/$fh.txt"
+			printf '%s  %s\n' "${fs%% *}" "$fh.txt" >> "$tmp/sums" || fail2 "cannot write a temp file"
+		done < "$tmp/files"
+		if [ "$cbad" = 1 ]; then
+			rm -rf "$pdir" "$pend" 2>/dev/null || fail2 "cannot remove $pdir"
+			exit 1
+		fi
+		cp "$tmp/sums" "$pdir/SHA256SUMS" 2>/dev/null || fail2 "cannot write $pdir/SHA256SUMS"
+		[ ! -e "$live/results-$ik" ] || fail2 "$live/results-$ik exists"
+		mv "$pdir" "$live/results-$ik" 2>/dev/null || fail2 "cannot rename $pdir"
+	fi
+	[ ! -e "$live/results-$ik.md" ] || fail2 "$live/results-$ik.md exists"
 	mv "$pend" "$live/results-$ik.md" 2>/dev/null || fail2 "cannot rename $pend"
 	echo "live: imported live/results-$ik.md"
 	exit 0

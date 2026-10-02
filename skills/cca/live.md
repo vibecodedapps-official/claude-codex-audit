@@ -62,7 +62,7 @@ report: sha256:<hex>
 - query: <the query or command run>
 - env: <name>                     (a claim entry only, the environment it ran against)
 - where: <where it ran>
-- result: <the result, one line>
+- result: <the result, one line>   (or result_file: <path>, below)
 - approved_by: <the person who approved the access>
 - approved_at: <time, starting YYYY-MM-DD>
 ```
@@ -75,6 +75,16 @@ report: sha256:<hex>
   shown; `env` is required on a claim entry and not allowed on a finding entry.
 - `query` is the check as it ran. `where` is free text for the location. For a claim,
   the derivation reads `env`, not `where`.
+- A result that is more than one line, such as the rows a query returns, goes in a file:
+  `- result_file: <path>` in place of `- result:`, at the same position. An entry has
+  exactly one of the two. The path is relative to the directory of the `--live` file
+  and is written to stay under it: not absolute, no drive letter, and no `..` component.
+  The test is on the path as written: a symlink in that directory is followed, and a
+  file beside the `--live` file, such as an `.env`, is accepted. A copy goes to Codex and
+  into the report, so read a `--live` file someone else wrote before you import it, and
+  keep it in a directory that holds only its results. Leading spaces of the path are
+  ignored. The file is kept byte for byte, so it may hold any text; it must not be
+  empty.
 
 ## What `check` validates
 
@@ -105,11 +115,18 @@ report that lacks its first line `revision: sha256:<hex>` or its heading
   `query does not match the report's query for '<id>'`.
 - A claim entry's `env` equals the block's `env` exactly:
   `env '<x>' does not match the report's env '<y>'`.
-- Keys: `missing key '<key>'` (at the entry's heading), `unknown key '<key>'`,
+- Keys: `missing key '<key>'` (at the entry's heading; for the result,
+  `missing key 'result' or 'result_file'`), `unknown key '<key>'`,
   `duplicate key '<key>'`, `key '<key>' is out of order`,
+  `keys 'result' and 'result_file' are both given`,
   `key 'env' is not allowed on a finding entry`, `key '<key>' has an empty value`, and
   `approved_at must start with YYYY-MM-DD`.
 - Lines: `tab in line`, `unrecognized line`, and `no entries` (at the last line).
+- A `result_file` path that is absolute, has a drive letter, or has a `..` component:
+  `result_file '<path>' is not a relative path under the live file's directory`.
+- Each `result_file`, only when nothing above found an error, so the lines stay in line
+  order: `result_file '<path>' is not a readable file` (missing, unreadable, or not a
+  regular file) and `result_file '<path>' is empty`, at the `result_file` line.
 
 ## Imports and their state
 
@@ -124,6 +141,15 @@ record.
   entry's `## ` heading), names one file for the life of the run. A copy named
   `live/results-<k>.md.pending` was never committed and has no approval: nothing reads
   it, `import` and `retire` remove it, and its number may be taken again.
+- `live/results-<k>/` holds the import's result files, when an entry has a `result_file`:
+  `<line>.txt` is the copy for the entry whose `## ` heading is at `<line>`, so the copy
+  of the result at source `live/results-<k>.md:<line>` is `live/results-<k>/<line>.txt`.
+  `SHA256SUMS` lists each copy as `<hex>  <line>.txt`, in line order, hashed from the
+  copy. The kept `.md` still names the user's path; the copy is the record. The
+  directory is committed with its `.md`: a `live/results-<k>.pending/` directory, or a
+  `live/results-<k>/` without its `live/results-<k>.md`, was never committed, and
+  `import` and `retire` remove it. Like the results files, the copies are never moved,
+  changed, or deleted.
 - `live/retired.md` is append-only: one line `<k> retired <time>: <reason>` per import
   whose findings or claims a rerun replaced, `<k>` a number without a leading zero. An
   import is **active** when it exists and is not retired. Any other line in the file
@@ -181,19 +207,29 @@ operation (`cp`, `mkdir`, `mv`, `rm`, a temp file write, `jq`) exits 2 with one 
 `live: <what failed>` on stderr. Exit 1 is a validation or state error a mode names, one
 line each on stdout, leaving the committed imports, `live/retired.md`, the carried files,
 the derived files, and `stages.json` unchanged. The only writes an exit 1 may leave are
-`import`'s: the stale `.pending` files it removed, and a `live/` it created, empty.
+`import`'s: the uncommitted files and directories it removed, and a `live/` it created,
+empty.
 `assemble` and `carry` write nothing at all on exit 1. Files are written only through a
 temp file in the target's directory and a rename. Resume stops, with the script's lines,
 on any nonzero exit, before it supersedes or reruns anything. A rerun after a failure
 completes the work, so recovery is running resume again.
 
-- `import <file> <report.md> <run dir>`. Removes every `live/results-*.md.pending`;
-  copies the file to `live/results-<k>.md.pending`, creating `live/` when missing; runs
-  the `check` logic on the copy, its lines naming `<file>` as given; on exit 1 removes the
-  copy and prints the lines; on exit 0 renames it to `live/results-<k>.md` and prints
-  `live: imported live/results-<k>.md`. The rename is the commit point, and the bytes
-  validated are the bytes kept. A missing run directory is exit 2. So is a missing `jq`
-  (`live: jq not found`), checked before anything is written, since the reconcile that
+- `import <file> <report.md> <run dir>`. Removes what an earlier import left
+  uncommitted (`live/results-*.md.pending`, and the result directories above); checks
+  `live/retired.md`, the derived files, and the result copies of the active imports, as
+  `active` does, and exits 1 with those lines on a failure, before it writes anything
+  else; copies the
+  file to `live/results-<k>.md.pending`, creating `live/` when missing; runs the `check`
+  logic on the copy, its lines naming `<file>` as given and each `result_file` resolved
+  against `<file>`'s directory; on exit 1 removes the copy and prints the lines. On exit
+  0, when an entry has a `result_file`, it copies each file to
+  `live/results-<k>.pending/<line>.txt`, tests each copy again (a file emptied since the
+  check gives `result_file '<path>' is empty` and exit 1, removing both pending copies),
+  writes `SHA256SUMS` from the copies, and renames the directory to `live/results-<k>/`.
+  Then it renames the file to `live/results-<k>.md` and prints
+  `live: imported live/results-<k>.md`. That last rename is the commit point, and the
+  bytes validated are the bytes kept. A missing run directory is exit 2. So is a missing
+  `jq` (`live: jq not found`), checked before anything is written, since the reconcile that
   follows runs `active`, which needs it.
 - `active <run dir>`. Read only; prints nothing when `live/` is missing. Tab-separated
   lines, in this order:
@@ -205,7 +241,16 @@ completes the work, so recovery is running resume again.
     `live/carried/<id>.md`, in winner order;
   - `winner<TAB><id><TAB><source><TAB><earlier><TAB><kept|new|changed>` for each id in
     winner order; `<earlier>` is the sources, `, `-separated, or `none`.
-  A malformed `live/retired.md` or derived file is exit 1.
+  A malformed `live/retired.md` or derived file is exit 1. So is a result copy that does
+  not hold up, for each active import with a `result_file` entry, in `<k>` order:
+  `live: live/results-<k>/SHA256SUMS is missing`,
+  `live: live/results-<k>/SHA256SUMS does not list the result files of live/results-<k>.md`
+  (it must list exactly `<line>.txt` for each such entry, in line order),
+  `live: live/results-<k>/<line>.txt is missing`, or
+  `live: live/results-<k>/<line>.txt does not match live/results-<k>/SHA256SUMS`.
+  `assemble` and `import` run the same checks first, so a retried `--live` never commits
+  another import over broken state. A retired import is not checked. To recover, resume with
+  `--from 5` or earlier, which retires the imports, then import the results again.
 - `carry <run dir> <id>`. `<id>` is `X<n>` or `L<n>` (anything else is a usage error,
   exit 2). Cuts the block that starts at the line beginning `### <id>: ` in `ledger/6.md`
   (`X`) or `ledger/7.md` (`L`) and runs to the next `## ` line or `### <word>: ` line (the
@@ -238,7 +283,8 @@ completes the work, so recovery is running resume again.
   rerun finishes the job.
 - `retire <run dir> <dest dir> <reason>`. The reason is one line and not empty (else
   exit 2). First reads and checks `live/retired.md`, and on a malformed line exits 1
-  having changed nothing. Then removes every `live/results-*.md.pending`; creates
+  having changed nothing. Then removes what an import left uncommitted, as `import`
+  does; creates
   `<dest dir>` when there is something to move (and exits 2 if a name already exists
   there); appends `<k> retired <time>: <reason>` (time from `date -u +%Y-%m-%dT%H:%M:%SZ`)
   to `live/retired.md` for each active import, in `<k>` order, through a temp copy and a
@@ -273,7 +319,9 @@ The orchestrator runs no query itself.
 
 The orchestrator derives each entry from the finding's own `live check` field ("what each
 result changes"). The validator has already matched the query and, for a claim, the
-environment.
+environment. The result is the entry's `result` line, or for a `result_file` entry the
+whole copy `live/results-<k>/<line>.txt`, read in full (in slices when it is large),
+never the user's original file.
 
 - A finding: exactly one stated outcome matches the result. A result that shows the
   defect gives `verified fact` at the severity that outcome names (else the finding's
@@ -289,4 +337,15 @@ environment.
   completed.
 
 Each entry line cites its basis as `live result, approved by <who> at <time>`, with the
-source. A derivation is a proposal for the reviewers, never a verdict.
+source, and for a `result_file` entry the copy's path, `live/results-<k>/<line>.txt`. A
+derivation is a proposal for the reviewers, never a verdict.
+
+A copy is a reviewer input. The **result copies** of a derived file are the copies of
+its sections' `- source:` entries that have one. Each review of a live result gets the
+result copies of the derived files it reads, so it judges the result itself, not a
+summary of it: the second opinion (stage 6) those of `live/findings.md`, and the late
+adversary (stage 7) those of `live/findings.md` and `live/claims.md`. Stage 8 reads them
+for the report. The merger does not get them: it merges the positions the reviews gave,
+and the derivation lines name each copy. They are not hashed as stage inputs: a copy
+never changes, `active` checks it against `SHA256SUMS` before any reconcile, and a new
+result changes the `- source:` line, which the derived file's hash already covers.

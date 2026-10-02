@@ -90,6 +90,8 @@ edit "missing field" "work-items b.jsonl:3: missing field 'reason'" '3s|"reason"
 edit "missing op field" "work-items b.jsonl:3: missing field 'text'" '3s|,"text":"The test is skipped."||'
 edit "wrong type" "work-items b.jsonl:5: field 'value' must be a string" '5s|"value":"Active"|"value":3|'
 edit "empty items" "work-items b.jsonl:5: field 'items' is empty" '5s|"items":\["C1"\]|"items":[]|'
+edit "empty comment_id" "work-items b.jsonl:9: field 'comment_id' is empty" '9s|"comment_id":"c-17"|"comment_id":""|'
+edit "empty remove_link to" "work-items b.jsonl:10: field 'to' is empty" '10s|"to":"[^"]*"|"to":""|'
 edit "unknown op" "work-items b.jsonl:5: unknown op 'delete'" '5s|"op":"set_state"|"op":"delete"|'
 edit "id gap" "work-items b.jsonl:5: id 'W6' should be 'W5'" '5s|"id":"W5"|"id":"W6"|'
 edit "wrong id" "work-items b.jsonl:2: id 'W3' should be 'W2'" '2s|"id":"W2"|"id":"W3"|'

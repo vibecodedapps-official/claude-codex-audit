@@ -435,7 +435,9 @@ Probes (2026-10-01, git 2.55.0.windows.5, gh 2.91.0, Git Bash, isolated config):
 - With `commit.gpgSign=true` and `gpg.program=false`, `commit-tree` still exited 0, so this
   git does not sign from config; the script passes `--no-gpg-sign` anyway.
 - A skip-worktree file removed from disk was missing from the built tree, so it would read
-  as a deletion; flagged paths and sparse checkouts are refused.
+  as a deletion; flagged paths and sparse checkouts are refused. (Note, 2026-10-02: this
+  probe built from `read-tree HEAD`. The shipped build copies the repo's index, which
+  holds the flag, so the path stays at its index version; see Fixes after 0.3.1.)
 - `git check-attr --stdin filter` printed `lfs` for a `filter=lfs` path and `unspecified`
   for the rest.
 - `gh issue view --json` has no parent field and offers `closedByPullRequestsReferences`,
@@ -659,6 +661,125 @@ block (a bare `user:` entry was rewritten to `{}` by gh and did not reproduce), 
   exits 1 when an account on the host has authentication issues. `--json` for
   `gh auth status` first appears in the gh v2.81.0 release notes (2025-10-01).
 
+## Fixes after 0.3.1 (2026-10-02)
+
+- **Flagged paths are built, not refused.** `working-tree.sh` refused any path that
+  `ls-files -v` tags `S`, `h`, or `s` (skip-worktree or assume-unchanged), so a bundle
+  whose repo used either flag could not be audited. The refusal rested on the 2026-10-01
+  probe, which built from `read-tree HEAD`. The build has since copied the repo's index,
+  flags included, so `add -A` leaves a flagged entry at its index version whether its
+  file is edited or missing on disk. In a checked-out submodule, the parent's tree holds
+  the submodule's `HEAD`, and a staged change there is refused as a dirty submodule, so a
+  flagged file there is at its index version too. `build` now builds such a repo and
+  prints one `flagged <path>` line per flagged path after the `untracked` lines, in scan
+  order: the top level, then each checked-out submodule depth first, with its prefix.
+  Stage 1 keeps the lines, and the brief lists the paths as "flagged at audit time, held
+  at the index version".
+- **What is still refused.** A flagged path the build cannot hold at its index version is
+  refused, in `check` and `build`, in the old refusal's place among the others:
+  `working-tree: refused: <n> flagged paths cannot be held at the index version, first <path>`.
+  The five cases of the line above:
+  - A flagged gitlink: it hides the submodule from the parent's `git status`, so the
+    dirty-submodule refusal would not see a change in it.
+  - A flagged intent-to-add entry: `write-tree` leaves it out of the tree, and it is not
+    an untracked file either. Only when a flagged entry has the empty-blob object, the
+    script runs `git diff-index --cached --name-status --no-renames HEAD` with
+    `--ita-visible-in-index` and with `--ita-invisible-in-index`; a path with a
+    `status<TAB>path` line in one run that the other run lacks, in either direction, is
+    intent-to-add. That also catches a path `HEAD` tracks that was added again with
+    `git add -N`: over a tracked file it prints `M` in one run and `D` in the other, and
+    over a tracked empty file of the same mode it prints only `D`, in the invisible run.
+  - A path that is a directory on disk, not a symlink: `add -A` adds the files under it
+    and drops the flagged entry.
+  - A path with a leading component that is a symlink, or anything but a directory, on
+    disk: `add -A` adds that entry and drops the flagged one.
+  - A path git prints quoted: it cannot be checked on disk, so it is not taken as held.
+    At the top level the quoted-path reason refuses it as well; inside a submodule only
+    this line does.
+  After `write-tree`, the script checks that each flagged path of the top level is in the
+  tree with the mode and object of its entry in the copied index, and exits 2 if not.
+  The refusals should make that unreachable, so case 6p reaches it through a copy of the
+  script with the refusal removed.
+- **Sparse checkout in submodules.** A sparse checkout marks the paths it leaves out
+  skip-worktree, so the old flagged-path refusal also refused a sparse submodule. With
+  that refusal gone, the sparse-checkout refusal now runs in every checked-out submodule
+  too: `working-tree: refused: sparse checkout is on in <path>`.
+- **Read from an export.** A working-tree bundle was read directly unless `ls-files -v`
+  of the top level showed a flag, which missed a flag in a submodule. It is now read
+  directly only when `HEAD` is the build's `parent` and the build printed no `flagged`
+  line, which covers the checked-out submodules. Otherwise it is exported from the head's
+  tree, which holds the untracked files and the flagged paths at their index version, so
+  no agent reads a local flagged file. Resume applies the same test to its rebuild, so a
+  path flagged after a direct-read audit reruns stage 1, and it reruns stage 1 for any
+  working-tree bundle whose rebuild lists other flagged paths than the brief. Other
+  trees keep the top-level `ls-files -v` test.
+- **What the audit does not see.** A flagged path's local content is not in the head, so
+  an edit to it, before or during the run, is not audited and does not change the head
+  sha. The read-only check does not compare a flagged file's content: `git status` does
+  not report it, so a change during the run may escape the check. This was already so
+  for any audited repo with flagged paths. Coverage lists the flagged paths with this
+  limit, and the check record labels a `touched` line for a flagged path "touched,
+  content not compared".
+
+Probes (2026-10-02, Git Bash, a scratch copy of `working-tree.sh` with the refusal
+removed):
+
+- A skip-worktree file edited, a skip-worktree file deleted, an assume-unchanged file
+  edited, and an assume-unchanged file deleted, each in its own repo: every tree held the
+  committed blob, `.git/index` was unchanged, no `untracked` line was printed, and a
+  rebuild gave the same sha.
+- A file staged and then flagged was built at the staged blob, its index version.
+- A skip-worktree `p` replaced on disk by `p/child` built a tree with `p/child` and no
+  `p`. A skip-worktree `dir/f` whose `dir` became a file built a tree with `dir` and no
+  `dir/f`. Assume-unchanged gave the same.
+- A flagged intent-to-add `n.txt` was in neither the tree nor the `untracked` lines.
+  `ls-files -v --debug` showed its `flags:` as `60004000` with skip-worktree and
+  `2000c000` with assume-unchanged, bit `0x20000000` set in both. The shipped check uses
+  the documented `diff-index` options instead, since the debug format is internal.
+- A case-only rename of a deleted skip-worktree file with `core.ignorecase=true` kept
+  `README.md` at its committed blob, so it is not refused.
+
+## `result_file` for live results (0.4.0, 2026-10-02)
+
+The client asked for a file beside the one-line `result`, hashed into the import, so a
+query that returns rows is kept verbatim rather than summarized by hand.
+
+- **The copy is the record.** The results files are the record of what was imported,
+  so a path alone would let the result change or vanish after the import. `import`
+  copies each file under `live/results-<k>/` and hashes the copies, not the originals.
+  The kept `.md` stays the user's file byte for byte, so the bytes validated are still
+  the bytes kept; the copy is found by the heading line, the same number the approval's
+  `source` already uses.
+- **One commit point.** The copies are staged in `live/results-<k>.pending/` and renamed
+  before the `.md`, whose rename stays the commit point. A result directory without its
+  `.md` was never committed, and `import` and `retire` remove it, as they remove a
+  `.pending` file. Each copy is tested again after the copy, since a file can change
+  between the check and the copy.
+- **Checked before every reconcile.** `active` and `assemble` check every active
+  import's copies against `SHA256SUMS`, and the import's entries say which copies must
+  exist, so deleting the whole directory is caught too. The copies are not stage input
+  hashes: they never change, a new result changes the derived file's `- source:` line,
+  and the check above runs first. A retired import is not checked, since nothing decides
+  from it.
+- **Reviewers read the result, not a summary.** A one-line result reaches the reviewers
+  through the derivation lines. A file does not fit there, so the second opinion (with a
+  sentinel copy) and the late adversary get each result copy as an input. The merger
+  does not: it merges the positions they gave.
+- **File errors after format errors.** `check` tests the files only when the format is
+  clean, so every error line stays in line order without merging two sources.
+- **Limits.** A result file has no size cap, so it adds another unbounded input to the
+  bounded-loading item below; agents read a large one in slices. A copy over the
+  follow-up cap that Codex does not acknowledge cannot be inlined, so stage 6 fails for
+  it. Every copy of an active import is hashed on each `import`, `active`, and
+  `assemble`, so each resume reads every copy more than once.
+- **Only under the `--live` file's directory.** A copy goes to Codex and into the report,
+  so a `--live` file written by someone else could otherwise send a key or an `.env`
+  off the machine. An absolute path, a drive letter, or a `..` component is refused; a
+  symlink inside the directory is still followed, as the user placed it there.
+- **`import` checks first.** A broken copy of an active import stops every reconcile, so
+  `import` checks the copies before it commits. Otherwise each retried `--live` would
+  commit one more import before the reconcile failed again.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
@@ -683,4 +804,9 @@ block (a bare `user:` entry was rewritten to `{}` by gh and did not reproduce), 
   unbounded inputs (2026-10-02 review): a live result value of any length, the
   `memory.sh` output (one claim with "Step 1" and "version 2" against 300 memory files
   printed 601 lines, all but one from the keys `1` and `2`; a cap per key with a count of
-  the rest would fix it), and the brief's list of untracked files.
+  the rest would fix it), and the brief's list of untracked files. 0.4.0 adds two more
+  (2026-10-02 review): a `result_file` copy, read in full by both reviews of a live
+  result (see its Limits above), and the brief's list of flagged paths, one line per
+  path, which a repo with thousands of skip-worktree bits (left after sparse checkout
+  was turned off by hand) would make long. Like the untracked list, a count with the
+  first paths in the brief and the full list in a run file would bound it.

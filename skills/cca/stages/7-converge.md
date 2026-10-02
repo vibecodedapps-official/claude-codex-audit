@@ -32,7 +32,9 @@ by size has `<group>-<k>` parts), and `converged.md`.
    - every finding `live/findings.md` lists, with its live result and derivation (a
      carried `X<n>` or `L<n>` is read from its `live/carried/<id>.md`, the ledger may no
      longer hold it); at low, these are the only ids, and the prompt also names
-     `live/findings.md` and the carried files;
+     `live/findings.md` and the carried files; at every tier, the prompt names each
+     result copy of `live/findings.md` and `live/claims.md` (`live.md`, "Derivation"),
+     when there is any, for the adversary to read in full;
    - under `## Claims challenged`, every claim `live/claims.md` derives
      `true, reproduced`, which the adversary reproduces or overturns like any claim the
      report marks true (`common.md`, "Pass-two verdicts").

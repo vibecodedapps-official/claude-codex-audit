@@ -465,15 +465,27 @@ objects of a commit that `skills/cca/scripts/working-tree.sh build` makes from t
 tree in a temporary index, a copy of the repo's own, so a file you staged with
 `git add -f` despite an ignore rule is kept. The repo's index, refs, and files are not
 touched, and the commit has no ref, so `git gc` may prune it after its prune window; the
-report's Coverage says so, and lists the files untracked at audit time. The script refuses
-(exit 1, before it writes anything) a repo with no `HEAD` commit, a repo or checked-out
-submodule with no index file, a sparse checkout, skip-worktree or assume-unchanged paths,
-unmerged paths, a submodule with changes, an untracked nested repository, a Git LFS or
-program filter, or a path git prints quoted. Its `check` mode runs only these refusal
-checks, which run no filter or hook and write nothing, and stage 1 runs it before the
-read-only baseline, so a program filter never runs. The same working tree and `HEAD` give
-the same commit sha, so `/cca:resume` rebuilds the head and does not ask to restart.
-Agents search such a tree with `git grep <pattern> <head sha>`.
+report's Coverage says so, and lists the files untracked at audit time. A skip-worktree or
+assume-unchanged path is built at its index version, whatever its file on disk holds; the
+brief and Coverage list it as flagged, and agents read the bundle from an export of its
+head, never the local file (a flagged path in a submodule is absent from the export, as
+every submodule path is). One flagged path is enough to make the bundle an export, and no
+test runs in an export. If the bundle's tests matter, clear the flag before the run
+(`git update-index --no-skip-worktree <path>`, or `--no-assume-unchanged <path>`); the
+head then holds that file's local content, so leave the flag on a file such as local
+credentials. The read-only check does not compare a flagged file's content, so a change
+to one during the run may escape it. The script refuses (exit 1, before it writes
+anything) a repo with no `HEAD` commit, a repo or checked-out submodule with no
+index file, a sparse checkout in the top level or a checked-out submodule, flagged paths
+the build cannot hold at the index version (a flagged submodule or intent-to-add entry, a
+path that is a directory on disk or lies under a symlink or a file, or a path git prints
+quoted, which cannot be checked on disk), unmerged paths, a submodule with changes, an
+untracked nested repository, a Git LFS or program filter, or a path git prints quoted. Its
+`check` mode runs only these refusal checks, which run no filter or hook and write
+nothing, and stage 1 runs it before the read-only baseline, so a program filter never
+runs. The same working tree and `HEAD` give the same commit sha, so `/cca:resume` rebuilds
+the head and does not ask to restart. With no flagged path, agents search such a tree with
+`git grep <pattern> <head sha>`.
 
 Role agents' tool lists exclude Edit and NotebookEdit. Each agent has Write, limited by
 instruction to its own output file in the run directory; the read-only check after every
@@ -553,16 +565,19 @@ its sentinel. Only an input it could not open goes inline, in the one follow-up,
   or `false` from a run in this environment.
 - **Live results.** Run an approved check yourself, then write its result in a `--live`
   file and run `/cca:resume <run-id> --live <file>`. Per check the file gives the finding
-  id (or `claim <n>` for an env claim), the query as the report states it, the
-  environment for a claim, where it ran, the result, who approved the access, and when;
-  the format is in `skills/cca/live.md`. Resume checks the file against the report's
-  revision and the query, records each approval, and rederives the finding's label and
-  severity or the claim's verdict. A changed finding goes back to the second opinion and
-  the late adversary, and stays provisional until both have seen it. Resume then writes
-  a new report with a new revision, so an approval given to `/cca:act` against the old
-  one no longer matches. A result for an `X<n>` or `L<n>` finding is kept with the
-  finding, since a rerun renumbers those ids. A later resume that reruns from stage 5 or
-  earlier retires the imported results, which stay on disk as the record.
+  id (or `claim <n>` for an env claim), the query as the report states it, the environment
+  for a claim, where it ran, the result, who approved the access, and when; the format is
+  in `skills/cca/live.md`. A result longer than one line, such as the rows a query
+  returns, goes in a file named by `result_file: <path>`, under the directory of the
+  `--live` file; the import keeps a copy of it, hashed, and the reviewers read that copy.
+  Resume checks the file against the report's revision and the query, records each
+  approval, and rederives the finding's label and severity or the claim's verdict. A
+  changed finding goes back to the second opinion and the late adversary, and stays
+  provisional until both have seen it. Resume then writes a new report with a new
+  revision, so an approval given to `/cca:act` against the old one no longer matches. A
+  result for an `X<n>` or `L<n>` finding is kept with the finding, since a rerun renumbers
+  those ids. A later resume that reruns from stage 5 or earlier retires the imported
+  results, which stay on disk as the record.
 - **External text.** Anything cca drafts for outside use (commit messages, PR or ticket
   text, and comments) names no model, agent, or tool. The report is internal and may
   name them.

@@ -80,7 +80,8 @@ Every piece of evidence names its repo and the commit it was read at. Four kinds
   Every run is logged under the agent's `runs:` heading.
 - **Live result:** the result of an approved live check, fed back with `--live` and cited
   by its `live/` file and line (`live/results-<k>.md:<line>`, or the carried file for a
-  finding the ledger no longer holds). It counts as a run the approver made, so it can
+  finding the ledger no longer holds), and for a result kept as a file, by its copy
+  `live/results-<k>/<line>.txt`. It counts as a run the approver made, so it can
   demonstrate a defect. It is evidence only after it has passed the review gate
   (`stages/7-converge.md`, step 4).
 
@@ -117,8 +118,14 @@ and the sha it is pinned at.
   Search it only with `git -C <repo> grep <pattern> <head sha>`, never with `rg` over
   `git ls-files`, which misses the untracked files. The files the brief lists as
   untracked at audit time are part of the head and valid evidence, cited at the head sha
-  as `repo@sha:path:line`; an ignored or outside path is still invalid.
+  as `repo@sha:path:line`; an ignored or outside path is still invalid. When the brief
+  lists a path as flagged at audit time, the bundle is read from an export of its head
+  instead (mode `export`), which holds the untracked files too and each flagged path at
+  its index version, not the local file. A flagged path in a submodule is absent, as
+  every submodule path is.
 - **Exported tree** (`<run dir>/trees/<name>/`): tracked files only, at the pinned sha.
+  The export of a working-tree bundle's head also holds the files the brief lists as
+  untracked at audit time, which are valid evidence as the item above says.
   A symlink is a regular file holding its target; do not resolve it. Submodules are
   listed in the brief and absent. Git LFS files are their pointer files. Cite as
   `repo@sha:path:line` with the repo-relative path, not the export path. No test or lint

@@ -301,7 +301,8 @@ and before writing that stage's final entry:
 6. Write `baseline/<stage>-check.md`: the stage, the time, the repos checked, the
    result (`pass` or `blocked: <reason>`), the ignored-file differences accepted (each
    with the agent and run that accounts for it, or `pending` with the agents it waits
-   on), or `none`, the `touched` lines as "touched, content unchanged", and the
+   on), or `none`, the `touched` lines as "touched, content unchanged" (for a path the
+   brief lists as flagged, "touched, content not compared"), and the
    `note mtime precision: seconds` line when the check printed it (the report's
    Coverage repeats it from there). On pass, the out prefix of this check becomes the
    ignored base for the next check, until the baseline is taken again.
@@ -357,7 +358,7 @@ with `mv -f`. Never edit either in place.
 
 ```json
 {
-  "plugin_version": "0.3.1",
+  "plugin_version": "0.4.0",
   "approvals": [ { "kind": "fetch", "target": "<repo name>:<remote>",
                    "decision": "approved", "time": "2026-09-30T14:15:00Z",
                    "commands": ["git -C <repo> fetch --no-tags --refmap= ..."] } ],

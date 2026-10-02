@@ -76,7 +76,8 @@ the Verified OK list the tier lets you attack.
 
 1. Read `common.md`, `audit-brief.md`, `ledger/5.md`, and `ledger/6.md`, and, when your
    prompt names them, `live/findings.md`, `live/claims.md`, and the files under
-   `live/carried/`.
+   `live/carried/`. Read each result copy `live/results-<k>/<line>.txt` your prompt names
+   in full: a result kept as a file is the result itself.
 2. Challenge every late addition (`- origin: pass2`, `- origin: topup`, and
    `- origin: codex`) and every finding the second opinion asked to restore, together with
    its stage 5 verdicts, as in steps 3 and 4. Also challenge every finding
