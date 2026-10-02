@@ -739,6 +739,47 @@ removed):
 - A case-only rename of a deleted skip-worktree file with `core.ignorecase=true` kept
   `README.md` at its committed blob, so it is not refused.
 
+## `result_file` for live results (0.4.0, 2026-10-02)
+
+The client asked for a file beside the one-line `result`, hashed into the import, so a
+query that returns rows is kept verbatim rather than summarized by hand.
+
+- **The copy is the record.** The results files are the record of what was imported,
+  so a path alone would let the result change or vanish after the import. `import`
+  copies each file under `live/results-<k>/` and hashes the copies, not the originals.
+  The kept `.md` stays the user's file byte for byte, so the bytes validated are still
+  the bytes kept; the copy is found by the heading line, the same number the approval's
+  `source` already uses.
+- **One commit point.** The copies are staged in `live/results-<k>.pending/` and renamed
+  before the `.md`, whose rename stays the commit point. A result directory without its
+  `.md` was never committed, and `import` and `retire` remove it, as they remove a
+  `.pending` file. Each copy is tested again after the copy, since a file can change
+  between the check and the copy.
+- **Checked before every reconcile.** `active` and `assemble` check every active
+  import's copies against `SHA256SUMS`, and the import's entries say which copies must
+  exist, so deleting the whole directory is caught too. The copies are not stage input
+  hashes: they never change, a new result changes the derived file's `- source:` line,
+  and the check above runs first. A retired import is not checked, since nothing decides
+  from it.
+- **Reviewers read the result, not a summary.** A one-line result reaches the reviewers
+  through the derivation lines. A file does not fit there, so the second opinion (with a
+  sentinel copy) and the late adversary get each result copy as an input. The merger
+  does not: it merges the positions they gave.
+- **File errors after format errors.** `check` tests the files only when the format is
+  clean, so every error line stays in line order without merging two sources.
+- **Limits.** A result file has no size cap, so it adds another unbounded input to the
+  bounded-loading item below; agents read a large one in slices. A copy over the
+  follow-up cap that Codex does not acknowledge cannot be inlined, so stage 6 fails for
+  it. Every copy of an active import is hashed on each `import`, `active`, and
+  `assemble`, so each resume reads every copy more than once.
+- **Only under the `--live` file's directory.** A copy goes to Codex and into the report,
+  so a `--live` file written by someone else could otherwise send a key or an `.env`
+  off the machine. An absolute path, a drive letter, or a `..` component is refused; a
+  symlink inside the directory is still followed, as the user placed it there.
+- **`import` checks first.** A broken copy of an active import stops every reconcile, so
+  `import` checks the copies before it commits. Otherwise each retried `--live` would
+  commit one more import before the reconcile failed again.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl

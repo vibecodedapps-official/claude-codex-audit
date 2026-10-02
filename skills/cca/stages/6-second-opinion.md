@@ -11,10 +11,11 @@ two and every map-correction top-up has finished).
 
 Inputs: `ledger/5.md` and the other run-directory inputs `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`
 lists (`audit-brief.md`, `common.md`, `claims.md`, the diffs and stats, the `pass2/`
-files), and the live inputs: `live/findings.md` and each `live/carried/<id>.md` it names
-(`${CLAUDE_PLUGIN_ROOT}/skills/cca/live.md`). Each live input is recorded in the stage
-entry with its hash, or `absent` when it does not exist; absent to present, or present to
-absent, is a change that reruns the stage (`resume.md`, step 5). `live/findings.md`
+files), and the live inputs: `live/findings.md`, each `live/carried/<id>.md` it names,
+and its result copies (`${CLAUDE_PLUGIN_ROOT}/skills/cca/live.md`, "Derivation"). The
+result copies are not hashed, as `live.md` says. Each other live input is recorded in
+the stage entry with its hash, or `absent` when it does not exist; absent to present, or
+present to absent, is a change that reruns the stage (`resume.md`, step 5). `live/findings.md`
 exists only on a run resumed with a live finding result. A `_test.drop_ack` naming
 `live/findings.md` applies like any other input.
 
@@ -49,8 +50,8 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
 4. **Build the request** from `ledger/5.md`, per `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`:
    1. Copy each input the template lists to `codex/inputs/<run-relative path>`, with the
       sentinel line the template gives as its first line and a new random token per copy;
-      this includes `live/findings.md` and each `live/carried/<id>.md` it names, when they
-      exist, so each is a request input with a sentinel. Only generated run-directory
+      this includes `live/findings.md`, each `live/carried/<id>.md` it names, and its
+      result copies, when they exist, so each is a request input with a sentinel. Only generated run-directory
       files get a sentinel; the originals are not changed. Audited source files never get
       a sentinel, are never copied, and are named by their read path and sha from the
       brief. Keep every path and token for the stage entry's `sentinels` map.

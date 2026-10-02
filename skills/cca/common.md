@@ -80,7 +80,8 @@ Every piece of evidence names its repo and the commit it was read at. Four kinds
   Every run is logged under the agent's `runs:` heading.
 - **Live result:** the result of an approved live check, fed back with `--live` and cited
   by its `live/` file and line (`live/results-<k>.md:<line>`, or the carried file for a
-  finding the ledger no longer holds). It counts as a run the approver made, so it can
+  finding the ledger no longer holds), and for a result kept as a file, by its copy
+  `live/results-<k>/<line>.txt`. It counts as a run the approver made, so it can
   demonstrate a defect. It is evidence only after it has passed the review gate
   (`stages/7-converge.md`, step 4).
 

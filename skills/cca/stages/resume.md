@@ -129,7 +129,8 @@ never loses a finished one. With `--live`, it first imports approved live check 
       3. run `live.sh carry <run dir> <id>` for each `carry` line;
       4. remove `<run dir>/tmp/live-entries/` if present, then for each `new` or
          `changed` winner derive its entry (`live.md`, "Derivation") from the winning
-         result and write it to a file there; a `kept` winner gets none;
+         result (for a `result_file` entry, its copy under `live/results-<k>/`, read in
+         full) and write it to a file there; a `kept` winner gets none;
       5. run `live.sh assemble <run dir> <run dir>/tmp/live-entries`.
       Any nonzero exit stops resume with the script's lines, before anything is
       superseded or rerun. The orchestrator runs no query itself.

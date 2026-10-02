@@ -561,16 +561,19 @@ its sentinel. Only an input it could not open goes inline, in the one follow-up,
   or `false` from a run in this environment.
 - **Live results.** Run an approved check yourself, then write its result in a `--live`
   file and run `/cca:resume <run-id> --live <file>`. Per check the file gives the finding
-  id (or `claim <n>` for an env claim), the query as the report states it, the
-  environment for a claim, where it ran, the result, who approved the access, and when;
-  the format is in `skills/cca/live.md`. Resume checks the file against the report's
-  revision and the query, records each approval, and rederives the finding's label and
-  severity or the claim's verdict. A changed finding goes back to the second opinion and
-  the late adversary, and stays provisional until both have seen it. Resume then writes
-  a new report with a new revision, so an approval given to `/cca:act` against the old
-  one no longer matches. A result for an `X<n>` or `L<n>` finding is kept with the
-  finding, since a rerun renumbers those ids. A later resume that reruns from stage 5 or
-  earlier retires the imported results, which stay on disk as the record.
+  id (or `claim <n>` for an env claim), the query as the report states it, the environment
+  for a claim, where it ran, the result, who approved the access, and when; the format is
+  in `skills/cca/live.md`. A result longer than one line, such as the rows a query
+  returns, goes in a file named by `result_file: <path>`, under the directory of the
+  `--live` file; the import keeps a copy of it, hashed, and the reviewers read that copy.
+  Resume checks the file against the report's revision and the query, records each
+  approval, and rederives the finding's label and severity or the claim's verdict. A
+  changed finding goes back to the second opinion and the late adversary, and stays
+  provisional until both have seen it. Resume then writes a new report with a new
+  revision, so an approval given to `/cca:act` against the old one no longer matches. A
+  result for an `X<n>` or `L<n>` finding is kept with the finding, since a rerun renumbers
+  those ids. A later resume that reruns from stage 5 or earlier retires the imported
+  results, which stay on disk as the record.
 - **External text.** Anything cca drafts for outside use (commit messages, PR or ticket
   text, and comments) names no model, agent, or tool. The report is internal and may
   name them.

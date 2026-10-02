@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- A `--live` entry can give `result_file: <path>` in place of a one-line `result`, so a
+  result that is more than one line, such as the rows a query returns, is kept verbatim.
+  The path is relative to the `--live` file and stays under its directory. `live.sh
+  import` copies each file to `live/results-<k>/<heading line>.txt` and writes
+  `SHA256SUMS` from the copies, committed with the results file. `import`, `active`, and
+  `assemble` stop with a named line when a copy of an active import is missing or no
+  longer matches its hash. The derivation, the second opinion, the late adversary, and
+  the report read the copy, and the report gives its path and hash.
+
 ### Fixed
 
 - `skills/cca/work-items.md` says what `work-items.sh` already enforces: a required

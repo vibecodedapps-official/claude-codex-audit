@@ -18,7 +18,9 @@ Inputs: `converged.md`, `gate.md`, `ledger/5.md`, `ledger/6.md`, `ledger/7.md`, 
 lines for the live claims, which are never ledger content), `live/findings.md`,
 `live/claims.md`, and each `live/carried/<id>.md`, whichever exist. The results files
 `live/results-<k>.md` that the derived files cite are read for each result's text,
-approver, and time; they are never changed, so they are not hashed.
+approver, and time, and a `result_file` entry's text is its copy
+`live/results-<k>/<line>.txt`, with its hash from `live/results-<k>/SHA256SUMS`; they
+are never changed, so they are not hashed.
 
 Recorded input hashes (`git hash-object --no-filters`): `converged.md`, `gate.md`, the
 ledger files, `claims.md`, `audit-brief.md`, `manifest.json`, `late/adversary.md`,
@@ -142,7 +144,9 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
       `live/claims.md`, the results files they cite, and the `live` approvals in
       `stages.json`: `not run: not approved`, or
       `run, approved by <who> at <time>: <result>; derived: <derived>; <reviewed | under review: <what it lacks>>`.
-      A finding is `under review` while its live review has not completed (its `gate.md`
+      For a result kept as a file, `<result>` is
+      `in live/results-<k>/<line>.txt, sha256:<hex>`, with the hash from `SHA256SUMS`;
+      this holds for each `earlier` result too. A finding is `under review` while its live review has not completed (its `gate.md`
       reason is `live result not yet reviewed`). Every result, the winner and each
       `earlier` one, is logged here as an access with its approver and time, as hard
       rule 5 requires. A check the user did not approve is listed as not run. A result is

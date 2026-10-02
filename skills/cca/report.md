@@ -154,6 +154,9 @@ format is the one in `live.md`:
 - status: not run: not approved | run, approved by <who> at <time>: <result>; derived: <derived>; <reviewed | under review: <what it lacks>>
 ```
 
+For a result kept as a file, `<result>` is `in live/results-<k>/<line>.txt, sha256:<hex>`,
+the copy and its hash from `SHA256SUMS`.
+
 A result is fed back with `/cca:resume <run-id> --live <file>`. Every approved live
 access, each result with its approver and time, is logged here. `none` when no finding
 has a live check and no claim is an env claim.

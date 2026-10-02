@@ -252,6 +252,56 @@ run "check utf-8 bom" 0 "live: ok" "" check bom.md report.md
 { head -n 9 "$v"; printf -- '- result: '; long; tail -n +11 "$v"; } > "$w/longres.md"
 run "check long result" 0 "live: ok" "" check longres.md report.md
 
+# result_file: an entry gives a file in place of a one-line result. The files hold a CR,
+# an empty line, and a `## ` line, which a one-line result cannot.
+printf 'id,status\r\n\r\n## 1,null\n2,null\n' > "$w/rows.txt"
+printf 'PASS 41 tests\nFAIL 0\n' > "$w/tests.txt"
+set_line "$v" "$w/c.md" 10 "- result_file: rows.txt"
+set_line "$w/c.md" "$w/rf.md" 32 "- result_file: tests.txt"
+run "check result_file" 0 "live: ok" "" check rf.md report.md
+mkdir -p "$w/sub dir"
+cp "$w/rows.txt" "$w/sub dir/my rows.txt"
+set_line "$v" "$w/sub dir/rf.md" 10 "- result_file: my rows.txt"
+run "check result_file beside the live file, with spaces" 0 "live: ok" "" check "sub dir/rf.md" report.md
+mkdir -p "$w/data"
+cp "$w/rows.txt" "$w/data/rows.txt"
+set_line "$v" "$w/b.md" 10 "- result_file:   data/rows.txt"
+run "check result_file in a subdirectory, leading spaces" 0 "live: ok" "" check b.md report.md
+# Only a path under the live file's directory: never absolute, never through `..`.
+under="is not a relative path under the live file's directory"
+set_line "$v" "$w/b.md" 10 "- result_file: $w/rows.txt"
+broken "result_file absolute" "live b.md:10: result_file '$w/rows.txt' $under"
+set_line "$v" "$w/b.md" 10 '- result_file: C:/x/rows.txt'
+broken "result_file X:/" "live b.md:10: result_file 'C:/x/rows.txt' $under"
+set_line "$v" "$w/b.md" 10 '- result_file: c:rows.txt'
+broken "result_file X:" "live b.md:10: result_file 'c:rows.txt' $under"
+set_line "$v" "$w/b.md" 10 '- result_file: \x\rows.txt'
+broken "result_file \\" "live b.md:10: result_file '\x\rows.txt' $under"
+set_line "$v" "$w/b.md" 10 "- result_file: data/../../rows.txt"
+broken "result_file .." "live b.md:10: result_file 'data/../../rows.txt' $under"
+set_line "$v" "$w/b.md" 10 '- result_file: data\..\rows.txt'
+broken "result_file ..\\" "live b.md:10: result_file 'data\..\rows.txt' $under"
+# A backslash in a path is printed as is, under dash too.
+set_line "$v" "$w/b.md" 10 '- result_file: out\new\table.txt'
+broken "result_file backslashes" "live b.md:10: result_file 'out\\new\\table.txt' is not a readable file"
+del_line "$v" "$w/b.md" 10
+broken "neither result key" "live b.md:7: missing key 'result' or 'result_file'"
+ins_after "$v" "$w/b.md" 10 "- result_file: rows.txt"
+broken "both result keys" "live b.md:11: keys 'result' and 'result_file' are both given"
+set_line "$v" "$w/b.md" 10 "- result_file:"
+broken "empty result_file" "live b.md:10: key 'result_file' has an empty value"
+set_line "$v" "$w/b.md" 10 "- result_file: nope.txt"
+broken "missing result_file" "live b.md:10: result_file 'nope.txt' is not a readable file"
+set_line "$v" "$w/b.md" 10 "- result_file: sub dir"
+broken "result_file a directory" "live b.md:10: result_file 'sub dir' is not a readable file"
+: > "$w/none.txt"
+set_line "$w/rf.md" "$w/b.md" 32 "- result_file: none.txt"
+broken "empty result file" "live b.md:32: result_file 'none.txt' is empty"
+# A format error hides the file errors, so the lines stay in line order.
+set_line "$v" "$w/c.md" 10 "- result_file: nope.txt"
+set_line "$w/c.md" "$w/b.md" 2 "cca-live: 2"
+broken "format error first" "live b.md:2: unsupported live version"
+
 run "no arguments" 2 "" "$usage_msg"
 run "unknown mode" 2 "" "$usage_msg" parse valid.md report.md
 run "check one argument" 2 "" "$usage_msg" check valid.md
@@ -388,6 +438,89 @@ if PATH=$nojq sh -c '! command -v jq && command -v "$1" && command -v awk && com
 else
 	echo "live test: skipped import, no jq: jq shares a PATH directory with the tools"
 fi
+
+# --- result_file -------------------------------------------------------------
+
+# An import copies each result_file to results-<k>/<heading line>.txt and hashes the
+# copies in SHA256SUMS; the kept .md is the source byte for byte.
+SR=0cdfed83356cc4c62dc9b84dbd6bf8dd4a859e67a5e72b360c57b3c4d7a6aee7
+ST=40b0d5efd5ab8f61cba15cbd5471e30fe4f42e26de480b6bc0c861e199ad4d74
+rm -rf "$w/f1" && mkdir "$w/f1"
+run "import result_file" 0 "live: imported live/results-1.md" "" import rf.md report.md f1
+cmp -s "$w/rf.md" "$w/f1/live/results-1.md" || fail "import result_file: the kept file is not the source"
+cmp -s "$w/rows.txt" "$w/f1/live/results-1/7.txt" || fail "import result_file: 7.txt is not rows.txt"
+cmp -s "$w/tests.txt" "$w/f1/live/results-1/28.txt" || fail "import result_file: 28.txt is not tests.txt"
+same "import result_file" "$w/f1/live/results-1/SHA256SUMS" "$SR  7.txt
+$ST  28.txt"
+[ "$(cd "$w/f1/live" && ls -A)" = "results-1${nl}results-1.md" ] || fail "import result_file: live/ holds more"
+want="approve${tab}live/results-1.md:7${tab}g1-F2${tab}Ana Ruiz${tab}2026-10-01T09:30:00Z
+approve${tab}live/results-1.md:14${tab}g1+g2-F3${tab}Ana Ruiz${tab}2026-10-01T09:31:00Z
+approve${tab}live/results-1.md:21${tab}X1${tab}Ana Ruiz${tab}2026-10-01T09:32:00Z
+approve${tab}live/results-1.md:28${tab}claim 3${tab}Ana Ruiz${tab}2026-10-01
+carry${tab}X1${tab}ledger/6.md
+winner${tab}g1-F2${tab}live/results-1.md:7${tab}none${tab}new
+winner${tab}g1+g2-F3${tab}live/results-1.md:14${tab}none${tab}new
+winner${tab}X1${tab}live/results-1.md:21${tab}none${tab}new
+winner${tab}claim 3${tab}live/results-1.md:28${tab}none${tab}new"
+run "active, result_file" 0 "$want" "" active f1
+
+# A missing result file writes nothing.
+rm -rf "$w/f2" && mkdir "$w/f2"
+set_line "$v" "$w/b.md" 10 "- result_file: nope.txt"
+run "import result_file, missing file" 1 "live b.md:10: result_file 'nope.txt' is not a readable file" "" import b.md report.md f2
+[ -z "$(ls -A "$w/f2/live")" ] || fail "import result_file, missing file: live/ is not empty"
+
+# Recovery: a stale results-<k>.pending/ and an orphan results-<k>/ (no .md, an import
+# stopped between its two renames) are removed; a committed results-<k>/ stays.
+rm -rf "$w/f3" && mkdir -p "$w/f3/live/results-1" "$w/f3/live/results-2" "$w/f3/live/results-4.pending" "$w/f3/live/results-x"
+cp "$w/f1/live/results-1.md" "$w/f3/live/results-1.md"
+cp "$w/f1/live/results-1/"* "$w/f3/live/results-1/"
+printf 'orphan\n' > "$w/f3/live/results-2/7.txt"
+printf 'stale\n' > "$w/f3/live/results-4.pending/7.txt"
+run "import result_file, recovery" 0 "live: imported live/results-2.md" "" import rf.md report.md f3
+[ "$(cd "$w/f3/live" && ls -A)" = "results-1${nl}results-1.md${nl}results-2${nl}results-2.md${nl}results-x" ] || fail "import result_file, recovery: live/ holds $(cd "$w/f3/live" && ls -A)"
+cmp -s "$w/rows.txt" "$w/f3/live/results-2/7.txt" || fail "import result_file, recovery: 7.txt is not rows.txt"
+mkdir "$w/f3/live/results-9"
+run "retire, orphan result directory" 0 "live: retired 1${nl}live: retired 2" "" retire f3 f3/superseded/1/live "stage 4 rerun"
+absent "retire, orphan result directory" "$w/f3/live/results-9"
+[ -d "$w/f3/live/results-2" ] || fail "retire, orphan result directory: removed live/results-2"
+
+# active and assemble check the copies of every active import.
+copies() { # <dir>: a run directory with the result_file import and no derived files
+	rm -rf "$w/$1" && mkdir -p "$w/$1/live"
+	cp "$w/f1/live/results-1.md" "$w/$1/live/"
+	cp -R "$w/f1/live/results-1" "$w/$1/live/"
+}
+copies f4
+printf 'more\n' >> "$w/f4/live/results-1/7.txt"
+run "active, edited copy" 1 "live: live/results-1/7.txt does not match live/results-1/SHA256SUMS" "" active f4
+copies f4
+rm "$w/f4/live/results-1/28.txt"
+run "active, missing copy" 1 "live: live/results-1/28.txt is missing" "" active f4
+copies f4
+rm -r "$w/f4/live/results-1"
+run "active, missing result directory" 1 "live: live/results-1/SHA256SUMS is missing" "" active f4
+run "assemble, missing result directory" 1 "live: live/results-1/SHA256SUMS is missing" "" assemble f4 f4/entries
+copies f4
+head -n 1 "$w/f4/live/results-1/SHA256SUMS" > "$w/f4/sums" && cp "$w/f4/sums" "$w/f4/live/results-1/SHA256SUMS"
+run "active, short SHA256SUMS" 1 "live: live/results-1/SHA256SUMS does not list the result files of live/results-1.md" "" active f4
+# A SHA256SUMS without its final newline: its last line is still checked.
+copies f4
+printf '%s  7.txt\n%s  28.txt' "$SR" "$ST" > "$w/f4/live/results-1/SHA256SUMS"
+printf 'more\n' >> "$w/f4/live/results-1/28.txt"
+run "active, unterminated SHA256SUMS" 1 "live: live/results-1/28.txt does not match live/results-1/SHA256SUMS" "" active f4
+# import checks the copies first, so a retry does not commit another import.
+run "import, broken copy of an earlier import" 1 "live: live/results-1/28.txt does not match live/results-1/SHA256SUMS" "" import valid.md report.md f4
+[ "$(cd "$w/f4/live" && ls -A)" = "results-1${nl}results-1.md" ] || fail "import, broken copy of an earlier import: live/ changed"
+copies f4
+printf 'junk\n' > "$w/f4/live/findings.md"
+run "import, malformed derived file" 1 "live: live/findings.md:1: line before the first section; delete the file to rebuild it" "" import valid.md report.md f4
+[ "$(cd "$w/f4/live" && ls -A)" = "findings.md${nl}results-1${nl}results-1.md" ] || fail "import, malformed derived file: live/ changed"
+copies f4
+head -n 1 "$w/f4/live/results-1/SHA256SUMS" > "$w/f4/sums" && cp "$w/f4/sums" "$w/f4/live/results-1/SHA256SUMS"
+# A retired import is not checked.
+printf '1 retired 2026-10-01T10:00:00Z: stage 4 rerun\n' > "$w/f4/live/retired.md"
+run "active, retired import with a short SHA256SUMS" 0 "" "" active f4
 
 # --- active ----------------------------------------------------------------
 

@@ -18,6 +18,8 @@ The request's inputs are these run-directory files:
 - `live/findings.md` and each `live/carried/<id>.md` it names, when `live/findings.md`
   exists: the findings that a live result answers, with their derivations, and the text
   of each carried finding (`live.md`)
+- the result copies of `live/findings.md` (`live/results-<k>/<line>.txt`, `live.md`,
+  "Derivation"), when it has any: a result kept as a file, which you read in full
 
 Audited source files are never inputs; the request points at them by the absolute read
 paths and shas in `audit-brief.md`. The live files are generated run-directory files, so
