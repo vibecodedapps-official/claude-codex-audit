@@ -15,10 +15,10 @@
   When the PR read, its review threads, or a named ticket's read fails, the run stops
   with a line that names the host it queried; give the id as a URL when that host is
   wrong. A failed read of a closing issue, or of a ticket's parent, is a gap listed in
-  the brief, not a stop. `tests/lint.sh` fails on a
+  the brief, not a stop, and resume retries it. `tests/lint.sh` fails on a
   `gh pr` or `gh issue` command in a code span under `agents/`, `skills/`, or
   `commands/` that passes neither `-R <host>/<owner>/<repo>` nor a URL argument, and on
-  a `gh api` command without `--hostname`.
+  a `gh api` command without a `--hostname` option.
 
 ## 0.3.0 - 2026-10-01
 

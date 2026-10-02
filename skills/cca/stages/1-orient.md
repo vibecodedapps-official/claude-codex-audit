@@ -261,7 +261,8 @@ missing), and only rewrite the stage 1 entry as `running` with its inputs.
 7. Write `stages.json` with `plugin_version` `0.3.0`, empty `approvals`, and a stage 1
    entry with status `running` and inputs: the hashes of `manifest.json`, each claims
    file, the questions file, and every `file:` ticket or PR export, and
-   `plugin_version`. Step 10 adds the shas and `forge_hashes` to the final entry.
+   `plugin_version`. Step 10 adds the shas, `forge_hashes`, and `forge_gaps` to the
+   final entry.
 
 ## Steps
 
@@ -414,6 +415,9 @@ login), which can differ from the bundle's host. When a `gh` read of this step f
   parent as `parent: not read`, and list the gap in the brief's Forge section beside the
   "not in export" keys, with the host and the first line of gh's error. The file it
   would have written is neither a stage 1 output (step 10) nor in `forge_hashes`.
+  Step 10 records the read in `forge_gaps` instead, a map from that run-relative path
+  to the ticket's URL (its `url` in `pr.json` for a closing issue), so resume retries
+  it.
 
 - `forge/<bundle>/pr.json`, the one `gh pr view` call, unprojected (section C runs it
   and parses it; no second call is made):
@@ -708,8 +712,8 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
    recorded plus each bundle's head, base, and merge-base sha (the pinned base is the
    local sha of the base ref; `baseRefOid` is recorded beside it for a GitHub PR, for
    information only), `head_parent` and `head_tree` for each `head: working-tree`
-   bundle, the pinned sha of every reference and source of truth, and `forge_hashes`
-   (step 2).
+   bundle, the pinned sha of every reference and source of truth, `forge_hashes`, and
+   `forge_gaps` (step 2; an empty map when no read was a gap).
 7. Print the stage boundary line. With `budget: 0`, or `_test`
    `expire_budget_after_stage: 1`, the budget has now expired: go to stage 8. Otherwise
    start stages 2, 3, and 4 together.

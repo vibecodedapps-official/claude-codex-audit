@@ -39,7 +39,9 @@
 #   backtick span, a `gh pr <sub>` or `gh issue <sub>` command with at least one
 #   argument after <sub> must pass -R or --repo a <host>/<owner>/<repo> value, attached
 #   or separated, or an argument that starts with https:// or http:// or is <url>; a
-#   `gh api` command with at least one argument must pass --hostname. A command may
+#   `gh api` command with at least one argument must pass the option --hostname with
+#   a value, as `--hostname <host>` or `--hostname=<host>`; the text inside another
+#   argument, such as `q=--hostname`, does not count. A command may
 #   start anywhere in the span (after a blank, `;`, `|`, `&`, or `(`) and ends at the
 #   next `;`, `|`, `&`, or `)`. A single-quoted argument with no blank, `;`, `|`, `&`,
 #   or `)` in it counts without its quotes; other single-quoted text is ignored. Without
@@ -243,7 +245,8 @@ done
 # `&`, or `)`. Kind repo: `gh pr <sub>` or `gh issue <sub>` with at least one argument
 # after <sub> passes neither -R nor --repo a <host>/<owner>/<repo> value (attached or
 # separated) nor an argument that starts with https:// or http:// or is <url>. Kind api:
-# `gh api` with at least one argument lacks --hostname. An argument that starts with `*`
+# `gh api` with at least one argument lacks the option --hostname (after a blank)
+# followed by a blank or `=` and a value. An argument that starts with `*`
 # (as in an allowed-tools pattern) does not count. The patterns are string regexes,
 # since BSD awk ends a regex literal at a slash inside a bracket.
 gh_spans() {
@@ -255,6 +258,7 @@ gh_spans() {
 			api_arg = "^gh[ \t]+api[ \t]+[^ \t*]"
 			repo3 = "[ \t](-R|--repo)[ \t=]*[^ \t/]+/[^ \t/]+/[^ \t/]+"
 			url = "[ \t](https://|http://|<url>([ \t]|$))"
+			hostopt = "[ \t]--hostname([ \t]+|=)[^ \t=-]"
 		}
 		/^[ \t]*```/ { fence = !fence; next }
 		fence { next }
@@ -277,7 +281,7 @@ gh_spans() {
 					c = s
 					if (match(c, "[;|&)]")) c = substr(c, 1, RSTART - 1)
 					if (kind == "repo" && c ~ sub_arg && c !~ repo3 && c !~ url) bad = 1
-					if (kind == "api" && c ~ api_arg && !index(c, "--hostname")) bad = 1
+					if (kind == "api" && c ~ api_arg && c !~ hostopt) bad = 1
 					s = substr(s, 3)
 				}
 			}
@@ -318,12 +322,16 @@ cat > "$tmp/gh-sample" <<'SAMPLE'
 `gh api repos/o/r`
 ```
 `gh issue view 5 -R h/o/r`
+`gh api search/code -f q=--hostname`
+`gh api repos/o/r --jq .--hostname`
+`gh api --hostname=h repos/o/r`
+`gh api --hostname --paginate repos/o/r`
 SAMPLE
 gh_got=$(gh_spans repo < "$tmp/gh-sample" | tr '\n' ' ')
 [ "$gh_got" = "5: 6: 7: 10: 11: 12: 25: 26: 27: " ] ||
 	fail "tests/lint.sh: gh host self-test, kind repo: got lines $gh_got"
 gh_got=$(gh_spans api < "$tmp/gh-sample" | tr '\n' ' ')
-[ "$gh_got" = "6: 8: 13: 14: 21: " ] ||
+[ "$gh_got" = "6: 8: 13: 14: 21: 32: 33: 35: " ] ||
 	fail "tests/lint.sh: gh host self-test, kind api: got lines $gh_got"
 
 # Every gh read names its host.

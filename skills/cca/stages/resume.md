@@ -162,6 +162,15 @@ never loses a finished one. With `--live`, it first imports approved live check 
      `forge/<bundle>/pr.json.new` until step 6 picks the first stage to rerun; step 6
      removes them unless that stage is 1 (then stage 1 renames them, `1-orient.md`
      section C), and any stop removes them;
+   - the stage 1 `forge_gaps`: for each path in the map, run the `gh` command of
+     `1-orient.md` step 2 that would have written it (the ticket read for
+     `<ticket>.json`, the parent read for `<ticket>.parent.json`), with the host,
+     owner, repo, and number of the ticket URL the map gives, and its output discarded.
+     Exit 0 means the evidence can now be read, which invalidates stage 1, so the rerun
+     reads it. A non-zero exit leaves the gap as it was: it is neither a difference nor
+     a stop, since the read can keep failing for a reason that does not change, such as
+     a GitHub Enterprise Server with no `parent` field. An entry with no `forge_gaps`
+     key has no gaps;
    - the pinned sha of every reference and source of truth, by resolving each again as
      stage 1 did, through the brief's ref mapping lines (step 3); a changed one
      invalidates stage 1 (the bundles' head and base shas were already compared in
