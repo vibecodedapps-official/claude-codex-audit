@@ -27,6 +27,7 @@
 # 10 a staged file that matches an ignore rule   11 no index file
 # 12 `check`: no output and no write, and the same refusal lines as `build`
 # 13 a submodule's own program filter, refused with the submodule prefix
+# 14 a repo hook is not run         15 a renamed submodule with a change is refused
 #
 # Prints one line per mismatch, then `working-tree test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -448,6 +449,35 @@ for mode in check build; do
 	[ "$(loose "$A")" = "$n0" ] || mismatch "case 13, $mode: the object count changed"
 	[ "$(loose "$A/sub")" = "$s0" ] || mismatch "case 13, $mode: the submodule's object count changed"
 	[ ! -e "$root/filter-ran13" ] || mismatch "case 13, $mode: the filter ran"
+done
+
+# 14. a repo hook never runs: `check` and `build` leave the marker a `post-index-change`
+# hook would create absent, and `build` still prints the case 1 lines.
+case_id="case 14"
+fresh
+mkdir -p "$A/.git/hooks"
+printf '#!/bin/sh\ntouch "%s"\n' "$root/hook-ran14" > "$A/.git/hooks/post-index-change"
+chmod +x "$A/.git/hooks/post-index-change"
+run check "$A"
+expect "case 14, check" 0 '' ''
+[ ! -e "$root/hook-ran14" ] || mismatch "case 14, check: the hook ran"
+run build "$A"
+expect "case 14, build" 0 "$(lines "$head1" "$tree1")\n" ''
+[ ! -e "$root/hook-ran14" ] || mismatch "case 14, build: the hook ran"
+
+# 15. a submodule renamed in the index, with a tracked file edited in it: git reports the
+# rename as a type 2 status entry, which must be refused like any dirty submodule.
+case_id="case 15"
+fresh
+add_sub
+sha=$(g -C "$A/sub" rev-parse HEAD)
+mv "$A/sub" "$A/sub2"
+g -C "$A" update-index --force-remove sub
+g -C "$A" update-index --add --cacheinfo "160000,$sha,sub2"
+printf '%s\n' 'edit' >> "$A/sub2/s.txt"
+for mode in check build; do
+	run "$mode" "$A"
+	expect "case 15, $mode" 1 '' "$r submodule sub2 has uncommitted changes or untracked files\n"
 done
 
 if [ "$bad" -gt 0 ]; then

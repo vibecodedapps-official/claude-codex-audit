@@ -24,6 +24,11 @@
 # an unchanged working tree and HEAD give the same commit sha. Filters are never
 # disabled: the tree holds what the user's own commit would.
 #
+# Every git call runs with hooks disabled (core.hooksPath is an empty directory in the
+# temporary directory), since a hook such as post-index-change could write or reach a
+# service. The submodule test reads `git status --porcelain=v2 --no-renames` (git 2.18 or
+# later), so a renamed submodule is a type 1 entry like any other, not a type 2 rename.
+#
 # check: runs the refusal checks below and nothing else. It writes nothing (no temporary
 # index, no object) and runs no filter, hook, or program: exit 0 with nothing printed, or
 # exit 1 or 2 as `build` does. `build` runs the same checks first.
@@ -87,6 +92,13 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 2' HUP INT TERM
 
+# An empty directory for core.hooksPath, so no git call runs a hook of the repository.
+nohooks=$tmp/nohooks
+mkdir "$nohooks" || {
+	echo "working-tree: cannot create a directory in $tmp" >&2
+	exit 2
+}
+
 die() {
 	printf '%s\n' "working-tree: $*" >&2
 	exit 2
@@ -102,14 +114,14 @@ tab=$(printf '\t')
 
 # g <git args>: git in the top level, quoting only the paths git must quote.
 g() {
-	git -c core.quotePath=false -c core.fsmonitor=false -C "$top" "$@" < /dev/null
+	git -c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath="$nohooks" -C "$top" "$@" < /dev/null
 }
 
 # gd <dir> <git args>: git in a directory, quoting only the paths git must quote.
 gd() {
 	gd_dir=$1
 	shift
-	git -c core.quotePath=false -c core.fsmonitor=false -C "$gd_dir" "$@" < /dev/null
+	git -c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath="$nohooks" -C "$gd_dir" "$@" < /dev/null
 }
 
 # cfgset <dir> <key>: success when the key is set in any scope of the repository in <dir>.
@@ -145,7 +157,7 @@ list_repos() {
 build() {
 	mode=$1
 	repo=$2
-	top=$(git -C "$repo" rev-parse --show-toplevel 2> /dev/null) ||
+	top=$(git -c core.hooksPath="$nohooks" -C "$repo" rev-parse --show-toplevel 2> /dev/null) ||
 		die "not a git work tree: $repo"
 	r=$tmp/r
 	mkdir "$r" || die "cannot create a directory in $tmp"
@@ -204,7 +216,7 @@ build() {
 		k=$((k + 1))
 		gd "$rd" ls-files --cached --others --exclude-standard > "$tmp/paths.$k" ||
 			die "git ls-files failed${rp:+ in $rp}"
-		git -c core.quotePath=false -c core.fsmonitor=false -C "$rd" check-attr --stdin filter \
+		git -c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath="$nohooks" -C "$rd" check-attr --stdin filter \
 			< "$tmp/paths.$k" > "$tmp/attr" || die "git check-attr failed${rp:+ in $rp}"
 		# `driver<TAB>path` for the first path of each driver, in first-seen order.
 		awk '
@@ -239,7 +251,7 @@ build() {
 	# 5 and 6. A dirty submodule, and an untracked nested repository. A status would run
 	# a filter that a reason above names, so it waits for them to be absent.
 	if [ ! -s "$r/7" ] && [ ! -s "$r/8" ]; then
-		g status --porcelain=v2 --untracked-files=all --ignore-submodules=none \
+		g status --porcelain=v2 --no-renames --untracked-files=all --ignore-submodules=none \
 			> "$tmp/status" || die "git status failed"
 		awk '
 			function rest(s, n,   i) {
