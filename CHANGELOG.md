@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-10-02
+
+Adds `result_file` to `--live` results and builds working-tree bundles that have
+skip-worktree or assume-unchanged paths. No full multi-agent audit has run yet; the
+agent-driven cases in `docs/acceptance.md` are still `not run`.
 
 ### Added
 
@@ -35,6 +39,7 @@
   escape it; Coverage says so. Resume reruns stage 1 when a directly read working-tree
   bundle now has a flagged path, in a submodule too. A sparse checkout is now refused in
   a checked-out submodule too, not only in the top level.
+- A run started under 0.3.1 and resumed under 0.4.0 reruns from stage 1.
 
 ## 0.3.1 - 2026-10-02
 
