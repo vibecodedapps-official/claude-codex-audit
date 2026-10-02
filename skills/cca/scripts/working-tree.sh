@@ -63,9 +63,12 @@
 # file, and the build copies it, so a top level or checked-out submodule with none is
 # refused (`<path>` is `.` for the top level, else the submodule's path): a HEAD-only
 # start would restore attributes the scan never saw. Like a filter reason, it skips
-# `git status`. It is not checked without a HEAD commit. The skip-worktree and
-# assume-unchanged check also runs in every checked-out submodule: the count is summed
-# over the repositories, and the first path is the first in scan order, with its prefix.
+# `git status`. It is not checked without a HEAD commit. A submodule path git quotes, at
+# any depth, is never scanned, so it is refused as a quoted path (the top level's first
+# quoted path first, else the first such submodule, with its prefix) and also skips
+# `git status`, which would recurse into it. The skip-worktree and assume-unchanged
+# check also runs in every checked-out submodule: the count is summed over the
+# repositories, and the first path is the first in scan order, with its prefix.
 #
 # Output, exit 0, on stdout:
 #   head <sha>
@@ -164,7 +167,11 @@ list_repos() {
 		die "awk failed"
 	while IFS= read -r lrs; do
 		case $lrs in
-		'"'*) continue ;;
+		'"'*)
+			# Never scanned, so refused (9), and `git status` is not run.
+			printf '%s%s\n' "$2" "$lrs" >> "$tmp/qsubs"
+			continue
+			;;
 		esac
 		if [ -e "$1/$lrs/.git" ]; then
 			list_repos "$1/$lrs" "$2$lrs/"
@@ -199,6 +206,7 @@ build() {
 
 	# The top level, then each checked-out submodule, depth first.
 	: > "$tmp/repos"
+	: > "$tmp/qsubs"
 	lr=0
 	list_repos "$top" ""
 
@@ -282,16 +290,19 @@ build() {
 	done < "$tmp/repos"
 	paths=$tmp/paths.1
 
-	# 9. a path git prints quoted even with core.quotePath=false.
+	# 9. a path git prints quoted even with core.quotePath=false: the first in the top
+	# level, else the first submodule path quoted inside a checked-out submodule.
 	awk '/^"/ { print; exit }' "$paths" > "$tmp/quoted" || die "awk failed"
+	[ -s "$tmp/quoted" ] || head -n 1 "$tmp/qsubs" > "$tmp/quoted" || die "head failed"
 	if [ -s "$tmp/quoted" ]; then
 		IFS= read -r line < "$tmp/quoted"
 		printf '%s\n' "working-tree: refused: unsupported path (git prints it quoted): $line" > "$r/9"
 	fi
 
 	# 5 and 6. A dirty submodule, and an untracked nested repository. A status would run
-	# a filter that a reason above names, so it waits for them to be absent.
-	if [ ! -s "$r/7" ] && [ ! -s "$r/8" ] && [ -z "$noindex" ]; then
+	# a filter that a reason above names, or one in a quoted submodule the scan skipped,
+	# so it waits for them to be absent.
+	if [ ! -s "$r/7" ] && [ ! -s "$r/8" ] && [ -z "$noindex" ] && [ ! -s "$tmp/qsubs" ]; then
 		g status --porcelain=v2 --no-renames --untracked-files=all --ignore-submodules=none \
 			> "$tmp/status" || die "git status failed"
 		awk '

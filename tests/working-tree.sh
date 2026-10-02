@@ -30,6 +30,7 @@
 # 14 a repo hook is not run         15 a renamed submodule with a change is refused
 # 16 a driver named `set`            17 no index file, an ignored tracked file with a filter
 # 18 an assume-unchanged file in a submodule
+# 19 a quoted submodule path with a program filter (19a top level, 19b in a submodule)
 #
 # Prints one line per mismatch, then `working-tree test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -544,6 +545,59 @@ printf '%s\n' 'edit' >> "$A/sub/s.txt"
 for mode in check build; do
 	run "$mode" "$A"
 	expect "case 18, $mode" 1 '' "$r 1 paths are skip-worktree or assume-unchanged, first sub/s.txt\n"
+done
+
+# 19. a checked-out submodule whose path git quotes (a DEL in the name), with its own
+# program filter on a same-size edit: the scan cannot enter it, so it is refused as a
+# quoted path and no `git status` runs, which would recurse into it and run the filter.
+# 19a: in the top level. 19b: inside the submodule `sub`, so the path has its prefix. A
+# file system that rejects the name skips the case, and the skip is printed.
+q=$(printf 'q\177d')
+mkrepo "$root/fsrc"
+printf '*.dat filter=mark\n' > "$root/fsrc/.gitattributes"
+printf 'data\n' > "$root/fsrc/x.dat"
+g -C "$root/fsrc" add .gitattributes x.dat
+g -C "$root/fsrc" commit -q -m dat
+
+# quoted_sub <host>: check out fsrc as the submodule $q of <host>, recorded in a commit
+# as a gitlink, with its filter configured and x.dat edited; fails when the name is not
+# kept.
+quoted_sub() {
+	g clone -q "$root/fsrc" "$1/$q" > /dev/null 2>&1 || return 1
+	[ -d "$1/$q" ] || return 1
+	g -C "$1" update-index --add --cacheinfo "160000,$(g -C "$1/$q" rev-parse HEAD),$q" &&
+		g -C "$1" commit -q -m quoted || return 1
+	git -C "$1/$q" config filter.mark.clean "touch '$root/filter-ran19'; cat"
+	printf 'atad\n' > "$1/$q/x.dat"
+}
+
+for c in a b; do
+	case_id="case 19$c"
+	fresh
+	if [ "$c" = a ]; then
+		host=$A
+		want="$r unsupported path (git prints it quoted): \"q\\\\177d\"\n"
+	else
+		add_sub
+		host=$A/sub
+		want="$r unsupported path (git prints it quoted): sub/\"q\\\\177d\"\n"
+	fi
+	if ! quoted_sub "$host"; then
+		echo "working-tree test: skipped $case_id: the file system does not keep a DEL in a name"
+		continue
+	fi
+	if [ "$c" = b ]; then
+		g -C "$A" update-index --cacheinfo "160000,$(g -C "$A/sub" rev-parse HEAD),sub"
+		g -C "$A" commit -q -m sub2
+	fi
+	n0=$(loose "$A")
+	for mode in check build; do
+		run "$mode" "$A"
+		expect "$case_id, $mode" 1 '' "$want"
+		[ "$(loose "$A")" = "$n0" ] || mismatch "$case_id, $mode: the object count changed"
+		[ ! -e "$root/filter-ran19" ] || mismatch "$case_id, $mode: the filter ran"
+		rm -f "$root/filter-ran19"
+	done
 done
 
 if [ "$bad" -gt 0 ]; then
