@@ -400,8 +400,9 @@ with `mv -f`. Never edit either in place.
 5. Stage-specific keys: stage 1 `inputs` also records `forge_hashes` (the hashed `gh`
    files under `forge/`: `pr.hash.json`, a `jq` projection of the unprojected
    `pr.json` that leaves out the head and base shas and viewer-dependent fields,
-   `pr-threads.json`, and `<ticket>.json`, by run-relative path, each with its hash,
-   compared by resume; `pr.json` itself is not hashed), the `headRefOid` of each
+   `pr-threads.json`, `<ticket>.json`, and `<ticket>.parent.json`, by run-relative
+   path, each with its hash, compared by resume; `pr.json` itself is not hashed), the
+   `headRefOid` of each
    GitHub PR bundle, which is its pinned head, and its `baseRefOid`, information only
    (the base as GitHub last evaluated it, never pinned or compared: the pinned base is
    the sha of the local remote-tracking ref `<remote>/<baseRefName>`); stages 2 and 3

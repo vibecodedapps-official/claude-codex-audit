@@ -18,7 +18,8 @@ Closes issues #5 to #11. No full multi-agent audit has run yet; see `docs/accept
 - Verification checks tagged `env: <name>;` are listed as live checks by claim number, and
   `claims-verdicts.md` calls them `not reproducible here`, not recheck requests.
 - Optional handoff keys `parent` and `links`, for tickets and raised tickets. Stage 1 fetches
-  the PRs that close a GitHub ticket, so hygiene can check its links.
+  the PRs that close a GitHub ticket, and its parent through GraphQL, so hygiene can check
+  both.
 - Work-item operations `update_comment`, `remove_link`, and `set_fields`, mentions, and
   `W<n>` items for supporting operations.
 - A manifest bundle key `ticket_token`, so a bare-number ticket id matches only as a ticket

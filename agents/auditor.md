@@ -90,8 +90,9 @@ prompt assigns, in addition to steps 1 to 11.
    loosened; CI configuration changes.
 2. Work-item hygiene: each ticket matches the change; each acceptance criterion is met or
    not, with evidence; follow-ups are recorded; each `status` claim's parent and links match
-   the forge data. Read the brief's "not in export" items and report each as a gap in what
-   could be checked. Write `## Scope` as step 9 says.
+   the forge data (a GitHub ticket's `<ticket>.md` gives its parent as
+   `github:<repo>#<number>`, or `none`). Read the brief's "not in export" items and
+   report each as a gap in what could be checked. Write `## Scope` as step 9 says.
 3. Cross-bundle interactions: shared contracts, schemas, and APIs changed in one bundle and
    used in another; the stack order the brief records.
 4. Low tier: one auditor covers the ticket's group, tests, and work-item hygiene with the

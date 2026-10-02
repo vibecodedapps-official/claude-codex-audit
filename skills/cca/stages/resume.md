@@ -123,14 +123,15 @@ never loses a finished one. With `--live`, it first imports approved live check 
      `manifest.json`), each claims file, the questions file, the content hash of
      every `file:` ticket or PR export, and `plugin_version`;
    - the stage 1 `forge_hashes`: recompute each path in the map (`1-orient.md` step 2:
-     `pr.hash.json`, `pr-threads.json`, `<ticket>.json`) and compare it with the
-     recorded hash. For `pr.hash.json`, project the one file step 3 already fetched
-     with the identical `jq` command of step 2, reading
+     `pr.hash.json`, `pr-threads.json`, `<ticket>.json`, `<ticket>.parent.json`) and
+     compare it with the recorded hash. For `pr.hash.json`, project the one file step
+     3 already fetched with the identical `jq` command of step 2, reading
      `forge/<bundle>/pr.json.new`, and hash the result, with no second query:
      `jq '<filter>' forge/<bundle>/pr.json.new | git hash-object --no-filters --stdin`.
      The projection leaves out `headRefOid` and `baseRefOid`, which step 3 compares on
-     their own. For `pr-threads.json` and each `<ticket>.json`, run the identical `gh`
-     command of step 2, with the same owner, repo, number, and projection, and with
+     their own. For `pr-threads.json`, each `<ticket>.json`, and each
+     `<ticket>.parent.json`, run the identical `gh` command of step 2, with the same
+     owner, repo, number, and projection, and with
      its `> <path>` redirect replaced by `| git hash-object --no-filters --stdin`, so
      no file is written. Run every such pipeline with `set -o pipefail` in front of it
      (or write the producer's output to a temporary file and hash it only when the

@@ -338,8 +338,9 @@ For each bundle, save under `forge/<bundle>/`:
 - `<ticket>.md` for each ticket in the bundle, and each ticket the PR's
   `closingIssuesReferences` names: text, state, acceptance criteria, fields, links,
   comments, rendered from the ticket's `.json` below (for a GitHub ticket, the pull
-  requests that close it, from `closed_by`, are listed under links). For an export, copy
-  its content.
+  requests that close it, from `closed_by`, are listed under links, and its parent, from
+  `<ticket>.parent.json`, is written as `parent: github:<repo>#<number>`, or
+  `parent: none`). For an export, copy its content.
 
 Every saved `.md` file starts with a provenance block: the source (`gh`, or the export's
 `source`, `exported_by`, and `exported_at`), and the time it was read. When no forge
@@ -365,12 +366,17 @@ commands and the same `jq` projection.
   `gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {id, path, line, original_line, commit_id, body, user: .user.login, created_at, updated_at, in_reply_to_id}' > forge/<bundle>/pr-threads.json`
 - `forge/<bundle>/<ticket>.json`, one per GitHub ticket:
   `gh issue view <n> -R <owner>/<repo> --json number,url,title,body,state,labels,comments,closedByPullRequestsReferences --jq '{number,url,title,body,state,labels: [.labels[].name], closed_by: [.closedByPullRequestsReferences[] | {number, url}], comments: [.comments[] | {author: .author.login, body, createdAt}]}' > forge/<bundle>/<ticket>.json`
+- `forge/<bundle>/<ticket>.parent.json`, the parent of each GitHub ticket,
+  `{"parent":null}` when it has none. `gh issue view` has no parent field, so this is a
+  GraphQL read:
+  `gh api graphql -f query='query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { issue(number: $n) { parent { number url repository { nameWithOwner } } } } }' -f owner=<owner> -f repo=<repo> -F n=<n> --jq '{parent: (.data.repository.issue.parent | if . then {number, url, repo: .repository.nameWithOwner} else null end)}' > forge/<bundle>/<ticket>.parent.json`
 
-Hash `pr.hash.json`, `pr-threads.json`, and each `<ticket>.json` with
-`git hash-object --no-filters <file>`; the threads and ticket files are hashed as
-written (their `--jq` output is already the projection), and `pr.json` itself is never
-hashed. Step 10 records the hashes in the stage 1 entry's inputs as `forge_hashes`, a
-map from run-relative path (such as `forge/<bundle>/pr.hash.json`) to hash. Exports
+Hash `pr.hash.json`, `pr-threads.json`, and each `<ticket>.json` and
+`<ticket>.parent.json` with `git hash-object --no-filters <file>`; the threads, ticket,
+and parent files are hashed as written (their `--jq` output is already the projection),
+and `pr.json` itself is never hashed. Step 10 records the hashes in the stage 1 entry's
+inputs as `forge_hashes`, a map from run-relative path (such as
+`forge/<bundle>/pr.hash.json`) to hash. Exports
 (`file:` tickets and PRs) have no `.json` file and no entry in `forge_hashes`; their
 content hashes are in D7.
 
