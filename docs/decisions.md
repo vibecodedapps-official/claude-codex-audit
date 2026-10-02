@@ -515,6 +515,20 @@ Later rounds of the same review, each fix shown failing on the old script first,
    fallback build. A repo or checked-out submodule with no index file is now refused,
    and the fallback is gone.
 
+A review of PR #12 on 2026-10-02 found 6. Two were taken, each shown failing first:
+
+1. A submodule path git quotes was skipped by the filter scan, yet `git status` still ran
+   and recursed into it, running its clean filter (a DEL in the name reproduces it on
+   Windows too). Inside a submodule, the quoted path was not refused at all. Such a path,
+   at any depth, is now refused as a quoted path, and `git status` is skipped.
+2. Without `jq`, `live.sh import` kept the results file and the `active` that follows
+   failed, so every later resume of the run stopped. `import` now exits 2 before it
+   writes anything, and the README lists `jq` for `--live`.
+
+Three findings about unbounded agent inputs (a live result value of any length, every
+memory match, and every untracked file in the brief) join the deferred bounded-loading
+item below. The proposal to split the PR was declined: 0.3.0 was planned as one PR.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
@@ -535,4 +549,8 @@ Later rounds of the same review, each fix shown failing on the old script first,
   450,000-byte chunk or ledger slice, an ordinary corpus file is read in full, a single
   finding larger than the split threshold is passed whole as an `over threshold` part,
   and a merger may reopen a full ledger file for a duplicate check. A per-agent byte
-  cap with sectioned inputs is a later design change, still deferred.
+  cap with sectioned inputs is a later design change, still deferred. 0.3.0 adds three
+  unbounded inputs (2026-10-02 review): a live result value of any length, the
+  `memory.sh` output (one claim with "Step 1" and "version 2" against 300 memory files
+  printed 601 lines, all but one from the keys `1` and `2`; a cap per key with a count of
+  the rest would fix it), and the brief's list of untracked files.
