@@ -440,7 +440,7 @@ Probes (2026-10-01, git 2.55.0.windows.5, gh 2.91.0, Git Bash, isolated config):
 - `gh issue view --json` has no parent field and offers `closedByPullRequestsReferences`,
   first named in the gh v2.73.0 release notes.
 - ccl#25 is the merged ccl 0.9.0 PR, not an open issue; ccl writing `parent` and `links`
-  needs a new ccl issue, asked before opening.
+  is ccl#26, opened 2026-10-02.
 
 Review findings, by round, and how each was settled:
 
