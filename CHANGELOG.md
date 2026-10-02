@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 - 2026-10-02
 
 ### Fixed
 
@@ -19,6 +19,10 @@
   `gh pr` or `gh issue` command in a code span under `agents/`, `skills/`, or
   `commands/` that passes neither `-R <host>/<owner>/<repo>` nor a URL argument, and on
   a `gh api` command without a `--hostname` option.
+
+### Changed
+
+- A run started under 0.3.0 and resumed under 0.3.1 reruns from stage 1.
 
 ## 0.3.0 - 2026-10-01
 
