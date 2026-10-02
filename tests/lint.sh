@@ -23,7 +23,7 @@
 # - skills/cca/SKILL.md has frontmatter keys name, description, and the line
 #   `user-invocable: false`; it names each stage file below by path, and every
 #   stages/*.md path it mentions exists under skills/cca/.
-# - skills/cca/handoff.md and skills/cca/work-items.md exist.
+# - skills/cca/handoff.md, skills/cca/live.md, and skills/cca/work-items.md exist.
 # - Every scripts/<name>.sh path that a file under skills/ or commands/ mentions
 #   exists under skills/cca/scripts/.
 # - .claude-plugin/plugin.json and marketplace.json parse as JSON (node, else
@@ -180,7 +180,7 @@ else
 fi
 
 # The handoff and work-item formats, and the scripts the plugin files name.
-for f in skills/cca/handoff.md skills/cca/work-items.md; do
+for f in skills/cca/handoff.md skills/cca/live.md skills/cca/work-items.md; do
 	grep -qx "$f" "$files" || fail "missing: $f"
 done
 for f in $(listed '^(skills|commands)/'); do

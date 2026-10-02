@@ -11,7 +11,12 @@ two and every map-correction top-up has finished).
 
 Inputs: `ledger/5.md` and the other run-directory inputs `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`
 lists (`audit-brief.md`, `common.md`, `claims.md`, the diffs and stats, the `pass2/`
-files).
+files), and the live inputs: `live/findings.md` and each `live/carried/<id>.md` it names
+(`${CLAUDE_PLUGIN_ROOT}/skills/cca/live.md`). Each live input is recorded in the stage
+entry with its hash, or `absent` when it does not exist; absent to present, or present to
+absent, is a change that reruns the stage (`resume.md`, step 5). `live/findings.md`
+exists only on a run resumed with a live finding result. A `_test.drop_ack` naming
+`live/findings.md` applies like any other input.
 
 Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md`,
 and, when the fallback answers several batches, `codex/request-<k>.md` and
@@ -42,24 +47,30 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
      entry. The orchestrator never runs the `codex` CLI for anything else.
 
 4. **Build the request** from `ledger/5.md`, per `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`:
-   1. Copy each input the template lists to `codex/inputs/<run-relative path>`, with
-      the sentinel line the template gives as its first line and a new random token per
-      copy. Only generated run-directory files get a sentinel; the originals are not
-      changed. Audited source files never get a sentinel, are never copied, and are
-      named by their read path and sha from the brief. Keep every path and token for the
-      stage entry's `sentinels` map.
-   2. Write `codex/request.md`, filling the template: the inputs, then the
-      acknowledgment section, then the asks in the template's order (every blocker and
-      high, every pass-two downgrade or drop, dropped findings to restore including
-      dismissed ones, up to ten new findings, severity recalibration, a non-binding
-      merge verdict per bundle), within the 3,000-word answer cap and two quoted lines
-      per citation. Asks 1 and 2 each end with the template's id slot: when step 4.3
-      splits the mandatory set, `for these ids: <the batch's ids>` (the first batch
-      here); otherwise `for every such finding`. It names each input copy by its absolute
-      path, and each audited source by its absolute read path and sha from the brief.
+   1. Copy each input the template lists to `codex/inputs/<run-relative path>`, with the
+      sentinel line the template gives as its first line and a new random token per copy;
+      this includes `live/findings.md` and each `live/carried/<id>.md` it names, when they
+      exist, so each is a request input with a sentinel. Only generated run-directory
+      files get a sentinel; the originals are not changed. Audited source files never get
+      a sentinel, are never copied, and are named by their read path and sha from the
+      brief. Keep every path and token for the stage entry's `sentinels` map.
+   2. Write `codex/request.md`, filling the template: the inputs, then the acknowledgment
+      section, then the asks in the template's order (every blocker and high, every
+      pass-two downgrade or drop, dropped findings to restore including dismissed ones, up
+      to ten new findings, severity recalibration, a non-binding merge verdict per
+      bundle), within the 3,000-word answer cap and two quoted lines per citation. Ask 1
+      also covers each finding `live/findings.md` lists, judged with its live result, and
+      names each carried one with its carried file. When `live/carried/` holds an `X<n>`,
+      ask 4 numbers the additions after the highest carried `X<n>`: the carried ids are
+      reserved, so an addition never reuses one. Asks 1 and 2 each end with the template's
+      id slot: when step 4.3 splits the mandatory set, `for these ids: <the batch's ids>`
+      (the first batch here); otherwise `for every such finding`. It names each input copy
+      by its absolute path, and each audited source by its absolute read path and sha from
+      the brief.
    3. **Mandatory id set and batches.** From `ledger/5.md`, collect every finding id at
-      severity blocker or high, and every finding id that pass two downgraded or
-      dropped. Asks 1 and 2 require a position for each, and no mandatory id may be
+      severity blocker or high, every finding id that pass two downgraded or dropped, and
+      every finding id `live/findings.md` lists (a carried id may have no section in
+      `ledger/5.md`). Asks 1 and 2 require a position for each, and no mandatory id may be
       left unrequested in a run that completes. The 3,000-word answer cap cannot hold
       more than 60 ids, so when the set has more, split it in id order into batches of
       at most 60 ids; each batch is the id list in the slot of asks 1 and 2.
@@ -118,12 +129,12 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
 
    A fresh retry is not a follow-up.
 
-8. **Check acknowledgments.** Every input the request names must have its sentinel
-   quoted in the answer. When `_test.drop_ack` names an input (by run-directory path,
-   such as `ledger/5.md`), treat that input's acknowledgment as missing for the first
-   `times` checks, whatever the answer says.
-   Also compute now, against the answer, the mandatory ids (step 4.3) that it leaves
-   without a position, and whether a second batch of asks 1 and 2 is due.
+8. **Check acknowledgments.** Every input the request names must have its sentinel quoted
+   in the answer. When `_test.drop_ack` names an input (by run-directory path, such as
+   `ledger/5.md` or `live/findings.md`), treat that input's acknowledgment as missing for
+   the first `times` checks, whatever the answer says. Also compute now, against the
+   answer, the mandatory ids (step 4.3) that it leaves without a position, and whether a
+   second batch of asks 1 and 2 is due.
    - All inputs acknowledged, no mandatory id without a position, and no second batch
      due: continue to step 9.
    - Anything else (an input unacknowledged, a mandatory id without a position, or a
@@ -170,7 +181,8 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
 
 10. **Check the mandatory positions, then write `ledger/6.md` once.** Before writing,
     take the ids step 10 requires, which are every mandatory id from step 4.3 (computed
-    from `ledger/5.md`; all of them are requested across the batches), and compare
+    from `ledger/5.md` and `live/findings.md`; all of them are requested across the
+    batches), and compare
     them with the finding ids the answer, with any follow-up appended, addresses with a
     position. When an id has a position in more than one place, the later one replaces
     the earlier; both stay in `codex/response.md`. For Codex this is a check after the
@@ -192,7 +204,9 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
       it covers), with its reason (`## Role`);
     - the acknowledgment table: each input, its sentinel, acknowledged or not
       (`## Acknowledgments`);
-    - one section per `ledger/5.md` finding id the answer addresses:
+    - one section per finding id the answer addresses, whether it is in `ledger/5.md`
+      or only in `live/findings.md` (a carried `X<n>` or `L<n>` may have a position here
+      although its block is no longer in any ledger file):
 
       ```
       ## <finding id>
@@ -249,7 +263,8 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
     requested (step 4.3), so every mandatory id is requested.
     When every batch passes both checks, write `ledger/6.md` from the answers as in
     step 10. Its additions also take `origin: codex` and ids `X<n>`, since they come
-    from the second opinion; only the first batch's answer carries additions.
+    from the second opinion, numbered after the highest carried `X<n>` (a carried id is
+    reserved); only the first batch's answer carries additions.
 
 12. **Stage completion.** Stage 6 is `complete` when an answer from Codex or the
     fallback is saved, every input is acknowledged by whoever filled the role, every id
@@ -268,7 +283,7 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
     ```json
     "codex_model": "gpt-6.1-sol",
     "codex_timeout": 1200,
-    "sentinels": { "ledger/5.md": "<token>" },
+    "sentinels": { "ledger/5.md": "<token>", "live/findings.md": "<token>" },
     "codex": { "called": true, "form": "path", "thread": "<id>", "status": "ok",
                "retried": false, "follow_up": false, "unacknowledged": [],
                "codex_version": "<text>", "codex_lite_version": "<text>" },

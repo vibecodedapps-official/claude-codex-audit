@@ -66,7 +66,7 @@ audit, check out the pinned sha cleanly so the repo is read directly.
            [--no-codex] [--codex-model <id>] [--models role=model,...]
            [--questions <file>] [--claims <file>]... [--budget <minutes>]
            [--max-agents <n>] [--codex-timeout <seconds>]
-/cca:resume <run-id> [--from <stage>]
+/cca:resume <run-id> [--from <stage>] [--live <file>]
 /cca:act <run-id> <item-id...> [--per-item]
 /cca:handoff [<manifest.json>] [<inputs...>] [--out <path>] [--verdicts <claims-verdicts.md>]
            [--memory <dir>]
@@ -75,7 +75,7 @@ audit, check out the pinned sha cleanly so the repo is read directly.
 - `/cca:handoff` runs in the build session and writes a typed handoff for `/cca:audit`.
 - `/cca:audit` runs stages 1 to 8 and stops at the report.
 - `/cca:resume` reruns a run from a stage, reusing only the stages whose inputs have not
-  changed.
+  changed, and with `--live` feeds approved live check results back into it.
 - `/cca:act` runs stage 9 on the items you approve.
 
 An unknown flag or a bad value is rejected in one line, and nothing is written.
@@ -114,6 +114,12 @@ commit list and overlap set depend on the base tip. A GitHub PR's base is the lo
 brief used; a difference invalidates stage 1, and if the forge cannot be queried,
 resume stops. A run directory with `manifest.json` but no `stages.json` reruns from
 stage 1; one without `manifest.json` is unrecoverable.
+
+`--live <file>` feeds the results of approved live checks back into a finished run (see
+Live data below). It takes an existing file, once, and is rejected with `--from` 1 to 5.
+It is also refused, without asking, when the run has no finished stage 1 or no report, or
+when a bundle's head or base has moved: run `/cca:resume <run-id>` first, which may ask to
+restart.
 
 ### `/cca:act`
 
@@ -300,13 +306,17 @@ decision ledger, the raised tickets, and the other decisions.
 **`claims-verdicts.md`.** Stage 8 writes it next to `report.md`, with the report's
 revision. It has one entry per claim of each claims file, in claim order, grouped by file
 (each group names the file's hash). An entry is a main line with the claim number, kind,
-source line, handoff ref, verdict (`true`, `false`, `not verified`, or `contested`),
+source line, handoff ref, verdict (`true`, `false`, `not verified`,
+`not reproducible here`, or `contested`),
 finding ids, and a pointer to the evidence, followed by three indented sub-lines,
 `ticket:` (the claim's ticket id, or `none`), `text:`, and `correction:` (a correction or
 `none`). The text and the correction sit on their own lines so a `; ` inside them cannot
 be misread. A file from 0.2.0 has no `ticket:` sub-line. `false` entries are corrections.
 `not verified` lines on verification claims are recheck requests, not evidence the
-statement is wrong. `contested` entries need a person to decide.
+statement is wrong. `not reproducible here` lines are not recheck requests: the check
+was tagged `env: <name>;` and ran against an environment the audit cannot reach, so run
+it there and feed the result back with `/cca:resume <run-id> --live <file>`; applying
+the file changes nothing for such a line. `contested` entries need a person to decide.
 
 To apply it, run `/cca:handoff --verdicts <claims-verdicts.md>` in the build session. A
 line is applied only when its file hash and claim text match the handoff source it names;
@@ -531,8 +541,21 @@ its sentinel. Only an input it could not open goes inline, in the one follow-up,
   to that access. Each access is logged in the report. A check you did not approve is
   listed in the report's Live checks section, with the query, where it runs, and what
   each result would mean; the finding stays an unverified assumption, capped at medium,
-  until the check runs. A live check result is not fed back into a run: rerun the
-  audit or act on the finding by hand.
+  until a live result for it has passed the review gate. A verification check tagged
+  `env: <name>;` in a handoff is listed there too, by claim number, and is never `true`
+  or `false` from a run in this environment.
+- **Live results.** Run an approved check yourself, then write its result in a `--live`
+  file and run `/cca:resume <run-id> --live <file>`. Per check the file gives the finding
+  id (or `claim <n>` for an env claim), the query as the report states it, the
+  environment for a claim, where it ran, the result, who approved the access, and when;
+  the format is in `skills/cca/live.md`. Resume checks the file against the report's
+  revision and the query, records each approval, and rederives the finding's label and
+  severity or the claim's verdict. A changed finding goes back to the second opinion and
+  the late adversary, and stays provisional until both have seen it. Resume then writes
+  a new report with a new revision, so an approval given to `/cca:act` against the old
+  one no longer matches. A result for an `X<n>` or `L<n>` finding is kept with the
+  finding, since a rerun renumbers those ids. A later resume that reruns from stage 5 or
+  earlier retires the imported results, which stay on disk as the record.
 - **External text.** Anything cca drafts for outside use (commit messages, PR or ticket
   text, and comments) names no model, agent, or tool. The report is internal and may
   name them.

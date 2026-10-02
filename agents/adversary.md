@@ -74,13 +74,28 @@ the Verified OK list the tier lets you attack.
 
 ## Late adversary mode
 
-1. Read `common.md`, `audit-brief.md`, `ledger/5.md`, and `ledger/6.md`.
+1. Read `common.md`, `audit-brief.md`, `ledger/5.md`, and `ledger/6.md`, and, when your
+   prompt names them, `live/findings.md`, `live/claims.md`, and the files under
+   `live/carried/`.
 2. Challenge every late addition (`- origin: pass2`, `- origin: topup`, and
    `- origin: codex`) and every finding the second opinion asked to restore, together with
-   its stage 5 verdicts, as in steps 3 and 4.
-3. Anything you raise yourself is provisional: number it `L<n>` with the line
-   `- origin: late` after its title. No further round follows.
-4. Finish with steps 12 and 13.
+   its stage 5 verdicts, as in steps 3 and 4. Also challenge every finding
+   `live/findings.md` lists: a live result is a run the approver made, so read its
+   derivation against the finding's own `live check` outcomes and the result, and check
+   that exactly one stated outcome matches and that the result ran at the place and with
+   the query the check names. A carried finding (`X<n>` or `L<n>`) is read from its
+   `live/carried/<id>.md`, since the ledger may no longer hold it. When your prompt is a
+   low-tier run, these are the only ids you challenge. You never run a live check
+   yourself (boundary 4).
+3. Write `## Claims challenged` after the verdicts, as step 9 of pass two says: a line
+   for every claim `live/claims.md` derives `true, reproduced`, upheld or overturned with
+   your evidence. A live env claim is reproduced only by a result from the environment it
+   names; a result under another `env` does not uphold it. Write `none` when
+   `live/claims.md` derives none.
+4. Anything you raise yourself is provisional: number it `L<n>` with the line
+   `- origin: late` after its title, numbered after the highest carried `L<n>` (a carried
+   id is reserved for its finding). No further round follows.
+5. Finish with steps 12 and 13.
 
 ## Second-opinion fallback mode
 
@@ -93,12 +108,15 @@ You stand in for Codex and answer the same request it would have received.
    lists, its first line exactly as you read it (the line starting `cca-sentinel:`). List
    an input you could not open as `not read: <path>`.
 3. Answer the request's asks in its order, in its "Answer format": one line per finding,
-   your own evidence, findings no reviewer raised numbered `X<n>` with the line
-   `- origin: codex`, at most 3,000 words in total and at most two quoted lines per
-   citation, ending with the non-binding merge verdict per bundle. When asks 1 and 2
-   end with `for these ids: <id list>`, give a position for every id in that list and
-   for no other; when a request holds only asks 1 and 2 (a later batch), answer those
-   and give no additions or merge verdicts.
+   your own evidence, findings no reviewer raised numbered `X<n>` with the line `- origin:
+   codex` and numbered after the highest carried `X<n>` in the request (a carried id is
+   reserved for its finding), at most 3,000 words in total and at most two quoted lines
+   per citation, ending with the non-binding merge verdict per bundle. When asks 1 and 2
+   end with `for these ids: <id list>`, give a position for every id in that list and for
+   no other, judging a finding that `live/findings.md` lists with its live result and
+   reading a carried one from the carried file the request names; when a request holds
+   only asks 1 and 2 (a later batch), answer those and give no additions or merge
+   verdicts.
 4. Your output file is the one your prompt names (`codex/response.md`, or
    `codex/response-<k>.md` for a later batch). After the merge verdicts (or, for a later
    batch, the last position), finish with steps 12 and 13.

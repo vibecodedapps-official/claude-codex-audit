@@ -60,7 +60,9 @@ These hold for every stage, for the orchestrator and every agent.
    are used only when a question cannot be answered from code, and only after the user
    says yes to that access. Each access is logged in the report. A check not approved is
    listed in the report's Live checks section. An agent never asks for or uses live
-   access itself; it writes a `live check` field, and the orchestrator asks the user.
+   access itself; it writes a `live check` field, and the orchestrator asks the user. The
+   result of a check the user ran comes back in a `--live` file (`live.md`), and its
+   approval is recorded from that file, never asked for again.
 6. **Evidence.** A claim is not a fact until evidence is cited (see Evidence).
 7. **Disk first.** Every agent writes its output file before it reports back and
    returns only the path and a one-line status.
@@ -69,13 +71,18 @@ These hold for every stage, for the orchestrator and every agent.
 
 ## Evidence
 
-Every piece of evidence names its repo and the commit it was read at. Three kinds:
+Every piece of evidence names its repo and the commit it was read at. Four kinds:
 
 - **Quote:** `repo@sha:path:line`, with the quoted lines.
 - **Search:** the exact command, its scope, and its result, including an empty result.
   This is how absence is shown.
 - **Run:** the exact command, where it ran, and the output, marked as cut where cut.
   Every run is logged under the agent's `runs:` heading.
+- **Live result:** the result of an approved live check, fed back with `--live` and cited
+  by its `live/` file and line (`live/results-<k>.md:<line>`, or the carried file for a
+  finding the ledger no longer holds). It counts as a run the approver made, so it can
+  demonstrate a defect. It is evidence only after it has passed the review gate
+  (`stages/7-converge.md`, step 4).
 
 Forge evidence is a URL with a quote. A finding separates what the evidence
 **demonstrates** from what it **infers**. The label `verified fact` requires that the
@@ -87,10 +94,11 @@ behavior.
 A digest (`guidelines/digest-N.md`) or a map (`domain/<source>-map.md`) is a pointer,
 not evidence. Cite the original document or source at its pinned sha.
 
-A finding with a `live check` keeps `unverified assumption` and its cap until the check
-has run. A missing rationale in the ticket or PR is not by itself a defect. The diff is
-always the three-dot diff in `diffs/<bundle>.diff`; never compare base and head with a
-two-dot diff, which shows the base's later changes as reversals on the head.
+A finding with a `live check` keeps `unverified assumption` and its cap until a live
+result for it has passed the review gate. A missing rationale in the ticket or PR is not
+by itself a defect. The diff is always the three-dot diff in `diffs/<bundle>.diff`; never
+compare base and head with a two-dot diff, which shows the base's later changes as
+reversals on the head.
 
 ### Reading trees and searching
 
@@ -205,6 +213,18 @@ directory, a missing environment variable, service, or account, or another envir
 than the one the statement names. The claim is then `not verified, not reproduced`, and
 the reason names what differs. Reproducing a result does not show that the build session
 ran its stated check; the report says so once in its Claims section.
+
+## Env claims
+
+An env claim is a `verification` claim whose check part, the text after the first
+`; check: ` of its entry, starts with `env: ` (`env: <name>; <check>`, as `handoff.md`
+defines it). The rule is mechanical: stage 1 adds no marker to `claims.md`. The check
+ran against the environment `<name>`, which the audit cannot reach, so a run here is a
+run against another environment. Pass one writes it
+`not verified, not reproduced; needs a live check: env <name>`, never `true` or `false`
+from a run here. The report lists each env claim by claim number in its Live checks
+section, with its environment and command, and `claims-verdicts.md` gives it the verdict
+`not reproducible here` until a live result settles it (`live.md`).
 
 ## Decisions
 

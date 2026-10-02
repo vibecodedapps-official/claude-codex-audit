@@ -140,10 +140,23 @@ enter a ledger, and never change the counts.
 
 ### 9. Live checks
 
-For each finding with a live check: its item id, the query, where it runs, and the
-severity each result implies. Mark each `run (approved <time>)` with its result, or
-`not run: not approved`. A result is not fed back into this run; the user reruns the
-audit or acts on the finding by hand. Every approved live access is logged here.
+One block per live check: each finding with a live check, and each env claim
+(`common.md`, "Env claims"), keyed by claim number. Every value is a whole line, and the
+format is the one in `live.md`:
+
+```
+#### live <finding id> | live claim <n>
+- item: C<n> | claim <n>
+- query: <the query or command, exactly as the check states it>
+- where: <where it runs>                  (finding)
+- env: <name>                             (env claim)
+- results: <what each result changes>     (finding)
+- status: not run: not approved | run, approved by <who> at <time>: <result>; derived: <derived>; <reviewed | under review: <what it lacks>>
+```
+
+A result is fed back with `/cca:resume <run-id> --live <file>`. Every approved live
+access, each result with its approver and time, is logged here. `none` when no finding
+has a live check and no claim is an env claim.
 
 ### 10. Claims
 
@@ -154,7 +167,9 @@ no pass-one entry is `not verified`, with the reason "not assessed".
 
 A `verification` claim is `true, reproduced` only when the audit reproduced the stated
 result itself, `false, contradicted` only with counter-evidence, and otherwise
-`not verified, not reproduced` with the reason. One line says that reproducing a stated
+`not verified, not reproduced` with the reason. A live claim takes its derived verdict,
+and `contested` when the late adversary overturned it, or `not verified, not reproduced`
+when the late adversary gave no line. One line says that reproducing a stated
 result does not show that the build session ran its stated check. Where the auditor's
 and the adversary's verdicts differ, both are shown.
 

@@ -608,7 +608,10 @@ generated: 2026-09-01T12:00:00Z
 Apply a line only when its file hash and claim text match what you hold. \`false\` lines
 are corrections: the statement is contradicted by the cited evidence. \`not verified\` lines
 on verification claims are recheck requests: the audit could not reproduce the check, which
-is not evidence the statement is wrong. \`contested\` lines need a person to decide.
+is not evidence the statement is wrong. \`not reproducible here\` lines are not recheck
+requests: the check ran against an environment the audit cannot reach, so run it against
+that environment and feed the result back with \`/cca:resume <run-id> --live <file>\`.
+\`contested\` lines need a person to decide.
 
 ## $T/handoff.md (handoff), hash $1
 

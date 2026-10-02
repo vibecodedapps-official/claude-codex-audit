@@ -13,12 +13,18 @@ Inputs: `converged.md`, `gate.md`, `ledger/5.md`, `ledger/6.md`, `ledger/7.md`, 
 `pass1/` and `pass2/` files (Claims and Verified OK lists, attacked Verified OK lists, the
 `## Decisions` and `## Scope` sections of pass one, and the `## Claims challenged`,
 `## Decisions challenged`, and `## Scope challenged` sections of pass two),
-`claims.md`, `audit-brief.md`, `manifest.json`, `stages.json`, `usage.md`, and
-`baseline/*-check.md`, whichever exist.
+`claims.md`, `audit-brief.md`, `manifest.json`, `stages.json`, `usage.md`,
+`baseline/*-check.md`, and the live files: `late/adversary.md` (it holds the challenge
+lines for the live claims, which are never ledger content), `live/findings.md`,
+`live/claims.md`, and each `live/carried/<id>.md`, whichever exist. The results files
+`live/results-<k>.md` that the derived files cite are read for each result's text,
+approver, and time; they are never changed, so they are not hashed.
 
 Recorded input hashes (`git hash-object --no-filters`): `converged.md`, `gate.md`, the
-ledger files, `claims.md`, `audit-brief.md`, `manifest.json`, and each `pass1/` and
-`pass2/` file read, whichever exist. `stages.json` and `usage.md` are read but not
+ledger files, `claims.md`, `audit-brief.md`, `manifest.json`, `late/adversary.md`,
+`live/findings.md`, `live/claims.md`, each `live/carried/<id>.md`, and each `pass1/` and
+`pass2/` file read, whichever exist (`absent` for a live file that does not exist, as
+`${CLAUDE_PLUGIN_ROOT}/skills/cca/live.md` says). `stages.json` and `usage.md` are read but not
 hashed: they are run state, not inputs, and stage 8's own entry is written into
 `stages.json`, so a hash of it could never match on resume.
 
@@ -36,11 +42,17 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
       does not discard a checked merge): use its items, gates, and dispositions.
    2. Else the ledger files that exist: one item per ledger finding, with its state after the last verdict it has. Compute its gate with the rules
       in `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/7-converge.md` step 4 from the ledger files present; a
-      finding that has not passed them is `provisional`. Disposition: `dismissed` when
+      finding that has not passed them is `provisional`. The finding set is the ledger
+      findings plus every active carried finding (`live/carried/<id>.md`), one item per
+      id, each carried finding joined with its positions in `ledger/6.md` and
+      `ledger/7.md` and gated by the live rule. A position on a finding whose live review
+      has not completed is `pending review`: it is listed under the item and never sets
+      its severity, label, or disposition (stage 7, step 6). Disposition: `dismissed` when
       its last verdict is `dropped` and no one asked to restore it, `contested` when
       verdicts disagree on existence or severity, else `agreed`.
    3. Else the `pass1/` and `pass2/` files: one item per finding, every one
-      `provisional`, with the pass-two verdicts that exist.
+      `provisional`, with the pass-two verdicts that exist, and the carried findings added
+      the same way.
 
    In the fallback paths 2 and 3, stage 8 still assigns `C<n>` ids, sequential in
    ledger order (or file order for path 3), each item listing its finding id as
@@ -123,10 +135,18 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
       Decision and scope entries are report items, not findings: they get no `C<n>` id
       of their own, never enter a ledger, and never change the counts. A finding an
       entry names in its `finding:` field is in section 2 like any other.
-   9. Live checks: for each finding with a live check, its id, the query, where it
-      runs, and the severity each result implies; each check the user did not approve
-      is listed here. A result is not fed back into a run: the user reruns the
-      audit or acts on the finding by hand.
+   9. Live checks: one block per live check, in the format of `live.md`: a
+      `#### live <finding id>` block for each finding with a live check, and a
+      `#### live claim <n>` block for each env claim, keyed by claim number, with its
+      environment and command. Fill each `status` line from `live/findings.md`,
+      `live/claims.md`, the results files they cite, and the `live` approvals in
+      `stages.json`: `not run: not approved`, or
+      `run, approved by <who> at <time>: <result>; derived: <derived>; <reviewed | under review: <what it lacks>>`.
+      A finding is `under review` while its live review has not completed (its `gate.md`
+      reason is `live result not yet reviewed`). Every result, the winner and each
+      `earlier` one, is logged here as an access with its approver and time, as hard
+      rule 5 requires. A check the user did not approve is listed as not run. A result is
+      fed back with `/cca:resume <run-id> --live <file>`.
    10. Claims: every numbered claim in `claims.md` with its kind, then `true`, `false`,
        or `not verified`, and the finding or evidence, from the pass-one Claims lists as
        revised by later verdicts. A claim no list covers is `not verified`, and so is a claim
@@ -135,6 +155,12 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
        stated result itself; `false, contradicted` only with counter-evidence; else
        `not verified, not reproduced`, with the reason. A claim that a
        `## Claims challenged` line overturned shows both verdicts and is `contested`.
+       A live claim (`live/claims.md`) takes its derived verdict: a derived
+       `true, reproduced` with the late adversary's `upheld` (from `late/adversary.md`)
+       stays `true, reproduced`; `overturned` makes it `contested`; and no line (the late
+       adversary failed after the ladder) makes it `not verified, not reproduced`, with
+       the reason "live result not challenged". An env claim with no live result stays
+       `not verified, not reproduced`, reason `needs a live check: env <name>`.
        Say once, in this section, that reproducing a stated result does not show that
        the build session ran its stated check.
    11. Coverage, from `stages.json`, `audit-brief.md`, and the check files:
@@ -252,11 +278,14 @@ generated: <time>
 Apply a line only when its file hash and claim text match what you hold. `false` lines
 are corrections: the statement is contradicted by the cited evidence. `not verified` lines
 on verification claims are recheck requests: the audit could not reproduce the check, which
-is not evidence the statement is wrong. `contested` lines need a person to decide.
+is not evidence the statement is wrong. `not reproducible here` lines are not recheck
+requests: the check ran against an environment the audit cannot reach, so run it against
+that environment and feed the result back with `/cca:resume <run-id> --live <file>`.
+`contested` lines need a person to decide.
 
 ## <claims file absolute path> (handoff | prose), hash <git hash-object --no-filters>
 
-- claim <n> [<kind>] <source file>:<line> <handoff ref or ->: <true | false | not verified | contested>; finding: <C<n>, ... or none>; evidence: <pointer>
+- claim <n> [<kind>] <source file>:<line> <handoff ref or ->: <true | false | not verified | not reproducible here | contested>; finding: <C<n>, ... or none>; evidence: <pointer>
   ticket: <the claim's ticket id, or none>
   text: <the claim's text as in claims.md>
   correction: <text or none>
@@ -275,6 +304,9 @@ is not evidence the statement is wrong. `contested` lines need a person to decid
   `id`; else `none`. A file written by 0.2.0 has no `ticket:` sub-line.
 - `(handoff)` for a file `handoff.sh detect` accepted, else `(prose)`. The handoff ref
   is the one in the claim line, or `-` for a prose claim.
+- `not reproducible here` is the verdict of an env claim (`common.md`, "Env claims") that
+  no live result has settled. An env claim with a live result takes the verdict of the
+  report's section 10 like any other.
 - `contested` is used when the auditor's and the adversary's verdicts differ; both are
   given in the report's Claims section. Otherwise the verdict is the one in the report's
   section 10. For a `verification` claim, `true` means reproduced and not overturned.
