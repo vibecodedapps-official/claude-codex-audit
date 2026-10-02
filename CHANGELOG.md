@@ -32,6 +32,7 @@ Closes issues #5 to #11. No full multi-agent audit has run yet; see `docs/accept
   operation, and operations that reach no report item or claim.
 - Report section 9 lists each live check as a block keyed by finding id or claim number.
 - GitHub tickets need gh 2.73.0 or later.
+- `/cca:resume --live` needs `jq`, on any forge.
 - CI runs the three new script tests on all runners and under mawk, and fails when jq is
   missing.
 - A run started under 0.2.0 and resumed under 0.3.0 reruns from stage 1.

@@ -371,6 +371,24 @@ rm -rf "$w/i5" && mkdir "$w/i5"
 run "import, long result" 0 "live: imported live/results-1.md" "" import longres.md report.md i5
 [ "$(sha "$w/i5/live/results-1.md")" = 53e82444536d4c2c202e313227e7d14d35646831e9cd9a4ae512c37cd57c6e7c ] || fail "import, long result: the kept file differs"
 
+# Without jq, import exits 2 before it writes anything, since the reconcile after it runs
+# `active`, which needs jq. Runs only where PATH without jq's directories still has the
+# shell and the tools the script uses (jq installed apart from them); else prints a skip.
+nojq=$(printf '%s\n' "$PATH" | tr ':' '\n' | while IFS= read -r pd; do
+	[ -x "$pd/jq" ] || [ -x "$pd/jq.exe" ] || printf '%s\n' "$pd"
+done | paste -s -d : -)
+if PATH=$nojq sh -c '! command -v jq && command -v "$1" && command -v awk && command -v cp &&
+	command -v tail && { command -v sha256sum || command -v shasum; }' sh "$LS" > /dev/null 2>&1; then
+	rm -rf "$w/i6" && mkdir "$w/i6"
+	if out=$(cd "$w" && PATH=$nojq $LS "$lv" import valid.md report.md i6 2> "$tmp/err"); then st=0; else st=$?; fi
+	[ "$st" = 2 ] || fail "import, no jq: expected exit 2, got $st"
+	[ -z "$out" ] || fail "import, no jq: expected no output, got '$out'"
+	[ "$(cat "$tmp/err")" = "live: jq not found" ] || fail "import, no jq: expected stderr 'live: jq not found', got '$(cat "$tmp/err")'"
+	absent "import, no jq" "$w/i6/live"
+else
+	echo "live test: skipped import, no jq: jq shares a PATH directory with the tools"
+fi
+
 # --- active ----------------------------------------------------------------
 
 rm -rf "$w/a0" && mkdir "$w/a0"

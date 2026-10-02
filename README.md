@@ -29,6 +29,8 @@ have passed; no full multi-agent audit has run yet (see `docs/acceptance.md`).
   it, the report's Coverage says the file was not validated.
   For any other forge, or without a forge CLI, supply ticket and thread text as exported files (see Exported forge
   files); the report then says the forge was not queried.
+- `jq` for `/cca:resume --live`, on any forge. Without it, the import stops before it
+  keeps anything.
 - Optional: the Codex CLI and the `codex-lite` plugin, 0.7.0 or later, for the second
   opinion. codex-lite runs Codex from the session's repository root, with no network
   access.

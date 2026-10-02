@@ -21,8 +21,9 @@
 # prints one line per error, "live <file>:<line>: <message>" in line order, to stdout and
 # exits 1; the other modes print their validation and state errors as "live: <message>"
 # lines to stdout and exit 1, leaving the record unchanged. Usage errors, an unreadable
-# input, a missing sha256sum or shasum, a report without its revision line or heading,
-# and any failed operation print one "live: <what failed>" line to stderr and exit 2.
+# input, a missing sha256sum or shasum, a missing jq (import; active with a stages.json),
+# a report without its revision line or heading, and any failed operation print one
+# "live: <what failed>" line to stderr and exit 2.
 #
 # Every write goes through a temp file in the target's directory and a rename. Files are
 # read in byte order and results files in numeric order of <k>, so results-10.md follows
@@ -668,6 +669,8 @@ mode_import() {
 	file=$1
 	need_run "$3"
 	[ -f "$file" ] && [ -r "$file" ] || fail2 "cannot read $file"
+	# The reconcile after an import runs `active`, which needs jq: without it, keep nothing.
+	command -v jq >/dev/null 2>&1 || fail2 "jq not found"
 	load_report "$2"
 	write_check_awk
 	rm_pending

@@ -192,7 +192,9 @@ completes the work, so recovery is running resume again.
   the `check` logic on the copy, its lines naming `<file>` as given; on exit 1 removes the
   copy and prints the lines; on exit 0 renames it to `live/results-<k>.md` and prints
   `live: imported live/results-<k>.md`. The rename is the commit point, and the bytes
-  validated are the bytes kept. A missing run directory is exit 2.
+  validated are the bytes kept. A missing run directory is exit 2. So is a missing `jq`
+  (`live: jq not found`), checked before anything is written, since the reconcile that
+  follows runs `active`, which needs it.
 - `active <run dir>`. Read only; prints nothing when `live/` is missing. Tab-separated
   lines, in this order:
   - `approve<TAB><source><TAB><id><TAB><approved_by><TAB><approved_at>` for each entry of
