@@ -248,7 +248,7 @@ shows it. The v0.1.0 and v0.2.0 records above are unchanged.
 | V3-f | `sh tests/live.sh` and `dash tests/live.sh` pass | pass | 2026-10-01, Windows 11, Git Bash: each printed `live test: ok`, exit 0 |
 | V3-g | `sh tests/memory.sh` and `dash tests/memory.sh` pass | pass | 2026-10-01, Windows 11, Git Bash: each printed `memory test: ok`, exit 0 |
 | V3-h | the four fixtures build and verify | pass | 2026-10-01, Windows 11, Git Bash: each build of `solo`, `solo-dirty`, `full`, and `tokens` exited 0 and printed its manifest path; the four verifies printed `verify <name>: ok`, exit 0 |
-| V3-i | CI `checks` and `scripts` pass on Linux, macOS, and Windows, with the mawk step running the awk tests; run id recorded | not run | GitHub Actions run `<run id>` |
+| V3-i | CI `checks` and `scripts` pass on Linux, macOS, and Windows, with the mawk step running the awk tests; run id recorded | pass | 2026-10-02 (UTC), GitHub Actions run 36961322491 on commit `edcd6f1`: `checks` printed `verify <name>: ok` for `solo`, `solo-dirty`, `full`, and `tokens`, and `scripts` passed on ubuntu-latest, macos-latest, and windows-latest, each with jq present (1.7, 1.8.2, 1.8.1). The mawk step (`mawk 1.3.4 20240123`) printed `handoff test: ok`, `readonly test: ok`, `live test: ok`, `memory test: ok`, and `working-tree test: ok`; macOS ran its BSD awk. Windows skipped working-tree cases 6j and 6k (its file system keeps no tab or backslash in a name); Linux and macOS ran them. The first branch run, 36937502825, failed on macOS (BSD awk ended a regex at `/`, in `memory.sh`), fixed in `ec416a9`; runs 36938137338, 36949285614, 36952285197, 36955214185, and 36958205393 passed on the commits between |
 
 ## Agent-driven cases
 
