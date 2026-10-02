@@ -49,14 +49,13 @@ each stage is in its stage file; read that file at the start of the stage, as th
 stage sections below say.
 
 The `allowed-tools` list above pre-approves read commands only. Export, snapshot,
-state-file, and probe commands (such as the export script, `rm -rf` and `mkdir` in
-the run directory, `stat`, `find`, `sha256sum`, `jq`, `awk`, `mv -f`, `wc -c`,
-`codex --version`, and the `sh` runs of the three scripts in
-`${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`: `readonly.sh`, `handoff.sh`, and
-`work-items.sh`) follow the session's permission mode; tell the user once, before
-stage 1, that they may prompt. `git fetch` (with its `git ls-remote --tags` check),
-every act write, and live-data access are not pre-approved, and you also ask for them
-in words first.
+state-file, and probe commands (such as the export script, `rm -rf` and `mkdir` in the run
+directory, `stat`, `find`, `sha256sum`, `jq`, `awk`, `mv -f`, `wc -c`, `codex --version`,
+and the `sh` runs of the five scripts in `${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`:
+`readonly.sh`, `handoff.sh`, `work-items.sh`, `working-tree.sh`, and `live.sh`) follow the
+session's permission mode; tell the user once, before stage 1, that they may prompt. `git
+fetch` (with its `git ls-remote --tags` check), every act write, and live-data access are
+not pre-approved, and you also ask for them in words first.
 
 `${CLAUDE_PLUGIN_DATA}` below is cca's data directory, and `${CLAUDE_PLUGIN_ROOT}` is
 the plugin's own directory, where the stage files and templates live. Use each path
@@ -88,6 +87,7 @@ flags:
   items: none | <id>[, <id>...]
   per-item: true | false
   from: none | <stage>
+  live: none | <file>
 ```
 
 Keep this block verbatim; you re-read it after a compaction. `audit` goes to Stage 1.
@@ -109,12 +109,17 @@ mean, in addition:
    `${CLAUDE_PLUGIN_DATA}/runs.json`. You never run `git checkout`, `git switch`,
    `git reset`, `git stash`, `git worktree`, `git archive`, `git checkout-index`, or any
    command that writes to an audited repo, and you run `git fetch` only after the
-   approval in stage 1.
+   approval in stage 1. The one other write is `working-tree.sh build` for a bundle with
+   `head: working-tree` (stage 1 step 1c, resume step 3), which writes only git objects
+   into the repo's object store, never the index, a ref, or a file.
 3. You call Codex only through the Skill tool, `codex-lite:ask`, with
    `--model <full id>` and `--timeout <seconds>`, plus `--resume <thread id>` for the
    one allowed follow-up. You never run the `codex` CLI except `codex --version`.
 4. You ask the user before any live-data access (hard rule 5), and record each answer
-   in `stages.json` `approvals` with kind `live`.
+   in `stages.json` `approvals` with kind `live`. Live approvals also come from a file:
+   a result in a `--live` file names the person who approved the access and when, and
+   resume records that approval from the file (`live.md`, "Reconciling") without asking
+   again. You never run a live query yourself.
 
 ### Compaction recovery
 
@@ -194,7 +199,8 @@ orient -+-> digest ------+
    starts per group once its barrier clears; early groups do not wait for late ones.
 4. Map-correction top-ups run in stage 5 and finish before stage 6 starts.
 5. Stage 6 starts when every group has finished pass two.
-6. Stage 7 runs the late adversary (medium and high only) and the merger.
+6. Stage 7 runs the late adversary (medium and high, and low when `live/` lists ids) and
+   the merger.
 7. Stage 8 always runs, even after a failed stage or an expired budget.
 
 ### Stage applicability
@@ -260,7 +266,7 @@ and before writing that stage's final entry:
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/readonly.sh check <repo> <run dir> <run dir>/baseline/<name> <ignored base prefix> <run dir>/baseline/<stage>/<name>`
    (create `baseline/<stage>/` first). The ignored base prefix is
    `<run dir>/baseline/<name>` until a check passes after the baseline was last taken
-   (stage 1 step 1b, or resume step 7), then the out prefix of the last check that
+   (stage 1 step 1b, or resume step 8), then the out prefix of the last check that
    passed since then. Resume moves older `baseline/<stage>/` directories away, so an
    earlier prefix is never used. The script takes a fresh snapshot into the out prefix and prints
    one line per difference: `blocked <status|stash|config|hashes|refs> <-|+> <line>`,
@@ -351,7 +357,7 @@ with `mv -f`. Never edit either in place.
 
 ```json
 {
-  "plugin_version": "0.2.0",
+  "plugin_version": "0.3.0",
   "approvals": [ { "kind": "fetch", "target": "<repo name>:<remote>",
                    "decision": "approved", "time": "2026-09-30T14:15:00Z",
                    "commands": ["git -C <repo> fetch --no-tags --refmap= ..."] } ],
@@ -378,7 +384,9 @@ with `mv -f`. Never edit either in place.
 2. Status is one of `running`, `complete`, `failed`, `not_applicable`, or
    `superseded`.
 3. `approvals` records each approval as `kind` (`fetch`, `live`, or
-   `export-over-1gb`), `target`, `decision`, and `time`; a `fetch` approval also
+   `export-over-1gb`), `target`, `decision`, and `time`; a `live` approval imported from
+   a `--live` file also records `by` (the approver) and `source`
+   (`live/results-<k>.md:<line>`); a `fetch` approval also
    records `commands`, the exact commands run under that approval (the fetches and any
    `git ls-remote --tags` check) and `resolved`, a map from each bare name that the
    approval covered to the kind it resolved to, `tag` or `branch`. It covers only those
@@ -392,8 +400,9 @@ with `mv -f`. Never edit either in place.
 5. Stage-specific keys: stage 1 `inputs` also records `forge_hashes` (the hashed `gh`
    files under `forge/`: `pr.hash.json`, a `jq` projection of the unprojected
    `pr.json` that leaves out the head and base shas and viewer-dependent fields,
-   `pr-threads.json`, and `<ticket>.json`, by run-relative path, each with its hash,
-   compared by resume; `pr.json` itself is not hashed), the `headRefOid` of each
+   `pr-threads.json`, `<ticket>.json`, and `<ticket>.parent.json`, by run-relative
+   path, each with its hash, compared by resume; `pr.json` itself is not hashed), the
+   `headRefOid` of each
    GitHub PR bundle, which is its pinned head, and its `baseRefOid`, information only
    (the base as GitHub last evaluated it, never pinned or compared: the pinned base is
    the sha of the local remote-tracking ref `<remote>/<baseRefName>`); stages 2 and 3
@@ -408,7 +417,10 @@ with `mv -f`. Never edit either in place.
    was requested, else false); stage 7 lists the `ledger/slices/` files
    among its outputs in split mode, marks a part `over threshold` when a single
    finding id alone exceeds the split threshold, and records `converged_check` (`pass`
-   or `fail`, absent when no merge was attempted), which stage 8 reads.
+   or `fail`, absent when no merge was attempted), which stage 8 reads. Stages 6, 7, and
+   8 record the live files they read (`live/findings.md`, `live/claims.md`, and each
+   `live/carried/<id>.md` that `live/findings.md` names) as inputs, each by hash, or
+   `absent` when it does not exist (`live.md`).
 
 ### Usage
 
@@ -485,4 +497,7 @@ by the audit's read-only boundary but is gated by the user's approval per item.
 
 For `command: resume`, read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/resume.md` and follow it. It finds the
 run, decides the first stage to rerun, marks superseded outputs, and continues at that
-stage's section above.
+stage's section above. With `live: <file>`, it first imports the file's live check
+results and reconciles them with `${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/live.sh`,
+whose format and modes are in `${CLAUDE_PLUGIN_ROOT}/skills/cca/live.md`; a finding
+result reruns stages 6 to 8 and a claim-only result stages 7 and 8.

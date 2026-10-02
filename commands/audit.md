@@ -56,6 +56,7 @@ flags:
   items: none
   per-item: false
   from: none
+  live: none
 ```
 
 4. Invoke the Skill tool with skill `cca:cca` and that same block as the args. Then follow the skill. Do not interpret the request, plan the audit, or act on it yourself: the skill does all of that.

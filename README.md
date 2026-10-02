@@ -23,10 +23,14 @@ have passed; no full multi-agent audit has run yet (see `docs/acceptance.md`).
 - Claude Code with plugin agents and the Agent tool's `model` option.
 - `git` 2.29 or later (the fetch commands use an empty `--refmap=`). Each audited repo
   is a local clone.
-- For GitHub bundles, `gh` authenticated and `jq`. `jq` is also what validates
-  `work-items.jsonl`; without it, the report's Coverage says the file was not validated.
+- For GitHub bundles, `gh` 2.73.0 or later, authenticated, and `jq`. An older `gh` stops
+  stage 1 with its "Unknown JSON field" message, because stage 1 asks for the pull
+  requests that close a ticket. `jq` is also what validates `work-items.jsonl`; without
+  it, the report's Coverage says the file was not validated.
   For any other forge, or without a forge CLI, supply ticket and thread text as exported files (see Exported forge
   files); the report then says the forge was not queried.
+- `jq` for `/cca:resume --live`, on any forge. Without it, the import stops before it
+  keeps anything.
 - Optional: the Codex CLI and the `codex-lite` plugin, 0.7.0 or later, for the second
   opinion. codex-lite runs Codex from the session's repository root, with no network
   access.
@@ -64,15 +68,16 @@ audit, check out the pinned sha cleanly so the repo is read directly.
            [--no-codex] [--codex-model <id>] [--models role=model,...]
            [--questions <file>] [--claims <file>]... [--budget <minutes>]
            [--max-agents <n>] [--codex-timeout <seconds>]
-/cca:resume <run-id> [--from <stage>]
+/cca:resume <run-id> [--from <stage>] [--live <file>]
 /cca:act <run-id> <item-id...> [--per-item]
 /cca:handoff [<manifest.json>] [<inputs...>] [--out <path>] [--verdicts <claims-verdicts.md>]
+           [--memory <dir>]
 ```
 
 - `/cca:handoff` runs in the build session and writes a typed handoff for `/cca:audit`.
 - `/cca:audit` runs stages 1 to 8 and stops at the report.
 - `/cca:resume` reruns a run from a stage, reusing only the stages whose inputs have not
-  changed.
+  changed, and with `--live` feeds approved live check results back into it.
 - `/cca:act` runs stage 9 on the items you approve.
 
 An unknown flag or a bad value is rejected in one line, and nothing is written.
@@ -112,6 +117,12 @@ brief used; a difference invalidates stage 1, and if the forge cannot be queried
 resume stops. A run directory with `manifest.json` but no `stages.json` reruns from
 stage 1; one without `manifest.json` is unrecoverable.
 
+`--live <file>` feeds the results of approved live checks back into a finished run (see
+Live data below). It takes an existing file, once, and is rejected with `--from` 1 to 5.
+It is also refused, without asking, when the run has no finished stage 1 or no report, or
+when a bundle's head or base has moved: run `/cca:resume <run-id>` first, which may ask to
+restart.
+
 ### `/cca:act`
 
 Item ids are the report's `C<n>` ids. Act never widens the list you give it.
@@ -130,6 +141,10 @@ Run it in the build session, before the audit. It takes the same input forms as
 - `--verdicts <claims-verdicts.md>`: a return-trip file from an earlier audit. It is read
   first. A line whose file hash and claim text match the handoff source it names is
   applied; a mismatch is listed as reconciliation work and not applied.
+- `--memory <dir>`: a directory of the build session's memory files; it needs `--verdicts`
+  and an existing directory. For each `false` entry it lists the files under `<dir>` that
+  mention the entry's ticket id, quoted names, numbers, shas, or issue ids, grouped by
+  claim, as memory reconciliation work. It never edits those files.
 
 The command settles each bundle's base first: the manifest's `base`, else the PR's base
 branch, else the repository's default branch, which it asks you to confirm. It never uses
@@ -179,6 +194,16 @@ are relative to the manifest's directory.
   with the PR, the run stops before stage 1 and shows both. A bundle with no resolvable
   base is rejected. Short ids such as `#159` are accepted only when the bundle's repo has
   one GitHub remote; otherwise ids are written `github:owner/repo#n` or `file:<path>`.
+  A bundle may add `ticket_token`, a string or a list of strings, each a literal template
+  with `{n}` once, such as `"#{n}"` or `["#{n}", "AB#{n}"]`. For its exported tickets,
+  stage 1 then matches commit messages by the template with `{n}` replaced by the
+  ticket's `id`, in place of the bare `id`, so a bare-number id matches `#4567` but not
+  `build 4567 passed`. The boundary rule applies outside the whole token, so `#{n}` does
+  not match `AB#4567`; list `AB#{n}` too for that. GitHub tickets keep their own rule.
+  A bundle may add `"head": "working-tree"` (a manifest key only; its one value) to audit
+  uncommitted work. The bundle's branch must be checked out, and stage 1 builds a commit
+  from the working tree, with the modified files and the untracked files that are not
+  ignored, as the bundle's head. See Read-only boundary.
 - **`references`.** Read-only repos consulted only when a question needs them, each with
   a `name`, a `path`, and a `ref`. Each is pinned to the sha its `ref` resolves to in
   stage 1.
@@ -283,11 +308,17 @@ decision ledger, the raised tickets, and the other decisions.
 **`claims-verdicts.md`.** Stage 8 writes it next to `report.md`, with the report's
 revision. It has one entry per claim of each claims file, in claim order, grouped by file
 (each group names the file's hash). An entry is a main line with the claim number, kind,
-source line, handoff ref, verdict (`true`, `false`, `not verified`, or `contested`),
-finding ids, and a pointer to the evidence, followed by two indented sub-lines, `text:`
-and `correction:` (a correction or `none`). The text and the correction sit on their own
-lines so a `; ` inside them cannot be misread. `false` entries are corrections. `not verified` lines on verification claims are recheck
-requests, not evidence the statement is wrong. `contested` entries need a person to decide.
+source line, handoff ref, verdict (`true`, `false`, `not verified`,
+`not reproducible here`, or `contested`),
+finding ids, and a pointer to the evidence, followed by three indented sub-lines,
+`ticket:` (the claim's ticket id, or `none`), `text:`, and `correction:` (a correction or
+`none`). The text and the correction sit on their own lines so a `; ` inside them cannot
+be misread. A file from 0.2.0 has no `ticket:` sub-line. `false` entries are corrections.
+`not verified` lines on verification claims are recheck requests, not evidence the
+statement is wrong. `not reproducible here` lines are not recheck requests: the check
+was tagged `env: <name>;` and ran against an environment the audit cannot reach, so run
+it there and feed the result back with `/cca:resume <run-id> --live <file>`; applying
+the file changes nothing for such a line. `contested` entries need a person to decide.
 
 To apply it, run `/cca:handoff --verdicts <claims-verdicts.md>` in the build session. A
 line is applied only when its file hash and claim text match the handoff source it names;
@@ -301,11 +332,14 @@ Stage 8 also writes `work-items.jsonl`: one JSON object per operation, ids `W1`,
 so on, for a forge adapter or a person to apply. An operation can create a ticket
 (`$new:<key>` is a placeholder for an id that does not exist yet), set a field (by the
 forge's own field name) or state, add a link or comment, or set a description,
-acceptance criteria, or PR description. The format is in `skills/cca/work-items.md`.
+acceptance criteria, or PR description, update a comment, remove a link, or set several
+fields. Text can carry `{mention:<key>}` placeholders for people, and an operation that
+exists only to support another cites it as `W<n>`. The format is in
+`skills/cca/work-items.md`.
 `sh skills/cca/scripts/work-items.sh check` (it needs `jq`) validates the file against
 the report body and `claims.md` before the report is hashed, and the result goes in the
-report's Coverage. cca 0.2 writes and validates the plan. No adapter ships, and
-`/cca:act` applies none of it.
+report's Coverage. cca writes and validates the plan. No adapter ships, and `/cca:act`
+applies none of it.
 
 ## Stages
 
@@ -424,6 +458,21 @@ nothing is written to the repo. Symlinks are exported as placeholder files holdi
 target, and submodules are listed, not exported. An export over 1 GB is asked about
 first.
 
+A bundle with `head: working-tree` writes one more thing to its repo: the loose git
+objects of a commit that `skills/cca/scripts/working-tree.sh build` makes from the working
+tree in a temporary index, a copy of the repo's own, so a file you staged with
+`git add -f` despite an ignore rule is kept. The repo's index, refs, and files are not
+touched, and the commit has no ref, so `git gc` may prune it after its prune window; the
+report's Coverage says so, and lists the files untracked at audit time. The script refuses
+(exit 1, before it writes anything) a repo with no `HEAD` commit, a repo or checked-out
+submodule with no index file, a sparse checkout, skip-worktree or assume-unchanged paths,
+unmerged paths, a submodule with changes, an untracked nested repository, a Git LFS or
+program filter, or a path git prints quoted. Its `check` mode runs only these refusal
+checks, which run no filter or hook and write nothing, and stage 1 runs it before the
+read-only baseline, so a program filter never runs. The same working tree and `HEAD` give
+the same commit sha, so `/cca:resume` rebuilds the head and does not ask to restart.
+Agents search such a tree with `git grep <pattern> <head sha>`.
+
 Role agents' tool lists exclude Edit and NotebookEdit. Each agent has Write, limited by
 instruction to its own output file in the run directory; the read-only check after every
 stage, described below, is the guard that detects a change to an audited repo and stops
@@ -497,8 +546,21 @@ its sentinel. Only an input it could not open goes inline, in the one follow-up,
   to that access. Each access is logged in the report. A check you did not approve is
   listed in the report's Live checks section, with the query, where it runs, and what
   each result would mean; the finding stays an unverified assumption, capped at medium,
-  until the check runs. A live check result is not fed back into a run: rerun the
-  audit or act on the finding by hand.
+  until a live result for it has passed the review gate. A verification check tagged
+  `env: <name>;` in a handoff is listed there too, by claim number, and is never `true`
+  or `false` from a run in this environment.
+- **Live results.** Run an approved check yourself, then write its result in a `--live`
+  file and run `/cca:resume <run-id> --live <file>`. Per check the file gives the finding
+  id (or `claim <n>` for an env claim), the query as the report states it, the
+  environment for a claim, where it ran, the result, who approved the access, and when;
+  the format is in `skills/cca/live.md`. Resume checks the file against the report's
+  revision and the query, records each approval, and rederives the finding's label and
+  severity or the claim's verdict. A changed finding goes back to the second opinion and
+  the late adversary, and stays provisional until both have seen it. Resume then writes
+  a new report with a new revision, so an approval given to `/cca:act` against the old
+  one no longer matches. A result for an `X<n>` or `L<n>` finding is kept with the
+  finding, since a rerun renumbers those ids. A later resume that reruns from stage 5 or
+  earlier retires the imported results, which stay on disk as the record.
 - **External text.** Anything cca drafts for outside use (commit messages, PR or ticket
   text, and comments) names no model, agent, or tool. The report is internal and may
   name them.
@@ -509,7 +571,10 @@ its sentinel. Only an input it could not open goes inline, in the one follow-up,
 asks you to confirm. Approval is bound to the run, the revision, and the items; if the
 report changed since, act stops. Each affected checkout must be on the bundle's branch
 with no uncommitted changes; act never stashes or resets. New commits on the branch that
-act did not make are shown as drift before it goes on.
+act did not make are shown as drift before it goes on. For a `head: working-tree` bundle,
+drift means the committed tree differs from the audited tree, since the audited head is
+not on any branch; commit ancestry does not apply, so committing the audited working tree
+as is, or amending its message, is not drift.
 
 Act runs the repo's required checks first as a baseline, then makes one local commit per
 ticket per repo (or per item with `--per-item`), rerunning the checks for each and asking

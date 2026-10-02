@@ -39,6 +39,9 @@ bundles: <bundle> <repo> <head sha> against <base> <base sha> (merge-base <sha>)
 generated: <time>
 ```
 
+For a `head: working-tree` bundle, `<head sha>` is followed by
+`(working tree on <parent sha>)`, the built commit and the `HEAD` it sits on.
+
 ### 1. Verdict
 
 `not ready`, `merge after fixes`, or `ready to merge`; in a `partial` run,
@@ -137,10 +140,23 @@ enter a ledger, and never change the counts.
 
 ### 9. Live checks
 
-For each finding with a live check: its item id, the query, where it runs, and the
-severity each result implies. Mark each `run (approved <time>)` with its result, or
-`not run: not approved`. A result is not fed back into this run; the user reruns the
-audit or acts on the finding by hand. Every approved live access is logged here.
+One block per live check: each finding with a live check, and each env claim
+(`common.md`, "Env claims"), keyed by claim number. Every value is a whole line, and the
+format is the one in `live.md`:
+
+```
+#### live <finding id> | live claim <n>
+- item: C<n> | claim <n>
+- query: <the query or command, exactly as the check states it>
+- where: <where it runs>                  (finding)
+- env: <name>                             (env claim)
+- results: <what each result changes>     (finding)
+- status: not run: not approved | run, approved by <who> at <time>: <result>; derived: <derived>; <reviewed | under review: <what it lacks>>
+```
+
+A result is fed back with `/cca:resume <run-id> --live <file>`. Every approved live
+access, each result with its approver and time, is logged here. `none` when no finding
+has a live check and no claim is an env claim.
 
 ### 10. Claims
 
@@ -151,7 +167,9 @@ no pass-one entry is `not verified`, with the reason "not assessed".
 
 A `verification` claim is `true, reproduced` only when the audit reproduced the stated
 result itself, `false, contradicted` only with counter-evidence, and otherwise
-`not verified, not reproduced` with the reason. One line says that reproducing a stated
+`not verified, not reproduced` with the reason. A live claim takes its derived verdict,
+and `contested` when the late adversary overturned it, or `not verified, not reproduced`
+when the late adversary gave no line. One line says that reproducing a stated
 result does not show that the build session ran its stated check. Where the auditor's
 and the adversary's verdicts differ, both are shown.
 
@@ -175,6 +193,9 @@ session.
   for it. Neither fails a scope or changes the verdict counts.
 - Each bundle whose base refresh the user declined ("base: local ref, refresh
   declined" in the brief): the base commit list and overlap set are as of that ref.
+- Each `head: working-tree` bundle: the loose objects `working-tree.sh build` wrote to
+  the repo's object store (an allowed write), that the head commit has no ref and
+  `git gc` may prune it after its prune window, and the files untracked at audit time.
 - Stage 6: whether the mandatory ids were requested in batches (`batched`) and, from
   `missing_positions`, every mandatory id left without a position (those Codex was
   asked for and left unanswered after the follow-up, and those of a fallback batch

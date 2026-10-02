@@ -56,7 +56,11 @@ custom list.
    `not verified`, with the finding id or the evidence. A `verification` claim takes the
    line shapes in "Claims list" and is `true, reproduced` only when you reproduced the
    stated result yourself, by a run or a quote. A quote of other text saying it was
-   checked is not a reproduction. When you cannot run the check (not run, no access, needs
+   checked is not a reproduction. An env claim (`common.md`, "Env claims": its check part
+   starts with `env: <name>;`) is always
+   `not verified, not reproduced; needs a live check: env <name>`, never `true` or
+   `false` from a run here, since a run here is another environment. When you cannot run
+   the check (not run, no access, needs
    a live check, budget expired, or an exported tree), write
    `not verified, not reproduced` with the reason; never `true`. A run under a different
    setup than the stated check needs is not counter-evidence: write
@@ -85,7 +89,9 @@ prompt assigns, in addition to steps 1 to 11.
 1. Tests: coverage of new behavior; tests weakened, skipped, or deleted; assertions
    loosened; CI configuration changes.
 2. Work-item hygiene: each ticket matches the change; each acceptance criterion is met or
-   not, with evidence; follow-ups are recorded. Read the brief's "not in export" items and
+   not, with evidence; follow-ups are recorded; each `status` claim's parent and links match
+   the forge data (a GitHub ticket's `<ticket>.md` gives its parent as
+   `github:<repo>#<number>`, or `none`). Read the brief's "not in export" items and
    report each as a gap in what could be checked. Write `## Scope` as step 9 says.
 3. Cross-bundle interactions: shared contracts, schemas, and APIs changed in one bundle and
    used in another; the stack order the brief records.
@@ -130,7 +136,10 @@ When your prompt says top-up, it names a digest or map and the group.
    a directly read working tree, search with `git grep` at the pinned sha, or with `rg`
    over the files `git ls-files` lists; use the Grep and Glob tools only in an export or
    in the run directory. Never follow a symlink outside the repo. A citation to an
-   untracked, ignored, or outside path is invalid evidence.
+   untracked, ignored, or outside path is invalid evidence. In a working-tree bundle (the
+   brief's mode `direct (working tree)`), search only with `git -C <repo> grep <pattern>
+   <head sha>`, never `rg` over `git ls-files`; the files the brief lists as untracked at
+   audit time are part of the head and valid evidence, cited at the head sha.
 4. Never ask for or use live systems or credentials yourself (hard rule 5). Use one only
    when your prompt says the user approved that named check; otherwise the check stays in
    the finding's `live check` field.

@@ -1,20 +1,21 @@
 # Fixture expected outcomes
 
-`sh tests/fixture/build.sh <name>` builds `solo`, `solo-dirty`, or `full` in a new temp
-directory and prints the absolute path of its manifest, nothing else. Below, `$F` is that
-directory (the manifest's directory). Every value here is a literal. A value changes only
-with a recorded reason: change `build.sh` and this file in the same commit, and say why in
-the commit body.
+`sh tests/fixture/build.sh <name>` builds `solo`, `solo-dirty`, `full`, or `tokens` in a
+new temp directory and prints the absolute path of its manifest, nothing else. Below, `$F`
+is that directory (the manifest's directory). Every value here is a literal. A value
+changes only with a recorded reason: change `build.sh` and this file in the same commit,
+and say why in the commit body.
 
 `sh tests/fixture/verify.sh <manifest path> [name]` checks the key literals below against
-a built fixture with git commands (commit ids, the two-dot and three-dot diffs, the skipped
-test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule, the legacy ids, the
-CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and `solo-dirty`, that the
-five handoff files exist, the handoff's hash and each verdicts file's heading hash below,
-and that `handoff.sh claims` gives the claim count per kind below) and
-prints one line per mismatch. CI
-runs it after each build. Its expected values are copies of the literals here, so a change
-to one changes the other.
+a built fixture with git commands (commit ids, the two-dot and three-dot diffs, the
+skipped test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule, the
+legacy ids, the CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and
+`solo-dirty`, that the five handoff files and `manifest-working-tree.json` exist, the
+handoff's hash and each verdicts file's heading hash below, and that `handoff.sh claims`
+gives the claim count per kind below; and, for `tokens`, its commit ids and messages,
+files, exports, and the `ticket_token` lines of its manifests) and prints one line per
+mismatch. CI runs it after each build. Its expected values are copies of the literals
+here, so a change to one changes the other.
 
 The builder fixes the git identity (`fixture <fixture@example.invalid>`), the commit
 dates (`2026-09-01 10:<n>:00 +0000`, one minute per commit in build order), and turns off
@@ -35,6 +36,7 @@ on Ubuntu with dash, gawk, and mawk).
 | `$F/session-summary.md` | The claims file |
 | `$F/manifest-handoff.json` | `manifest.json` with `"claims": ["./handoff.md"]` |
 | `$F/manifest-scratch.json` | `manifest.json` with `"scratch": "./app/.test-output"` added |
+| `$F/manifest-working-tree.json` | `manifest.json` with `"head": "working-tree"` in the bundle; outside every repo, so no commit id changes |
 | `$F/handoff.md` | The handoff, in the format of `skills/cca/handoff.md` (see "Handoff" below) |
 | `$F/claims-verdicts.md` | A return-trip file for `$F/handoff.md`, its heading carrying the handoff's hash (see "Verdicts" below) |
 | `$F/claims-verdicts-stale.md` | The same lines, its heading carrying a stale hash |
@@ -153,13 +155,24 @@ Expected audit outcomes, each only when the stage that judges it completes:
   `bd5d5e1e67a1fc55adeaa1452920245b1d368f7f` already appends without an id check, and
   `facts disagree with the handoff: yes`. The recommendation itself is not asserted.
 - With `manifest-scratch.json`, the run directory lands under `app/.test-output/cca/`.
+- With `manifest-working-tree.json`, stage 1 builds the head from the working tree
+  (`working-tree.sh build $F/app`, with `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1`):
+  head `1fcf8c53acc3f6e064fcb29ec0a05963b4949f2a`, parent
+  `0c23936980b254c4abd489d3ecfd296f5e7bc0db`, tree
+  `44cdf018ff3489bd74ad79d5cd4e74b76ff56773`, and one untracked file,
+  `notes/deactivate-draft.txt`. The brief lists that file as untracked at audit time and
+  maps the app as `direct (working tree)`; `.git/index` is unchanged at the end, and
+  Coverage discloses the object writes, that the head has no ref, and the untracked
+  file. The file is part of the head, so citing it at the head sha is valid evidence
+  here, unlike in an audit of `manifest.json`.
 
 ### Verdicts
 
 `git hash-object --no-filters $F/handoff.md` is `36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8`.
 `claims-verdicts.md` holds one claims file heading,
 `## $F/handoff.md (handoff), hash 36b30bd89b131ec1eed669ab0a0c58bbc9c5aaa8`, and five
-entries, each a main line with `text:` and `correction:` sub-lines:
+entries, each a main line with `ticket:`, `text:`, and `correction:` sub-lines (`ticket:` is
+`APP-1` in all five, the ticket field `handoff.sh claims` prints for each claim):
 
 | Claim | Ref | Verdict | Its `text:` | Expected handling |
 |---|---|---|---|---|
@@ -255,6 +268,9 @@ Everything in `solo`, then the changes below. Commits from `solo` keep their ids
   `.test-output/results.txt`, or deleting `.test-output/results.txt`, between two
   stages ends the run `blocked` and names the path.
 - After a clean stage, `baseline/1-check.md` lists no ignored-file differences.
+- With `manifest-working-tree.json`, the run stops before stage 1 with
+  `bundle app: head working-tree needs feature checked out, found scratch-branch`,
+  since the checkout is on `scratch-branch`, not `feature`.
 
 ### Traps that must not appear
 
@@ -396,4 +412,76 @@ git -C legacy rev-parse HEAD                       # 2f21951b0c72eba8ccf5b3db9b4
 git -C legacy rev-parse main                       # b3b208f6b760091e46d601739e93d43ee9f0bce7
 git -C api diff --stat main...feature              # bin/import-users.sh | 3 +++
 grep -L 'set -eu' $(git -C app ls-files '*.sh' | sed 's|^|app/|')   # app/src/audit-log.sh
+```
+
+## tokens
+
+One repo, `app`, and four exported tickets with bare-number ids. It shares nothing with
+`solo`: its commit ids are its own. It checks the `ticket_token` bundle key.
+
+### Layout
+
+| Path | What it is |
+|---|---|
+| `$F/manifest.json` | One bundle: `./app`, branch `feature`, base `main`, tickets `file:./exports/4567.md` to `4570.md`; no `ticket_token` |
+| `$F/manifest-token.json` | The same bundle with `"ticket_token": ["#{n}", "[{n}]", "AB#{n}"]` |
+| `$F/manifest-bad-token.json` | The same bundle with `"ticket_token": "#n"` |
+| `$F/exports/4567.md` to `4570.md` | Ticket exports with ids `4567`, `4568`, `4569`, `4570`; no text names a file |
+| `$F/app` | The app repo, checked out on `feature` |
+
+### Commits
+
+| Commit | Id | Branch | Files |
+|---|---|---|---|
+| `initial app` | `253d888eaa67c7c99b5f3d33a808835db8b6db39` | merge-base, main head | `README.md`, `src/app.sh` |
+| `fix(#4567 #4568): reject empty input` | `2c91be9d37d6d3ba48068a20da316c7e6e70a245` | feature | `src/input.sh` |
+| `build 4567 passed` | `e38ebff437050f6ce3653d0908515336d83bcfc3` | feature | `ci/status.txt` |
+| `[4569] add the report command` | `04ccf504e5efa62a444f69a2edcd40d5d42e9180` | feature | `src/report.sh` |
+| `AB#4570 rename the config key` | `dcae97565a63bbd4f6a52b6f9e1647530a32dd6f` | feature | `config/app.conf` |
+| `migrated 4567 rows` | `b12b94c3072b10e1b5b5f4eace49e598e5ef093c` | feature head | `data/migration.txt` |
+
+Changed files (three-dot): `ci/status.txt`, `config/app.conf`, `data/migration.txt`,
+`src/input.sh`, `src/report.sh`. The tier is `medium` (1 bundle, 4 tickets, under 5,000
+changed lines).
+
+### Expected outcomes
+
+Groups, worked out from Stage 1, "Groups", step 8 (rule 1, then extraction and merge; no
+ticket text or commit message names a file, so rule 2 adds nothing):
+
+- `manifest.json` (no token, so the bare id matches under the boundary rule alone):
+  - `4567` matches `fix(#4567 #4568)`, `build 4567 passed`, and `migrated 4567 rows`;
+  - `4568` matches `fix(#4567 #4568)`;
+  - `4569` matches `[4569]`;
+  - `4570` matches `AB#4570`.
+
+  Groups: `app-4567` (`ci/status.txt`, `data/migration.txt`, `src/input.sh`), `app-4568`
+  (`src/input.sh`), `app-4569` (`src/report.sh`), `app-4570` (`config/app.conf`). No file
+  is in more than two groups, so nothing moves to `cross-cutting`. No merge: `app-4567`
+  has one of its three files in `app-4568`, which is not more than half. No `unticketed`
+  group.
+- `manifest-token.json` (`#{n}`, `[{n}]`, `AB#{n}`):
+  - `#4567` and `#4568` match only `fix(#4567 #4568)`; `build 4567 passed` and
+    `migrated 4567 rows` hold no `#4567`, `[4567]`, or `AB#4567`;
+  - `[4569]` matches `[4569] add the report command`;
+  - `#4570` does not match `AB#4570` (a letter comes right before `#`), and `AB#4570`
+    does.
+
+  `ci/status.txt` and `data/migration.txt` are touched only by the build and migration
+  commits, which name no ticket, so both go to `unticketed`. `app-4567` and `app-4568` each
+  hold only `src/input.sh`, so each has all its files in the other and they merge into
+  `app-4567+app-4568`. Groups: `app-4567+app-4568` (`src/input.sh`), `app-4569`
+  (`src/report.sh`), `app-4570` (`config/app.conf`), `unticketed` (`ci/status.txt`,
+  `data/migration.txt`).
+- `manifest-bad-token.json` stops before stage 1 with
+  `bundle app: ticket_token must hold {n} once`.
+
+### Verify
+
+```sh
+A="git -C $F/app"
+$A rev-parse main                          # 253d888eaa67c7c99b5f3d33a808835db8b6db39
+$A log --reverse --format='%H %s' main..feature
+$A diff --name-only main...feature         # ci/status.txt config/app.conf data/migration.txt src/input.sh src/report.sh
+grep -c ticket_token $F/manifest.json      # 0
 ```

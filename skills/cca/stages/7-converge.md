@@ -3,9 +3,14 @@
 The orchestrator's procedure for stage 7. The preamble in `${CLAUDE_PLUGIN_ROOT}/skills/cca/SKILL.md` and the
 run's `common.md` apply throughout.
 
-Inputs: `ledger/5.md`, `ledger/6.md`, `audit-brief.md`, `common.md`.
+Inputs: `ledger/5.md`, `ledger/6.md`, `audit-brief.md`, `common.md`, and the live inputs
+`live/findings.md`, `live/claims.md`, and each `live/carried/<id>.md` that
+`live/findings.md` names (`${CLAUDE_PLUGIN_ROOT}/skills/cca/live.md`), each recorded in
+the stage entry with its hash, or `absent` when it does not exist. They exist only on a
+run resumed with live results; a claim-only result leaves `live/findings.md` absent.
 
-Outputs: `late/adversary.md` (medium and high), `ledger/7.md`, `gate.md`,
+Outputs: `late/adversary.md` (medium and high, and low when `live/` lists ids),
+`ledger/7.md`, `gate.md`,
 `ledger/slices/<group>.md` and `converged/<group>.md` (split mode only; a group split
 by size has `<group>-<k>` parts), and `converged.md`.
 
@@ -16,27 +21,38 @@ by size has `<group>-<k>` parts), and `converged.md`.
    hashes. Check the budget again before every launch in this stage; once it has
    expired, launch nothing more, let running agents finish, and go to stage 8.
 
-2. **Late adversary, at medium and high only.** Launch one fresh `cca:adversary` with
+2. **Late adversary, at medium and high, and at low when `live/` lists ids.** At low it
+   runs for those live ids only (below). Launch one fresh `cca:adversary` with
    the Agent tool, in the background, never as a fork, with its `model` from `--models`
    or the manifest, else the agent's default. The prompt holds the paths of
    `audit-brief.md`, `common.md`, `ledger/5.md`, and `ledger/6.md`, the output path
    `late/adversary.md`, and the list of ids to challenge:
    - every late addition: `origin: pass2`, `origin: topup`, and `origin: codex`;
-   - every finding the second opinion asked to restore.
+   - every finding the second opinion asked to restore;
+   - every finding `live/findings.md` lists, with its live result and derivation (a
+     carried `X<n>` or `L<n>` is read from its `live/carried/<id>.md`, the ledger may no
+     longer hold it); at low, these are the only ids, and the prompt also names
+     `live/findings.md` and the carried files;
+   - under `## Claims challenged`, every claim `live/claims.md` derives
+     `true, reproduced`, which the adversary reproduces or overturns like any claim the
+     report marks true (`common.md`, "Pass-two verdicts").
 
-   For each it gives a verdict (`survives`, `downgraded`, `reworded`, or `dropped`) with
+   For each id it gives a verdict (`survives`, `downgraded`, `reworded`, or `dropped`) with
    evidence, reading the stage 5 verdicts in `ledger/5.md`. Anything it raises itself
-   takes `origin: late` and an id `L<n>`, and stays provisional: there is no further
-   round. It ends with `runs:` and `status: complete`.
+   takes `origin: late` and an id `L<n>`, numbered after the highest carried `L<n>`
+   (`live/carried/L<n>.md`; a carried id is reserved), and stays provisional: there is no
+   further round. It ends with `runs:` and `status: complete`.
 
-   Failure: an error, a missing file, no `status: complete`, or a listed id without a
-   verdict. A `_test.fail` entry with `role: adversary` and scope `late` or `any`
-   applies. Ladder: first failure, relaunch on the same model; second, relaunch with
-   `model: fable`, recorded as a swap; third, the late adversary scope failed: record it
-   in the stage entry as a failed scope with its coverage loss (every id it would have
-   challenged), every late addition stays provisional, and the merger still runs.
+   Failure: an error, a missing file, no `status: complete`, a listed id without a
+   verdict, or a listed live true claim without a `## Claims challenged` line. A
+   `_test.fail` entry with `role: adversary` and scope `late` or `any` applies. Ladder:
+   first failure, relaunch on the same model; second, relaunch with `model: fable`,
+   recorded as a swap; third, the late adversary scope failed: record it in the stage
+   entry as a failed scope with its coverage loss (every id it would have challenged),
+   every late addition stays provisional, and the merger still runs.
 
-3. **Write `ledger/7.md` once.** At medium and high, one section per challenged id:
+3. **Write `ledger/7.md` once.** At medium and high, and at low for the live ids, one
+   section per challenged id:
 
    ```
    ## <finding id>
@@ -47,9 +63,10 @@ by size has `<group>-<k>` parts), and `converged.md`.
 
    then its own additions in the `common.md` schema with `origin: late`, each marked
    provisional. At low, write one line: "No late adversary at low tier; late additions
-   stay provisional." If the late adversary failed, say so and list the ids it would
-   have challenged, under a `## Late adversary failed` heading (so no finding section
-   runs on into it).
+   stay provisional." When `live/` lists ids at low, that line comes first and the
+   sections of the live ids follow it. If the late adversary failed, say so and list the
+   ids it would have challenged, under a `## Late adversary failed` heading (so no finding
+   section runs on into it).
 
 4. **Review gate.** A finding counts when a reviewer other than its author has
    challenged it, and both a Claude adversary and the second opinion have seen it, in
@@ -58,10 +75,10 @@ by size has `<group>-<k>` parts), and `converged.md`.
    | Origin | Counts when | Otherwise |
    |---|---|---|
    | `pass1` (with barrier top-up findings) | it has a stage 5 verdict and stage 6 saw it | provisional |
-   | `pass2` | stage 6 saw it and the late adversary gave a verdict | provisional (always at low) |
-   | `topup` | stage 6 saw it and the late adversary gave a verdict | provisional (always at low) |
-   | `codex` | the late adversary gave a verdict | provisional (always at low) |
-   | `late` | never | provisional |
+   | `pass2` | stage 6 saw it and the late adversary gave a verdict | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
+   | `topup` | stage 6 saw it and the late adversary gave a verdict | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
+   | `codex` | the late adversary gave a verdict | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
+   | `late` | never, except a carried `L<n>` under the live rule below | provisional |
 
    "Stage 6 saw it" means stage 6 is `complete` and the finding was in the request.
    A complete stage 6 requested every mandatory id (its step 4.3), so no finding
@@ -70,19 +87,31 @@ by size has `<group>-<k>` parts), and `converged.md`.
    stage 5 verdict. A `dropped` verdict still counts as a challenge; the disposition
    decides what happens to it.
 
-   Write `gate.md`: one line per ledger id, `<id>: counts | provisional; <reason>`.
+   The live rule is added to every origin's row. A finding in `live/findings.md` counts
+   only when its live review completed: stage 6 completed with a position on it, and the
+   late adversary gave it a verdict. Otherwise it is `provisional`, with the reason
+   `live result not yet reviewed`. A carried `X<n>` follows the `codex` row plus the live
+   rule; a carried `L<n>` counts under the live rule alone, since both a second opinion
+   and a fresh Claude adversary other than its author then challenged it. At low, a
+   live-reviewed `P`, `T`, or carried `X` finding uses the reviews it actually got.
+
+   Write `gate.md`: one line per ledger id and per carried id,
+   `<id>: counts | provisional; <reason>`.
 
 5. **Choose normal or split mode.** Add the byte sizes of `ledger/5.md`, `ledger/6.md`,
-   and `ledger/7.md` (`wc -c`). Over 450,000 bytes, or over `_test.ledger_split_bytes`
+   and `ledger/7.md`, `live/findings.md`, and every `live/carried/<id>.md` (`wc -c`;
+   the live files count when they exist), and record the total with them in the stage
+   entry. Over 450,000 bytes, or over `_test.ledger_split_bytes`
    when set, use split mode (step 7); otherwise normal mode (step 6).
 
-6. **Normal mode.** Launch one `cca:merger` with the Agent tool, in the background,
-   never as a fork, with its `model` from `--models` or the manifest, else the agent's
-   default. The prompt holds the paths of `audit-brief.md`, `common.md`, `ledger/5.md`,
+6. **Normal mode.** Launch one `cca:merger` with the Agent tool, in the background, never
+   as a fork, with its `model` from `--models` or the manifest, else the agent's default.
+   The prompt holds the paths of `audit-brief.md`, `common.md`, `ledger/5.md`,
    `ledger/6.md`, `ledger/7.md`, and `gate.md` (with the instruction to take each item's
-   gate from it), the path of any complete earlier `converged.md` for the same ledger
-   files, and the output path `converged.md`. The merger reads the ledger files and
-   never edits them. It writes one item per distinct defect:
+   gate from it), `live/findings.md` and each `live/carried/<id>.md` when they exist, the
+   path of any complete earlier `converged.md` for the same ledger files, and the output
+   path `converged.md`. The merger reads the ledger files and never edits them. It writes
+   one item per distinct defect:
 
    ```
    ## C<n>: <title>
@@ -99,22 +128,34 @@ by size has `<group>-<k>` parts), and `converged.md`.
 
    Dispositions: `agreed`, the reviewers who saw it accept it at one severity;
    `contested`, they disagree on existence or severity, and every position is kept with
-   its evidence, with no side picked; `dismissed`, dropped and not restored, kept with
-   the reason. An item's gate is `counts` when any id it absorbs counts in `gate.md`.
-   Ids are `C<n>` in ledger order and are stable once written: a relaunched merger or
-   the orchestrator's own merge keeps the ids of any complete earlier `converged.md` for
-   the same ledger files. The file ends with `status: complete`.
+   its evidence, with no side picked; `dismissed`, dropped and not restored, kept with the
+   reason. An item's gate is `counts` when any id it absorbs counts in `gate.md`. A
+   finding in `live/findings.md` whose live review has not completed (its `gate.md` reason
+   is `live result not yet reviewed`) must not set a counted item's severity, label, or
+   disposition through a reviewed duplicate. Every position on it from this rerun's stages
+   6 and 7 (each was given in light of the result) and its derivation are `pending
+   review`: the merger lists them under the item with that mark and leaves them out of its
+   severity, label, and disposition. Once the live review has completed they are ordinary
+   positions, the derivation reading "live result, approved by <who> at <time>". Ids are
+   `C<n>` in ledger order and are stable once written: a relaunched merger or the
+   orchestrator's own merge keeps the ids of any complete earlier `converged.md` for the
+   same ledger files. The file ends with `status: complete`.
 
 7. **Split mode.** One `cca:merger` per group, then one final merger:
    1. Assign each ledger id to a group: the scope in its id for `pass1`, `pass2`, and
-      `topup` findings; for `codex` and `late` findings, the group whose files their
-      recommended change or evidence names, else `ungrouped`.
+      `topup` findings; for `codex` and `late` findings, and for a carried `X<n>` or
+      `L<n>`, the group whose files their recommended change or evidence names, else
+      `ungrouped`.
    2. Write one slice per group, `ledger/slices/<group>.md`, before launching its
       merger (slices are not under `converged/`, which holds one file per group). The
       slice holds every section of `ledger/5.md`, `ledger/6.md`, and `ledger/7.md`
       whose finding id belongs to the group (step 7.1), each section prefixed with the
       pointer line `source: ledger/<n>.md, section <finding id>`, then the group's
-      lines from `gate.md`. The shell writes the slice, never the model: the
+      lines from `gate.md`. The slice also holds, for each id of the group that
+      `live/findings.md` lists, that section of `live/findings.md` (the same `## <id>`
+      cut as `ledger/5.md`), and, for a carried id, its whole `live/carried/<id>.md`,
+      each after a pointer line `source: live/findings.md, section <id>` or
+      `source: live/carried/<id>.md`. The shell writes the slice, never the model: the
       orchestrator reads none of it, and no section passes through its own output. For
       each id of the group (from the step 7.1 assignment, which covers every ledger id),
       in finding id order, and for each ledger file `<n>` (5, 6, or 7) that has a
@@ -141,6 +182,13 @@ by size has `<group>-<k>` parts), and `converged.md`.
       awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1); if (p) f = 1} END{exit !f}' ledger/<n>.md &&
         printf 'source: ledger/<n>.md, section <id>\n' >> <slice> &&
         awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1)} p' ledger/<n>.md >> <slice>
+      # live/findings.md, when it has a section for the id; a carried id's file whole
+      awk -v id=<id> '/^## /{p = ($0 == "## " id); if (p) f = 1} END{exit !f}' live/findings.md &&
+        printf 'source: live/findings.md, section <id>\n' >> <slice> &&
+        awk -v id=<id> '/^## /{p = ($0 == "## " id)} p' live/findings.md >> <slice>
+      [ -f live/carried/<id>.md ] &&
+        printf 'source: live/carried/<id>.md\n' >> <slice> &&
+        cat live/carried/<id>.md >> <slice>
       # once per id, after its sections
       awk -v id=<id> 'index($0, id ": ") == 1' gate.md >> <slice>
       ```
@@ -150,7 +198,8 @@ by size has `<group>-<k>` parts), and `converged.md`.
       parts `<group>-1`, `<group>-2`, ... with slices `ledger/slices/<group>-1.md`,
       `ledger/slices/<group>-2.md`, ... and one merger each; the final merger treats
       them as one group. Fill the parts greedily in finding id order: build each id's
-      block (its sections with their pointer lines, then its `gate.md` line) by the
+      block (its sections with their pointer lines, including its `live/findings.md`
+      section and carried file, then its `gate.md` line) by the
       commands above into `<run dir>/tmp/block.md`, truncating that file first
       (`: > <run dir>/tmp/block.md`) since the commands append, measure it with `wc -c`, and append
       it to the open part with `cat` and a redirect; a part closes when adding the next
@@ -179,11 +228,14 @@ by size has `<group>-<k>` parts), and `converged.md`.
       duplicate, recording it under `opened:` as in step 7.3.
 
 8. **The orchestrator checks the merge against the ledger:**
-   - every finding id in `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` appears in the
-     `absorbs` list of exactly one item;
+   - every finding id in `ledger/5.md`, `ledger/6.md`, and `ledger/7.md`, and every
+     carried id (`live/carried/<id>.md`), appears in the `absorbs` list of exactly one
+     item;
    - no item's severity differs from its source finding's severity without a cited
      verdict (a pass-two `downgraded`, a second-opinion recalibration, or a late
-     verdict) that sets it;
+     verdict) that sets it, and a severity or label change is accepted only from a
+     position that is not `pending review`: an item whose severity or label follows a
+     pending one fails the check;
    - each item's gate matches `gate.md`;
    - every `contested` item keeps each position with its evidence.
 
@@ -199,16 +251,17 @@ by size has `<group>-<k>` parts), and `converged.md`.
 
 10. **Stage completion.** Stage 7 is `complete` when `ledger/7.md`, `gate.md`, and
     `converged.md` are written and pass the check, and the late adversary (at medium and
-    high) succeeded; otherwise `failed`, and the run will end `partial`. A failed late
-    adversary scope fails the stage but does not discard a `converged.md` that passed
-    the check: stage 8 uses it.
+    high, and at low when `live/` lists ids) succeeded; otherwise `failed`, and the run
+    will end `partial`. A failed late adversary scope fails the stage but does not discard
+    a `converged.md` that passed the check: stage 8 uses it.
 
 11. **Read-only check.** Run the check in `${CLAUDE_PLUGIN_ROOT}/skills/cca/SKILL.md` and write
     `baseline/7-check.md`.
 
-12. **Write the stage 7 entry last,** once the check has passed, per the preamble:
-    status, inputs, outputs, agents with tokens labeled "task notification,
-    subagent_tokens; scope not documented", swaps, the mode (normal or split) with the
-    byte total and the threshold used, each part marked `over threshold` (step 7.2),
-    `"converged_check": "pass"` or `"fail"` from step 8 (absent when no merge was
-    attempted), failed scopes with coverage loss, and each `_test` fault applied.
+12. **Write the stage 7 entry last,** once the check has passed, per the preamble: status,
+    inputs (with the live inputs, each by hash or `absent`), outputs, agents with tokens
+    labeled "task notification, subagent_tokens; scope not documented", swaps, the mode
+    (normal or split) with the byte total and the threshold used, each part marked `over
+    threshold` (step 7.2), `"converged_check": "pass"` or `"fail"` from step 8 (absent
+    when no merge was attempted), failed scopes with coverage loss, and each `_test` fault
+    applied.

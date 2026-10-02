@@ -32,6 +32,7 @@
 # 25 out prefix with a .. component
 # 26 a linked worktree as the repo
 # 27 a linked worktree in an ignored directory of the repo
+# 28 a configured core.fsmonitor hook is not run
 #
 # Prints one line per mismatch, then `readonly test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -484,6 +485,17 @@ expect "case 27, below the top level" 0 '' ''
 printf '%s\n' 'new' > "$A/.test-output/wt/new.txt"
 ro check "$A" "$R" "$R/base" "$R/base" "$R/d"
 expect "case 27, at the top level" 3 'ignored changed .test-output/wt/\n' ''
+
+# 28. a configured core.fsmonitor hook never runs during a snapshot or a check: the
+# marker the hook would create stays absent.
+case_id="case 28"
+fresh
+printf '%s\n' "touch '$root/fsmonitor-ran'" 'exit 1' > "$root/fsmonitor.sh"
+git -C "$A" config core.fsmonitor "sh '$root/fsmonitor.sh'"
+snap "$R/b"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 28" 0 '' ''
+[ ! -e "$root/fsmonitor-ran" ] || mismatch "case 28: the fsmonitor hook ran"
 
 if [ "$bad" -gt 0 ]; then
 	exit 1

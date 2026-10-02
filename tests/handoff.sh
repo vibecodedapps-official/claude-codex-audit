@@ -144,6 +144,14 @@ if out=$(cd "$tmp" && sh "$hs" claims b.md 2>&1); then st=0; else st=$?; fi
 [ "$(printf '%s\n' "$out" | sed -n 7p)" = "$second" ] ||
 	fail "claims verified entry with a second check: line 7 '$(printf '%s\n' "$out" | sed -n 7p)'"
 
+set_line "$v" "$tmp/b.md" 27 "  - The smoke test passes; check: env: staging; sh smoke.sh"
+run "check verified entry with an env tag" 0 "handoff: ok" check b.md
+envc="verification${tab}tickets/APP-1/verified/2${tab}app${tab}APP-1${tab}27${tab}The smoke test passes; check: env: staging; sh smoke.sh"
+if out=$(cd "$tmp" && sh "$hs" claims b.md 2>&1); then st=0; else st=$?; fi
+[ "$st" = 0 ] || fail "claims verified entry with an env tag: exit $st"
+[ "$(printf '%s\n' "$out" | sed -n 7p)" = "$envc" ] ||
+	fail "claims verified entry with an env tag: line 7 '$(printf '%s\n' "$out" | sed -n 7p)'"
+
 set_line "$v" "$tmp/b1.md" 10 "- app: repo ./a; branch x; pr none; branch feature; base main"
 run "check bundle path holding a separator" 0 "handoff: ok" check b1.md
 
@@ -172,6 +180,27 @@ set_line "$tmp/b1.md" "$tmp/b2.md" 39 "- recorded_at: commit 9c5f77c"
 set_line "$tmp/b2.md" "$tmp/b3.md" 40 "- status: taken"
 set_line "$tmp/b3.md" "$tmp/b.md" 49 "- status: deferred to Team Lead"
 run "check person, commit record, taken, deferred to" 0 "handoff: ok" check b.md
+
+# The optional parent and links keys, after owner: on a ticket, and on the raised ticket.
+{
+	head -n 18 "$v"
+	printf '%s\n' "- parent: FEAT-1" "- links:" "  - closed by: github:owner/app#12" "  - related: APP-2"
+	tail -n +19 "$v"
+} > "$tmp/b.md"
+run "check parent and links on a ticket" 0 "handoff: ok" check b.md
+want="status${tab}tickets/APP-1/fields${tab}app${tab}APP-1${tab}14${tab}APP-1: type Story; state Active; iteration none; owner Developer; parent FEAT-1; links closed by github:owner/app#12, related APP-2"
+if out=$(cd "$tmp" && sh "$hs" claims b.md 2>&1); then st=0; else st=$?; fi
+[ "$st" = 0 ] || fail "claims parent and links on a ticket: exit $st"
+[ "$(printf '%s\n' "$out" | head -n 1)" = "$want" ] ||
+	fail "claims parent and links on a ticket: first line '$(printf '%s\n' "$out" | head -n 1)'"
+
+ins_after "$v" "$tmp/b.md" 58 "- links: none"
+run "check links none on a raised ticket" 0 "handoff: ok" check b.md
+want="status${tab}raised/R1/fields${tab}app${tab}APP-6${tab}53${tab}APP-6: type Bug; state New; iteration none; owner none; links none"
+if out=$(cd "$tmp" && sh "$hs" claims b.md 2>&1); then st=0; else st=$?; fi
+[ "$st" = 0 ] || fail "claims links none on a raised ticket: exit $st"
+[ "$(printf '%s\n' "$out" | tail -n 1)" = "$want" ] ||
+	fail "claims links none on a raised ticket: last line '$(printf '%s\n' "$out" | tail -n 1)'"
 
 # ---------------------------------------------------------------------------
 # Broken copies of the valid file.
@@ -249,6 +278,18 @@ broken "stray line" "handoff b.md:28: unrecognized line"
 set_line "$v" "$tmp/b.md" 27 "  - The test suite runs with one test skipped"
 broken "verified entry without a check" "handoff b.md:27: verified entry must be '<statement>; check: <check>'"
 
+set_line "$v" "$tmp/b.md" 27 "  - The smoke test passes; check: env: ; sh smoke.sh"
+broken "env tag with an empty name" "handoff b.md:27: env tag has an empty name"
+
+set_line "$v" "$tmp/b.md" 27 "  - The smoke test passes; check: env: staging;"
+broken "env tag with an empty check" "handoff b.md:27: env tag has an empty check"
+
+set_line "$v" "$tmp/b.md" 27 "  - The smoke test passes; check: env: staging"
+broken "env tag without a separator" "handoff b.md:27: env tag must be 'env: <name>; <check>'"
+
+set_line "$v" "$tmp/b.md" 27 "  - The smoke test passes; check: env:staging; sh smoke.sh"
+broken "env tag without a space after the colon" "handoff b.md:27: env tag must be 'env: <name>; <check>'"
+
 set_line "$v" "$tmp/b.md" 2 "cca-handoff: 2"
 broken "version 2" "handoff b.md:2: unsupported handoff version"
 
@@ -275,6 +316,36 @@ broken "empty decisions" "handoff b.md:29: section '## Decisions' is empty; writ
 
 sed '52,$d' "$v" > "$tmp/b.md"
 broken "file ends after raised tickets" "handoff b.md:51: section '## Raised tickets' is empty; write none"
+
+ins_after "$v" "$tmp/b.md" 19 "- parent: FEAT-1"
+broken "parent after bundles" "handoff b.md:20: key 'parent' is out of order"
+
+ins_after "$v" "$tmp/b1.md" 18 "- parent: FEAT-1"
+ins_after "$tmp/b1.md" "$tmp/b.md" 19 "- parent: FEAT-2"
+broken "parent twice" "handoff b.md:20: duplicate key 'parent'"
+
+ins_after "$v" "$tmp/b1.md" 18 "- links:"
+ins_after "$tmp/b1.md" "$tmp/b.md" 19 "  - closed by github:owner/app#12"
+broken "links entry without a separator" "handoff b.md:20: links entry must be '<type>: <target>'"
+
+ins_after "$tmp/b1.md" "$tmp/b.md" 19 "  - : github:owner/app#12"
+broken "links entry with an empty type" "handoff b.md:20: links entry has an empty type"
+
+ins_after "$tmp/b1.md" "$tmp/b.md" 19 "  - closed by:"
+broken "links entry with an empty target" "handoff b.md:20: links entry has an empty target"
+
+ins_after "$tmp/b1.md" "$tmp/b2.md" 19 "  - closed by: github:owner/app#12"
+ins_after "$tmp/b2.md" "$tmp/b.md" 20 "  - closed by: github:owner/app#12"
+broken "duplicate links entry" "handoff b.md:21: duplicate links entry 'closed by: github:owner/app#12'"
+
+cp "$tmp/b1.md" "$tmp/b.md"
+broken "links with no entries" "handoff b.md:19: key 'links' has no entries"
+
+ins_after "$v" "$tmp/b.md" 18 "- parent: APP-1"
+broken "parent equal to the ticket id" "handoff b.md:19: ticket 'APP-1' is its own parent"
+
+ins_after "$v" "$tmp/b.md" 58 "- parent: APP-6"
+broken "raised ticket parent equal to its ticket" "handoff b.md:59: ticket 'APP-6' is its own parent"
 
 # A claim is read as one line, so the whole claim line, all six fields joined by tabs, is
 # capped at 8000 bytes: an error, never a truncation. The long values are fixed-length

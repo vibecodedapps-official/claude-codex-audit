@@ -1,6 +1,7 @@
-# Acceptance record: v0.1.0 and v0.2.0
+# Acceptance record: v0.1.0, v0.2.0, and v0.3.0
 
-The v0.2.0 section is at the end of this file, after "What a full acceptance run needs".
+The v0.2.0 section follows "What a full acceptance run needs", and the v0.3.0 section is
+at the end.
 
 This file records the acceptance cases for cca 0.1.0 and their results, checked on
 2026-09-30 and 2026-10-01 with Claude Code 2.1.284 on Windows 11 with Git Bash. The
@@ -227,3 +228,58 @@ only when the stage that judges it completes.
 | V2-w | A pass-one report with no `## Decisions` entry for an assigned `decision` claim: the scope is not relaunched, the stage 4 entry records the claim `not assessed`, the report's coverage lists it, and `claims-verdicts.md` gives it `not verified` with the reason "not assessed" | not run: needs a live multi-agent audit run | |
 | V2-x | An adversary report with no `## Claims challenged` line for a `verification` claim marked true still fails the scope through the ladder | not run: needs a live multi-agent audit run | |
 | V2-y | A `verification` claim whose check needs an environment variable the audit's environment lacks: the auditor's run fails, and the claim is `not verified, not reproduced` with the reason naming the missing variable, never `false` | not run: needs a live multi-agent audit run | |
+
+# Acceptance record: v0.3.0
+
+This section records the acceptance cases for cca 0.3.0. Results are `pass`, `fail`,
+`superseded: <reason>`, `not run`, or `not run: <reason>`. The release checks ran locally;
+V3-i is filled in from the final CI run. No case is recorded as passed without a run that
+shows it. The v0.1.0 and v0.2.0 records above are unchanged.
+
+## Release checks
+
+| Case | Description | Result | Evidence or reason |
+|---|---|---|---|
+| V3-a | `sh tests/lint.sh` passes | pass | 2026-10-01, Windows 11, Git Bash: printed `lint: ok`, exit 0 |
+| V3-b | `sh tests/readonly.sh` and `RO_SH=dash dash tests/readonly.sh` pass, unchanged cases | pass | 2026-10-01, Windows 11, Git Bash: each printed `readonly test: ok`, exit 0 |
+| V3-c | `sh tests/handoff.sh` and `dash tests/handoff.sh` pass, with the env and parent/links cases | pass | 2026-10-01, Windows 11, Git Bash: each printed `handoff test: ok`, exit 0 |
+| V3-d | `sh tests/work-items.sh` and `dash tests/work-items.sh` pass, with the new ops and checks | pass | 2026-10-01, Windows 11, Git Bash, jq 1.8.2: each printed `work-items test: ok`, exit 0 |
+| V3-e | `sh tests/working-tree.sh` and `dash tests/working-tree.sh` pass | pass | 2026-10-02, Windows 11, Git Bash, with case 19 (a quoted submodule path): each printed `working-tree test: ok`, exit 0, and so did `WT_SH=dash dash tests/working-tree.sh`; cases 6j and 6k printed their skip |
+| V3-f | `sh tests/live.sh` and `dash tests/live.sh` pass | pass | 2026-10-02, Windows 11, Git Bash, with the import-without-jq case, which ran (jq sits in its own PATH directory here): each printed `live test: ok`, exit 0 |
+| V3-g | `sh tests/memory.sh` and `dash tests/memory.sh` pass | pass | 2026-10-01, Windows 11, Git Bash: each printed `memory test: ok`, exit 0 |
+| V3-h | the four fixtures build and verify | pass | 2026-10-01, Windows 11, Git Bash: each build of `solo`, `solo-dirty`, `full`, and `tokens` exited 0 and printed its manifest path; the four verifies printed `verify <name>: ok`, exit 0 |
+| V3-i | CI `checks` and `scripts` pass on Linux, macOS, and Windows, with the mawk step running the awk tests; run id recorded | pass | 2026-10-02 (UTC), GitHub Actions run 36969145720 on commit `7b0fcc4`: `checks` printed `verify <name>: ok` for `solo`, `solo-dirty`, `full`, and `tokens`, and `scripts` passed on ubuntu-latest, macos-latest, and windows-latest, each with jq present (1.7, 1.8.2, 1.8.1). The mawk step (`mawk 1.3.4 20240123`) printed `handoff test: ok`, `readonly test: ok`, `live test: ok`, `memory test: ok`, and `working-tree test: ok`; macOS ran its BSD awk. Windows skipped working-tree cases 6j and 6k (its file system keeps no tab or backslash in a name); Linux and macOS ran them. Working-tree case 19 ran on all three. The live import-without-jq case ran on Windows and printed its skip on Linux and macOS, where jq shares a PATH directory with the tools. Run 36961322491 on `edcd6f1` passed before the PR review fixes. The first branch run, 36937502825, failed on macOS (BSD awk ended a regex at `/`, in `memory.sh`), fixed in `ec416a9`; runs 36938137338, 36949285614, 36952285197, 36955214185, and 36958205393 passed on the commits between |
+
+## Agent-driven cases
+
+Each is judged against the run directory and the report, and each expected outcome holds
+only when the stage that judges it completes.
+
+| Case | Description | Result | Evidence or reason |
+|---|---|---|---|
+| V3-j | `solo` with `manifest-working-tree.json`: the head is the literal sha in `expected.md`, the brief lists `notes/deactivate-draft.txt` as untracked at audit time, the app is read directly, `.git/index` is unchanged, Coverage discloses the object writes and the unreferenced head | not run: needs a live multi-agent audit run | |
+| V3-k | `solo-dirty` with `manifest-working-tree.json`: stops before stage 1, `feature` not checked out | not run: needs a live multi-agent audit run | |
+| V3-l | After V3-j, `git gc --prune=now` in the app, then `/cca:resume`: the same head sha, no restart asked | not run: needs a live multi-agent audit run | |
+| V3-m | After V3-j: act before committing shows drift (the committed tree lacks the untracked `notes/deactivate-draft.txt`); commit the working tree as is, then act: no drift; amend that commit's message, then act: no drift; commit a different tree: drift shown | not run: needs a live multi-agent audit run | |
+| V3-n | A handoff verified entry `...; check: env: staging; sh run-tests.sh`: the claim is `not verified, not reproduced` naming env staging, section 9 has a `#### live claim <n>` block, `claims-verdicts.md` says `not reproducible here` | not run: needs a live multi-agent audit run | |
+| V3-o | `solo`, a `--live` file for the "Every existing row was migrated" finding: stages 6 to 8 rerun, the finding is provisional until both reviews, the report has a new revision, section 9 logs the access with its approver, and `stages.json` has the `live` approval | not run: needs a live multi-agent audit run | |
+| V3-p | A `--live` result making an env claim `true, reproduced`: only stages 7 and 8 rerun, `live/findings.md` stays absent, and the late adversary challenges the claim, at low tier too | not run: needs a live multi-agent audit run | |
+| V3-q | `--live` naming another revision, or another query, stops with the `live.sh` line; `--live` with `--from 3` is rejected in one line; `--live` on a run whose head moved stops without asking to restart | not run: needs a live multi-agent audit run | |
+| V3-r | A result matching no stated outcome: the finding stays at its label and severity, goes to both reviews, and the report says `unchanged: no stated outcome matches` | not run: needs a live multi-agent audit run | |
+| V3-s | A second `--live` file with a new result for the same finding: the derived entry is replaced and lists `earlier:`; a claim-only second file leaves `live/findings.md` byte for byte and reruns from stage 7; a plain `/cca:resume` afterwards with nothing changed says the run is current | not run: needs a live multi-agent audit run | |
+| V3-t | `_test` fails the late adversary three times on a live rerun: the live finding stays provisional and a live true claim is `not verified, not reproduced`, reason "live result not challenged" | not run: needs a live multi-agent audit run | |
+| V3-u | A merged item absorbing two findings, one with a live result: with the late adversary failed, the item's severity and label ignore both the derivation and stage 6's position on that finding, and the report marks them `pending review` | not run: needs a live multi-agent audit run | |
+| V3-v | Interruptions: a `.pending` copy left by a stopped import is never read and is removed by the next import or retirement, records no approval, and no committed import's `<k>` is reused; an import stopped after its rename and before reconciliation is reconciled once by the next resume (one approval per entry, no `earlier:` naming its own source); `live/findings.md` deleted by hand after a live rerun is rebuilt from the imports, and stages 6 to 8 rerun | not run: needs a live multi-agent audit run | |
+| V3-w | A later `/cca:resume --from 4` on a run with live results retires every active import, moves the derived files and `live/carried/` under `superseded/`, keeps the results files, and a later `--live` import takes the next `<k>`; the same holds when resume restarts from stage 1 after a moved head, for an import never reconciled | not run: needs a live multi-agent audit run | |
+| V3-x | Two successive `--live` files with results for `X1` and for `L1`: `live/carried/X1.md` and `L1.md` are written once, from the first import, and the second rerun reviews the same findings | not run: needs a live multi-agent audit run | |
+| V3-y | `_test` fails the merger twice on a live rerun with carried `X1` and `L1`: stage 8's fallback reports both carried findings as items, gated by the live rule | not run: needs a live multi-agent audit run | |
+| V3-z | `_test.ledger_split_bytes` set so the three ledger files fit under it but the ledger files plus `live/findings.md` and the carried files do not: stage 7 uses split mode, and the carried finding's slice holds its carried file | not run: needs a live multi-agent audit run | |
+| V3-aa | `_test.drop_ack` twice on `live/findings.md` in a live rerun: stage 6 fails and the live finding stays provisional | not run: needs a live multi-agent audit run | |
+| V3-ab | A live result for an `X<n>` with a Codex rerun that adds new findings: the carried finding keeps its id, the new additions number after it, and the merge check accounts for every id | not run: needs a live multi-agent audit run | |
+| V3-ac | At low tier, a live result for a `P<n>` finding: the late adversary runs for it alone, and after both reviews the finding counts | not run: needs a live multi-agent audit run | |
+| V3-ad | `/cca:handoff` with an export that has links writes `links:` entries and passes `handoff.sh check`; the hygiene scope judges the status claim against the export | not run: needs a live session with the plugin loaded | |
+| V3-ae | `/cca:handoff` for a GitHub issue closed by a PR writes a `closed by` link; stage 1's `<ticket>.json` holds `closed_by`, and the hygiene scope judges the link against it | not run: needs a live session with the plugin loaded | |
+| V3-af | `tokens` with `manifest.json`: the bare ids also match `build 4567 passed` and `migrated 4567 rows`; with `manifest-token.json`: `fix(#4567 #4568)` belongs to both tickets and their groups merge into `app-4567+app-4568`, `[4569]` and `AB#4570` go to theirs, and the build and migration commits' files go to `unticketed`, as `expected.md` lists; with `manifest-bad-token.json`: stops before stage 1 with the `ticket_token` line | not run: needs a live multi-agent audit run | |
+| V3-ag | `/cca:handoff --verdicts $F/claims-verdicts.md --memory <dir>` lists the files holding `APP-1` for claims 1 and 3, and changes no file in `<dir>` | not run: needs a live session with the plugin loaded | |
+| V3-ah | A real run's `work-items.jsonl` with `W<n>` items passes `work-items.sh check` | not run: needs a live multi-agent audit run | |
+| V3-ai | A GitHub issue with a parent: `/cca:handoff` writes `parent: github:<repo>#<number>`, stage 1's `<ticket>.parent.json` holds that parent and is in `forge_hashes`, `<ticket>.md` lists it, and the hygiene scope finds the `status` claim's parent matching; for an issue with none, the file holds `{"parent":null}` and the handoff has no `parent` key | not run: needs a live session with the plugin loaded | |

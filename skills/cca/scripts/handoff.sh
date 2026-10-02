@@ -98,7 +98,7 @@ function valid_sha(s) {
 }
 
 function islistkey(k) {
-	return (k == "commits" || k == "verified" || k == "options")
+	return (k == "commits" || k == "verified" || k == "options" || k == "links")
 }
 
 # keyline(s): the key of a "- key: value" line, else "". Sets kval.
@@ -238,8 +238,9 @@ function finish_item(   i, k, st) {
 	itemopen = 0
 	for (i = 1; i <= nk[sec]; i++) {
 		k = kname[sec, i]
-		if (!((sec, ci, k) in P)) err(H[sec, ci], "missing key '" k "'")
-		else if (islistkey(k) && listmode[sec, ci, k] == "entries" && EC[sec, ci, k] == 0)
+		if (!((sec, ci, k) in P)) {
+			if (!(k in OPT)) err(H[sec, ci], "missing key '" k "'")
+		} else if (islistkey(k) && listmode[sec, ci, k] == "entries" && EC[sec, ci, k] == 0)
 			err(L[sec, ci, k], "key '" k "' has no entries")
 	}
 	if (sec == 3 && ((sec, ci, "status") in P) && ((sec, ci, "options") in P)) {
@@ -273,7 +274,7 @@ function bundles_check(v, allownone,   n, a, i, b, set) {
 	BS[sec, ci] = set
 }
 
-function check_value(k, v,   ok) {
+function check_value(k, v,   ok, own) {
 	if (k == "bundles") {
 		bundles_check(v, sec == 4)
 	} else if (sec == 3 && k == "status") {
@@ -294,6 +295,9 @@ function check_value(k, v,   ok) {
 		else if (substr(v, 1, 4) == "url " && trim(substr(v, 5)) != "") ok = 1
 		else if (substr(v, 1, 12) == "checkpoint: " && trim(substr(v, 13)) != "") ok = 1
 		if (!ok) err(ln, "invalid recorded_at '" v "'")
+	} else if ((sec == 2 || sec == 4) && k == "parent") {
+		own = (sec == 2 ? ID[2, ci] : P[4, ci, "ticket"])
+		if (v == own) err(ln, "ticket '" own "' is its own parent")
 	} else if (sec == 4 && k == "rank") {
 		if (v !~ /^[1-9][0-9]*$/) err(ln, "rank must be a whole number from 1")
 		else if (v in RK) err(ln, "duplicate rank '" v "'")
@@ -374,7 +378,7 @@ function commit_entry(e, kk,   i, b, r, j, sha, text) {
 	CL[ci, kk] = ln
 }
 
-function verified_entry(e, kk,   i, stmt, chk) {
+function verified_entry(e, kk,   i, stmt, chk, rest, nm, ec) {
 	i = index(e, "; check: ")
 	if (i == 0) {
 		if (length(e) >= 8 && substr(e, length(e) - 7) == "; check:") err(ln, "verified entry has an empty check")
@@ -385,6 +389,20 @@ function verified_entry(e, kk,   i, stmt, chk) {
 	chk = trim(substr(e, i + 9))
 	if (stmt == "") err(ln, "verified entry has an empty statement")
 	if (chk == "") err(ln, "verified entry has an empty check")
+	# An env tag: a check part starting "env:" is 'env: <name>; <check>', split at the first
+	# ";" after "env: ".
+	if (substr(chk, 1, 4) == "env:") {
+		rest = substr(chk, 6)
+		i = index(rest, ";")
+		if (substr(chk, 1, 5) != "env: " || i == 0) {
+			err(ln, "env tag must be 'env: <name>; <check>'")
+		} else {
+			nm = trim(substr(rest, 1, i - 1))
+			ec = trim(substr(rest, i + 1))
+			if (nm == "") err(ln, "env tag has an empty name")
+			if (ec == "") err(ln, "env tag has an empty check")
+		}
+	}
 	V[ci, kk] = e
 	VL[ci, kk] = ln
 }
@@ -412,6 +430,27 @@ function options_entry(e,   body, i, opt, why) {
 	OJ[ci] = (OJ[ci] == "" ? e : OJ[ci] "; " e)
 }
 
+# link_entry(e, kk): a links entry is '<type>: <target>', split at the first ': '.
+function link_entry(e, kk,   i, ty, tg, bad, n) {
+	bad = "links entry must be '<type>: <target>'"
+	i = index(e, ": ")
+	if (i == 0) {
+		if (substr(e, length(e)) != ":") { err(ln, bad); return }
+		ty = trim(substr(e, 1, length(e) - 1))
+		tg = ""
+	} else {
+		ty = trim(substr(e, 1, i - 1))
+		tg = trim(substr(e, i + 2))
+	}
+	if (ty == "") err(ln, "links entry has an empty type")
+	if (tg == "") err(ln, "links entry has an empty target")
+	if (ty == "" || tg == "") return
+	n = ty ": " tg
+	if ((sec SUBSEP ci SUBSEP n) in LK) err(ln, "duplicate links entry '" n "'")
+	LK[sec, ci, n] = 1
+	LJ[sec, ci] = (LJ[sec, ci] == "" ? "" : LJ[sec, ci] ", ") ty " " tg
+}
+
 function entry_line(s,   e, kk) {
 	if (curlist == "") {
 		err(ln, "list entry outside a list key")
@@ -425,6 +464,7 @@ function entry_line(s,   e, kk) {
 	}
 	if (curlist == "commits") commit_entry(e, kk)
 	else if (curlist == "verified") verified_entry(e, kk)
+	else if (curlist == "links") link_entry(e, kk)
 	else options_entry(e)
 }
 
@@ -490,8 +530,12 @@ function cl(kind, ref, b, t, l, text,   row) {
 	OUT[++nout] = row
 }
 
-function ftext(s, i, id) {
-	return id ": type " P[s, i, "type"] "; state " P[s, i, "state"] "; iteration " P[s, i, "iteration"] "; owner " P[s, i, "owner"]
+function ftext(s, i, id,   t) {
+	t = id ": type " P[s, i, "type"] "; state " P[s, i, "state"] "; iteration " P[s, i, "iteration"] "; owner " P[s, i, "owner"]
+	if ((s, i, "parent") in P) t = t "; parent " P[s, i, "parent"]
+	if ((s, i, "links") in P)
+		t = t "; links " (listmode[s, i, "links"] == "none" ? "none" : LJ[s, i])
+	return t
 }
 
 function build_claims(   i, j, id, b, h, nc, t, opts, db) {
@@ -544,9 +588,11 @@ BEGIN {
 	nsec[2] = "Tickets"
 	nsec[3] = "Decisions"
 	nsec[4] = "Raised tickets"
-	spec[2] = "type state iteration owner bundles problem decision commits verified"
+	spec[2] = "type state iteration owner parent links bundles problem decision commits verified"
 	spec[3] = "ticket decision rationale options decided_by recorded_at status"
-	spec[4] = "ticket type state iteration owner bundles summary rank in_bundle_confidence reason"
+	spec[4] = "ticket type state iteration owner parent links bundles summary rank in_bundle_confidence reason"
+	OPT["parent"] = 1   # the optional keys; finish_item skips one that is missing
+	OPT["links"] = 1
 	for (s = 2; s <= 4; s++) {
 		nk[s] = split(spec[s], parts, " ")
 		for (i = 1; i <= nk[s]; i++) {

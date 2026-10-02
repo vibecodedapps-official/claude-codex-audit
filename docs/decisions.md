@@ -1,11 +1,11 @@
 # Decisions
 
-This file records the design decisions behind cca 0.1.0 and 0.2.0: the questions the
-design settled, the five platform decisions confirmed against Claude Code before the
-build, the choices made while building 0.1.0, the 0.2.0 decisions, what is still open, and
-what is deferred past 0.2. It
-replaces the pre-implementation spec, architecture, and build plan documents, in the
-repository history before this change; their user-facing content is in `README.md`.
+This file records the design decisions behind cca 0.1.0, 0.2.0, and 0.3.0: the questions
+the design settled, the five platform decisions confirmed against Claude Code before the
+build, the choices made while building 0.1.0, the 0.2.0 and 0.3.0 decisions, what is still
+open, and what is deferred past 0.3. It replaces the pre-implementation spec,
+architecture, and build plan documents, in the repository history before this change;
+their user-facing content is in `README.md`.
 
 ## Resolved questions (2026-09-30)
 
@@ -345,7 +345,202 @@ Review findings on the second plan draft:
 - GNU-only `touch -d` in the test: the ISO form both GNU and macOS accept, with the times
   asserted before the result.
 
-## Deferred past 0.2
+## 0.3.0 decisions (2026-10-01)
+
+0.3.0 closes issues #5 to #11: auditing uncommitted work, env tags, live results fed back
+into a run, parent and links keys, more work-item operations, a ticket token, and memory
+reconciliation. The plan was reviewed ten times by a second opinion before implementation;
+the settled findings are listed below. Nothing was run against a live audit; the
+acceptance record keeps every agent-driven case `not run` until one runs.
+
+Decisions taken with the user:
+
+- **gh 2.73.0 for GitHub tickets.** Hygiene checks closing-PR links, which
+  `closedByPullRequestsReferences` gives and older gh lacks. Azure DevOps and other forges
+  are unaffected: their exports already carry parent and links.
+- **Live results for `X<n>` and `L<n>`.** Accepted, through carried findings (below).
+- **Live bookkeeping is a script.** `live.sh` (`check`, `import`, `active`, `carry`,
+  `assemble`, `retire`) holds the file bookkeeping; the orchestrator keeps only the
+  derivation, a judgment.
+- **`ticket_token` takes a string or a list of templates.**
+- **New fixture material.** The `tokens` fixture, and `manifest-working-tree.json` in
+  `solo` and `solo-dirty`.
+
+Settled choices:
+
+- **Working-tree head (#5).** The bundle key `head: working-tree` is manifest only and
+  needs the bundle's branch checked out. Stage 1 step 1c builds the head with
+  `working-tree.sh build`, into a temp index, with a fixed author, date, and message and
+  `--no-gpg-sign`, so the same tree gives the same sha and a resume can rebuild a pruned
+  head. The only writes are objects, disclosed in Coverage along with the head having no
+  ref. The bundle is read directly, searched with `git grep <head sha>`; untracked files
+  at audit time are part of the head.
+- **Refusals.** No HEAD commit, a sparse checkout, skip-worktree or assume-unchanged
+  paths, unmerged paths, a dirty submodule, an untracked nested repository, Git LFS, a
+  filter with a `clean` or `process` program, and a quoted path. A dirty submodule's files
+  are not in the parent's tree, so a rebuild could give the same sha after they change.
+  Filters are never disabled, since the tree would then differ from the user's own commit.
+- **Act drift.** Decided by the committed tree, not ancestry, plus any commit act did not
+  log; an unchanged clean `HEAD` and a rewritten history with the same tree are not drift.
+- **Resume after a pruned head.** Resume snapshots, rebuilds, and checks read-only; an
+  unchanged tree gives the same sha, a different one is a changed head, handled as before.
+- **Env tags (#6).** A verified entry whose check starts `env: ` must read
+  `env: <name>; <check>`. Such a claim is never `true` or `false` from a run here, since a
+  run here is another environment. It is `not verified, not reproduced`, listed in section
+  9, and `claims-verdicts.md` calls it `not reproducible here`, not a recheck request.
+  `--verdicts` applies nothing for it and `memory.sh` ignores it.
+- **Live file format (#11).** A `--live` file names a finding id of a Live checks block, or
+  `claim <n>`, never `C<n>`, which is not stable across a rerun. The validator recomputes
+  the report body's SHA-256, matches the report's revision and the block's query exactly,
+  and, for a claim, its `env`. An environment named only inside free-text `where` does not
+  identify it.
+- **Imports are the record.** `live/results-<k>.md` is an import once renamed into place,
+  numbered across the run and never moved. Only retirements are logged
+  (`live/retired.md`). The derived `live/findings.md`, `live/claims.md`, and
+  `live/carried/` are rebuilt from the active imports, never created empty, and a `.pending`
+  copy is never read.
+- **Carried findings.** A rerun renumbers `X<n>` and `L<n>`, so a result for one carries
+  the finding's block in `live/carried/<id>.md`, written once. The id is reserved on the
+  rerun, and the carried finding goes through both reviews like any other.
+- **Review of a live result.** A finding in `live/findings.md` counts only after stage 6
+  gave a position and the late adversary a verdict. Until then every position on it from the
+  rerun, and its derivation, is `pending review` and cannot set an item's severity, label,
+  or disposition. Reruns from stage 5 or earlier retire the imports first.
+- **Script exit codes.** `live.sh` exits 0, 1 for named validation and state errors on
+  stdout, and 2 for usage and any failed operation on stderr. Writes go through a temp file
+  and a rename, and a rerun after a failure completes the job.
+- **Parent and links (#7).** Optional keys `parent` and `links` on tickets and raised
+  tickets; `links: none` is a checkable claim. `cca-handoff: 1` stays, so ccl must check for
+  cca 0.3.0 or later before writing them. `/cca:handoff` fills them from the record only.
+  `gh issue view` has no parent field, so stage 1 and `/cca:handoff` read a GitHub
+  ticket's parent with a GraphQL query, saved as `<ticket>.parent.json` and hashed.
+- **Work items (#8).** `update_comment`, `remove_link`, and `set_fields`; `mentions` on
+  every op with `text`; `W<n>` items for an op that exists only to support another. The
+  validator rejects unknown keys and an op that reaches no `C<n>` or `claim <n>`, directly
+  or through a `W<n>`, so a `W` cycle fails.
+- **Ticket token (#9).** A literal template with `{n}` once, never a regex, matched with
+  the base boundary outside the whole token, for exported tickets only. A list is allowed
+  because `#{n}` does not match `AB#4567`, and Azure DevOps commits write both.
+- **Memory reconciliation (#10).** `memory.sh find` prints, never edits. Keys are the
+  ticket id, quoted names, and words that are a number, a sha, or an id; a free phrase is
+  never a key. Stage 8 writes a `ticket:` sub-line to `claims-verdicts.md` so the script
+  needs no second file. A 0.2.0 file has none, and the script uses the text alone.
+- **Not done.** Keeping `C<n>` stable across a stage 7 rerun: live entries use finding ids,
+  and act binds to the revision.
+
+Probes (2026-10-01, git 2.55.0.windows.5, gh 2.91.0, Git Bash, isolated config):
+
+- Building a commit from a temp index with `read-tree`, `add -A`, `write-tree`, and
+  `commit-tree` twice gave the same sha, left `.git/index` unchanged, and made no ref.
+- With `commit.gpgSign=true` and `gpg.program=false`, `commit-tree` still exited 0, so this
+  git does not sign from config; the script passes `--no-gpg-sign` anyway.
+- A skip-worktree file removed from disk was missing from the built tree, so it would read
+  as a deletion; flagged paths and sparse checkouts are refused.
+- `git check-attr --stdin filter` printed `lfs` for a `filter=lfs` path and `unspecified`
+  for the rest.
+- `gh issue view --json` has no parent field and offers `closedByPullRequestsReferences`,
+  first named in the gh v2.73.0 release notes.
+- ccl#25 is the merged ccl 0.9.0 PR, not an open issue; ccl writing `parent` and `links`
+  is ccl#26, opened 2026-10-02.
+
+Review findings, by round, and how each was settled:
+
+1. Round 1, 11 findings, all taken. `X<n>` and `L<n>` ids do not survive a rerun
+   (replaced in round 2); results could be installed for a resume that cannot use them
+   (eligibility first, retire on early reruns); a reviewed duplicate could let an item count
+   at an unreviewed severity (unreviewed derivations stay out of positions); clean filters
+   other than LFS can run programs (refuse any driver with `clean` or `process`, resume
+   snapshots and checks around its rebuild); act kept an ancestry test (drift is the
+   committed tree); a result of another query could settle a finding (the validator requires
+   the query exactly); hygiene could not check GitHub links (fetch the closing PRs); memory
+   keys dropped literals and took words with digits (explicit grammars); a claim-only
+   import would create an empty `live/findings.md` (derived files never empty); `ticket_token`
+   did not say literal or regex (literal templates, boundary outside the token); test gaps.
+2. Round 2: round 1 items 4 to 10 resolved, 4 reopened, 7 new, all taken. `X<n>`/`L<n>`
+   results now carry the finding and reserve its id;
+   approval sources could collide after a retirement
+   (imports numbered across the run); a position on a live finding could promote it before
+   the late adversary saw it (`pending review`); the validated file was not the imported one
+   (validate the copy, then rename); an environment as a word in `where` did not identify it
+   (an exact `env` key); the validator trusted the revision header (recompute the body hash);
+   a recorded `absent` input read as missing (the optional-input rule); low-tier rules made
+   live-reviewed `P`/`T` findings provisional (a live exception); stage 8 read challenge
+   lines from an unhashed file (`late/adversary.md` is an input); dirty submodules and
+   untracked nested repositories are not in the synthetic tree (refused); test gaps.
+3. Round 3, 2 reopened, 2 new, all taken, by simplifying the import model: the results
+   files are the import record, only retirements are logged, derived files are rebuilt from
+   the active imports; a carried finding is kept once in `live/carried/<id>.md`; a deleted
+   derived file is rebuilt; carried text counts toward the split threshold.
+4. Round 4, 2 findings, both taken: stage 8's fallback includes carried findings, gated by
+   the live rule (V3-y); a discarded `.pending` number may be reused, since only committed
+   imports have approvals to protect. The agent-driven cases were renumbered V3-j to V3-ah.
+5. Round 5 found nothing in a full reread. A later reread found reconciliation ordered
+   before step 6 picks the rerun stage, which retirement depends on. Round 6 on that fix:
+   reconcile also when no stage reruns, recompute after reconciling, apply the eligibility
+   stop with `--live` only, and remove `.pending` copies on the retirement path. Taken.
+6. Round 7, on the move of bookkeeping into `live.sh`, 3 findings, all taken: exit codes for
+   every mode and resume stopping on any nonzero one; literal outputs, errors, and grammars
+   for entries, derived files, and `retired.md`; tests for replay, rebuild, numeric order,
+   `carry L1`, malformed state, operational failures, and recovery after a partial `retire`
+   or `assemble`.
+7. Round 8, 2 left, both taken: the malformed derived file message got its exact text and
+   order; "exit 1 writes nothing" now allows `import`'s `.pending` cleanup and an empty
+   `live/`.
+8. Round 9, 1 open, taken: `retire` read `live/retired.md` after removing `.pending` files,
+   so it checks first and exits 1 having changed nothing.
+9. Round 10 found nothing in a full reread of the `live.sh` contract and its tests.
+
+The final review of the branch against `main` found 2, both taken:
+
+1. The stage 1 baseline ran `git status` before `working-tree.sh` refused a program
+   filter, so a clean filter or an fsmonitor hook could run first. `working-tree.sh check`
+   runs the refusals alone, writing nothing, in A.4 and before resume's snapshot, and
+   `readonly.sh` runs its index-reading git calls with fsmonitor off.
+2. Building from `read-tree HEAD` dropped a file staged with `git add -f` despite an
+   ignore rule. The temporary index is now a copy of the repo's own index (`cp -p`), so
+   the head is what `git add -A && git commit` would make.
+
+Later rounds of the same review, each fix shown failing on the old script first, all in
+`working-tree.sh`:
+
+3. A submodule's own clean filter ran inside the recursive `git status` on a same-size
+   edit. The filter scan now covers every checked-out submodule before any status.
+4. A `post-index-change` hook ran during `add -A`; every git call now points
+   `core.hooksPath` at an empty directory. A dirty submodule staged as a rename was a
+   porcelain type 2 record the refusal did not read; status now runs with
+   `--no-renames`.
+5. A driver literally named `set`, `unset`, or `unspecified` was skipped; it is now
+   checked like any other. The skip-worktree and assume-unchanged refusal now runs in
+   every checked-out submodule.
+6. A missing index file let attributes the scan could not see come back from HEAD in a
+   fallback build. A repo or checked-out submodule with no index file is now refused,
+   and the fallback is gone.
+
+A review of PR #12 on 2026-10-02 found 6. Two were taken, each shown failing first:
+
+1. A submodule path git quotes was skipped by the filter scan, yet `git status` still ran
+   and recursed into it, running its clean filter (a DEL in the name reproduces it on
+   Windows too). Inside a submodule, the quoted path was not refused at all. Such a path,
+   at any depth, is now refused as a quoted path, and `git status` is skipped.
+2. Without `jq`, `live.sh import` kept the results file and the `active` that follows
+   failed, so every later resume of the run stopped. `import` now exits 2 before it
+   writes anything, and the README lists `jq` for `--live`.
+
+Three findings about unbounded agent inputs (a live result value of any length, every
+memory match, and every untracked file in the brief) join the deferred bounded-loading
+item below. The proposal to split the PR was declined: 0.3.0 was planned as one PR.
+
+A PR comment the same day found that hygiene checked a GitHub ticket's `parent` against
+forge data that held none: stage 1 saved no parent, and `/cca:handoff` wrote none. With
+ccl writing a GitHub `parent` (ccl#26), a right value could read as a mismatch. Taken:
+stage 1 saves the parent from GraphQL as `<ticket>.parent.json`, hashed in
+`forge_hashes` and rechecked by resume, `<ticket>.md` lists it, and `/cca:handoff` fills
+it. The query and its projection were run on 2026-10-02 against an issue with a parent
+(cli/cli#14529, giving `{"parent":{"number":14563,"repo":"cli/cli","url":...}}`) and one
+without (giving `{"parent":null}`). Documenting the gap instead was rejected: every
+handoff with a GitHub parent would carry a permanent gap line.
+
+## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
   changes. `skills/cca/handoff.md` is the format ccl can adopt, and `/cca:handoff` can run
@@ -357,10 +552,16 @@ Review findings on the second plan draft:
   `/cca:handoff` writes a handoff.
 - Exact token accounting.
 - A PreToolUse hook that enforces the read-only boundary mechanically.
-- Feeding a live check result back into a run. Today the user reruns the audit or acts
-  on the finding by hand.
+- `readonly.sh` takes its snapshots with `git status`, which runs a clean or process
+  filter on a modified file of a dirty checkout, in any audit (found in the 0.3.0 final
+  review; older than 0.3.0). A `head: working-tree` bundle is safe, since its refusals
+  run first. Other repos need a snapshot that never runs a filter.
 - Bounded loading for every agent input (2026-09-30 review). Today the unit is the
   450,000-byte chunk or ledger slice, an ordinary corpus file is read in full, a single
   finding larger than the split threshold is passed whole as an `over threshold` part,
   and a merger may reopen a full ledger file for a duplicate check. A per-agent byte
-  cap with sectioned inputs is a later design change, still deferred.
+  cap with sectioned inputs is a later design change, still deferred. 0.3.0 adds three
+  unbounded inputs (2026-10-02 review): a live result value of any length, the
+  `memory.sh` output (one claim with "Step 1" and "version 2" against 300 memory files
+  printed 601 lines, all but one from the keys `1` and `2`; a cap per key with a count of
+  the rest would fix it), and the brief's list of untracked files.

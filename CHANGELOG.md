@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.3.0 - 2026-10-01
+
+Closes issues #5 to #11. No full multi-agent audit has run yet; see `docs/acceptance.md`.
+
+### Added
+
+- A manifest bundle key `head: working-tree` audits uncommitted work. Stage 1 builds a
+  commit from the working tree with `skills/cca/scripts/working-tree.sh`, without touching
+  the index or refs, and reads the checkout directly, so tests can run. The objects it
+  writes, and that the head has no ref, are disclosed in the report. A repo whose files use
+  Git LFS or a filter that runs a program, or whose nested repositories have uncommitted
+  work, is refused.
+- `/cca:resume <run> --live <file>` feeds approved live check results back into a run. The
+  format is in `skills/cca/live.md`, validated by `skills/cca/scripts/live.sh`. A changed
+  finding goes back to the second opinion and the late adversary before it counts.
+- Verification checks tagged `env: <name>;` are listed as live checks by claim number, and
+  `claims-verdicts.md` calls them `not reproducible here`, not recheck requests.
+- Optional handoff keys `parent` and `links`, for tickets and raised tickets. Stage 1 fetches
+  the PRs that close a GitHub ticket, and its parent through GraphQL, so hygiene can check
+  both.
+- Work-item operations `update_comment`, `remove_link`, and `set_fields`, mentions, and
+  `W<n>` items for supporting operations.
+- A manifest bundle key `ticket_token`, so a bare-number ticket id matches only as a ticket
+  reference, and a `tokens` fixture.
+- `/cca:handoff --memory <dir>` lists the memory files that hold each `false` claim's keys,
+  with `skills/cca/scripts/memory.sh`. `claims-verdicts.md` gains a `ticket:` sub-line.
+
+### Changed
+
+- `work-items.sh` rejects unknown keys, an empty `set_fields`, a `W<n>` that names no
+  operation, and operations that reach no report item or claim.
+- Report section 9 lists each live check as a block keyed by finding id or claim number.
+- GitHub tickets need gh 2.73.0 or later.
+- `/cca:resume --live` needs `jq`, on any forge.
+- CI runs the three new script tests on all runners and under mawk, and fails when jq is
+  missing.
+- A run started under 0.2.0 and resumed under 0.3.0 reruns from stage 1.
+
 ## 0.2.0 - 2026-10-01
 
 Closes the gaps found by one real audit of 0.1.0, and adds a typed handoff from the build

@@ -50,6 +50,16 @@ commit sha is logged there (step 7).
    is not an ancestor of `HEAD` (`git merge-base --is-ancestor`). Show the drift
    (`git log --oneline` for those commits) and ask before going on. Log the answer.
 
+   A bundle with `head: working-tree` has an audited head that no branch ever held, so
+   drift is decided by the committed tree, not by ancestry. Take `head_tree` from
+   `stages.json`. Let `B` be the parent of the earliest act commit that `act/log.md`
+   records for this run and that is an ancestor of `HEAD`, or `HEAD` when there is none.
+   Drift is `B`'s tree (`git -C <repo> rev-parse B^{tree}`) differing from `head_tree`,
+   or any commit in `git -C <repo> rev-list B..HEAD` that act did not log. An unchanged
+   clean `HEAD` audited as is, and a rewritten history with the same tree, are not
+   drift. On drift, say that the committed tree differs from the audited one, show
+   `git -C <repo> log --oneline -5 B`, and ask, as above. Log the answer.
+
 4. **Baseline checks.** Before the first change in each repo, run the repo's required
    checks (from its `AGENTS.md`, `CLAUDE.md`, `README.md`, CI config, or package
    scripts) and the checks that cover the approved items. Record each command, where it
@@ -97,7 +107,7 @@ commit sha is logged there (step 7).
 6. **No push and no forge edits.** Never push, and never edit tickets or PRs, until the
    user says to for that item. Work-item fixes and decision comments from the report are
    shown as drafts. The operations in `work-items.jsonl` are drafts too, like the
-   work-item fixes: act applies none of them in 0.2.
+   work-item fixes: act applies none of them.
    When the user says to post one for an item, post that one only, with
    its text free of model, agent, and tool names, and log it with its URL.
 

@@ -41,6 +41,7 @@ flags:
   items: <id>[, <id>...]
   per-item: true | false
   from: none
+  live: none
 ```
 
 4. Invoke the Skill tool with skill `cca:cca` and that same block as the args. Then follow the skill. Do not interpret the request or act on it yourself: approval, checks, and commits happen in the skill, and only for the items listed. The flags other than `run-id`, `items`, and `per-item` are placeholders here.

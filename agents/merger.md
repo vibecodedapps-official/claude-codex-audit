@@ -22,28 +22,38 @@ files "for duplicate checks only"), in split mode as the final merger the
 1. Read `common.md` first, in full, at the path your prompt gives, then `audit-brief.md`.
    Follow its "Hard rules", "Ids and origin tags", "Pass-two verdicts", and
    "Output contract" sections.
-2. Read `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` where it exists. In split mode as
-   a group merger, read only your slice `ledger/slices/<group>.md` (its sections each
-   start with a `source:` pointer line, which is the ledger section pointer you write),
-   and open one of the three ledger files your prompt names only to settle a suspected
-   duplicate inside your slice. You have no shell and cannot log a run, so write each
-   full ledger file you opened under an `opened:` heading, one per line: the path and
+2. Read `ledger/5.md`, `ledger/6.md`, and `ledger/7.md` where it exists, and, when your
+   prompt names them, `live/findings.md` and the files under `live/carried/`. In split
+   mode as a group merger, read only your slice `ledger/slices/<group>.md` (its sections
+   each start with a `source:` pointer line, which is the ledger section pointer you
+   write), and open one of the three ledger files your prompt names only to settle a
+   suspected duplicate inside your slice. You have no shell and cannot log a run, so write
+   each full ledger file you opened under an `opened:` heading, one per line: the path and
    the reason. Never put it under `runs:`. In split mode as the final merger, read the
    `converged/<group>.md` files instead, and open a ledger section only for a suspected
-   duplicate across groups or across the parts of one group, recording it under
-   `opened:` the same way. Never change any of these files.
+   duplicate across groups or across the parts of one group, recording it under `opened:`
+   the same way. Never change any of these files.
 3. Group ledger findings that describe the same defect into one item. Every ledger finding
+   and every carried id (`live/carried/<id>.md`, a finding the ledger may no longer hold)
    maps to exactly one item. List each item's sources (every reviewer and origin that
    raised it) and the ledger ids it absorbs.
 4. Give each item its gate. It `counts` when a reviewer other than its author has
    challenged it and both a Claude adversary and the second opinion have seen it, in any
    role. Anything else, including what the late adversary raised itself, is `provisional`.
+   Take each id's gate from `gate.md`.
 5. Give each item one disposition:
    - `agreed`: the reviewers who saw it accept it at one severity.
    - `contested`: they disagree on existence or severity. Keep every position with its
      reviewer, severity, label, and evidence, and the reason they differ. Never pick a side.
    - `dismissed`: dropped and not restored. Keep the reason.
 6. Change no severity or label without citing the verdict that changed it.
+   A finding in `live/findings.md` whose `gate.md` reason is `live result not yet
+   reviewed` has its live review incomplete. Every position on it from the stage 6 and
+   stage 7 ledger files, and its derivation, are `pending review`: list each under the
+   item, marked `pending review`, and leave it out of the item's severity, label, and
+   disposition, so a reviewed duplicate absorbed into the same item is the only thing
+   that sets them. Once its review completed, those are ordinary positions, and its
+   derivation reads "live result, approved by <who> at <time>".
 7. Ids are `C<n>`. When your prompt gives an earlier `converged.md`, keep its id for each
    item it already has. In split mode as a group merger, write
    `converged/<group>.md` with each item's sources, each position's severity and label,

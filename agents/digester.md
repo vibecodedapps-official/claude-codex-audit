@@ -88,7 +88,10 @@ files in your chunk and any skipped binary files), and your output file
    a directly read working tree, search with `git grep` at the pinned sha, or with `rg`
    over the files `git ls-files` lists; use the Grep and Glob tools only in an export or
    in the run directory. Never follow a symlink outside the repo. A citation to an
-   untracked, ignored, or outside path is invalid evidence.
+   untracked, ignored, or outside path is invalid evidence. In a working-tree bundle (the
+   brief's mode `direct (working tree)`), search only with `git -C <repo> grep <pattern>
+   <head sha>`, never `rg` over `git ls-files`; the files the brief lists as untracked at
+   audit time are part of the head and valid evidence, cited at the head sha.
 4. Never ask for or use live systems or credentials yourself (hard rule 5). Use one only
    when your prompt says the user approved that named check; otherwise mark the answer
    `needs a live check`.

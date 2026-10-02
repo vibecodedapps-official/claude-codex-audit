@@ -1,8 +1,8 @@
 #!/bin/sh
-# build.sh <name>: build the fixture <name> (solo, solo-dirty, or full) in a new temp
-# directory and print the absolute path of its manifest on stdout, nothing else.
+# build.sh <name>: build the fixture <name> (solo, solo-dirty, full, or tokens) in a new
+# temp directory and print the absolute path of its manifest on stdout, nothing else.
 #
-# Usage: sh tests/fixture/build.sh solo | solo-dirty | full
+# Usage: sh tests/fixture/build.sh solo | solo-dirty | full | tokens
 #
 # Every expected outcome is listed as a literal in tests/fixture/expected.md. Git runs
 # with fixed identity, fixed commit dates, no global or system config, no signing, and
@@ -12,9 +12,9 @@ set -eu
 
 name=${1:-}
 case $name in
-solo | solo-dirty | full) ;;
+solo | solo-dirty | full | tokens) ;;
 *)
-	echo "build.sh: unknown fixture '$name'; expected solo, solo-dirty, or full" >&2
+	echo "build.sh: unknown fixture '$name'; expected solo, solo-dirty, full, or tokens" >&2
 	exit 2
 	;;
 esac
@@ -511,6 +511,17 @@ EOF
   "scratch": "./app/.test-output"
 }
 EOF
+	# Outside every repo too: the solo manifest with the bundle's head built from the
+	# working tree.
+	put manifest-working-tree.json <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main", "head": "working-tree",
+      "tickets": ["file:./exports/APP-1.md"] }
+  ],
+  "claims": ["./session-summary.md"]
+}
+EOF
 	put handoff.md <<'EOF'
 ---
 cca-handoff: 1
@@ -585,7 +596,8 @@ EOF
 
 # verdicts_md <hash>: a claims-verdicts.md for $T/handoff.md, its heading carrying <hash>.
 # Claim 1 is a correction whose text matches; claim 3 a correction whose text does not;
-# claim 5 contested; claim 6 a recheck request; claim 7 true.
+# claim 5 contested; claim 6 a recheck request; claim 7 true. Each entry has the ticket:
+# sub-line stage 8 writes, the claim's ticket field.
 verdicts_md() {
 	cat <<EOF
 # Claims verdicts: fixture-verdicts
@@ -596,23 +608,31 @@ generated: 2026-09-01T12:00:00Z
 Apply a line only when its file hash and claim text match what you hold. \`false\` lines
 are corrections: the statement is contradicted by the cited evidence. \`not verified\` lines
 on verification claims are recheck requests: the audit could not reproduce the check, which
-is not evidence the statement is wrong. \`contested\` lines need a person to decide.
+is not evidence the statement is wrong. \`not reproducible here\` lines are not recheck
+requests: the check ran against an environment the audit cannot reach, so run it against
+that environment and feed the result back with \`/cca:resume <run-id> --live <file>\`.
+\`contested\` lines need a person to decide.
 
 ## $T/handoff.md (handoff), hash $1
 
 - claim 1 [status] $T/handoff.md:14 tickets/APP-1/fields: false; finding: none; evidence: exports/APP-1.md gives state In Progress
+  ticket: APP-1
   text: APP-1: type Story; state Active; iteration none; owner Developer
   correction: APP-1: type Story; state In Progress; iteration none; owner Developer
 - claim 3 [code] $T/handoff.md:14 tickets/APP-1/decision: false; finding: C1; evidence: report item C1
+  ticket: APP-1
   text: Add a deactivate command that keeps the row.
   correction: Add a deactivate command; it deletes the user's row, though the ticket asks for a soft delete.
 - claim 5 [code] $T/handoff.md:24 tickets/APP-1/commit/app/0c23936: contested; finding: C1; evidence: report section 10
+  ticket: APP-1
   text: app 0c23936: add the deactivate command, which keeps the row and sets its status to inactive.
   correction: none
 - claim 6 [verification] $T/handoff.md:26 tickets/APP-1/verified/1: not verified; finding: none; evidence: not reproduced, needs a copy of production data
+  ticket: APP-1
   text: Deactivate was checked by hand against a copy of production data; check: not recorded
   correction: none
 - claim 7 [verification] $T/handoff.md:27 tickets/APP-1/verified/2: true; finding: none; evidence: sh run-tests.sh printed the skip line
+  ticket: APP-1
   text: The test suite runs with one test skipped; check: sh run-tests.sh
   correction: none
 EOF
@@ -852,9 +872,133 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-build_app
-write_exports
+# tokens: one repo whose exported tickets have bare-number ids, and commits that write
+# those numbers as ticket references (#4567, [4569], AB#4570) and as other numbers
+# (a build number, a row count). Each feature commit touches its own file.
+build_tokens() {
+	init app
+	put app/README.md <<'EOF'
+# app
+
+A small tool.
+EOF
+	put app/src/app.sh <<'EOF'
+#!/bin/sh
+set -eu
+echo app
+EOF
+	commit app "initial app"
+
+	g -C "$T/app" checkout -q -b feature
+	put app/src/input.sh <<'EOF'
+#!/bin/sh
+# input.sh: reject empty input.
+set -eu
+[ -n "${1:-}" ] || { echo "empty input" >&2; exit 1; }
+EOF
+	commit app "fix(#4567 #4568): reject empty input"
+	put app/ci/status.txt <<'EOF'
+build 4567: passed
+EOF
+	commit app "build 4567 passed"
+	put app/src/report.sh <<'EOF'
+#!/bin/sh
+# report.sh: print a one-line report.
+set -eu
+echo "report"
+EOF
+	commit app "[4569] add the report command"
+	put app/config/app.conf <<'EOF'
+mode=fast
+EOF
+	commit app "AB#4570 rename the config key"
+	put app/data/migration.txt <<'EOF'
+rows: 4567
+EOF
+	commit app "migrated 4567 rows"
+
+	put exports/4567.md <<'EOF'
+---
+id: 4567
+url: https://tickets.example.invalid/items/4567
+title: Reject empty input
+state: In Progress
+description: The tool must stop with an error when it gets empty input.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/4568.md <<'EOF'
+---
+id: 4568
+url: https://tickets.example.invalid/items/4568
+title: Name the empty input error
+state: In Progress
+description: The error for empty input must say that the input is empty.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/4569.md <<'EOF'
+---
+id: 4569
+url: https://tickets.example.invalid/items/4569
+title: Add a report command
+state: In Progress
+description: Add a command that prints a one-line report.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/4570.md <<'EOF'
+---
+id: 4570
+url: https://tickets.example.invalid/items/4570
+title: Rename the mode key
+state: In Progress
+description: Rename the mode key in the settings.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+}
+
+# tokens_manifest <ticket_token JSON value, or empty for no key>
+tokens_manifest() {
+	cat <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main",
+EOF
+	if [ -n "$1" ]; then
+		printf '      "ticket_token": %s,\n' "$1"
+	fi
+	cat <<'EOF'
+      "tickets": ["file:./exports/4567.md", "file:./exports/4568.md",
+                  "file:./exports/4569.md", "file:./exports/4570.md"] }
+  ]
+}
+EOF
+}
+
+# ---------------------------------------------------------------------------
 case $name in
+tokens) build_tokens ;;
+*)
+	build_app
+	write_exports
+	;;
+esac
+case $name in
+tokens)
+	tokens_manifest '' | put manifest.json
+	tokens_manifest '["#{n}", "[{n}]", "AB#{n}"]' | put manifest-token.json
+	tokens_manifest '"#n"' | put manifest-bad-token.json
+	;;
 solo)
 	write_solo_manifests
 	;;
