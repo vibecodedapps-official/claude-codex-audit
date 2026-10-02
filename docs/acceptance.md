@@ -236,8 +236,9 @@ This section records the acceptance cases for cca 0.3.0. Results are `pass`, `fa
 V3-i is filled in from the final CI run. No case is recorded as passed without a run that
 shows it. The v0.1.0 and v0.2.0 records above are unchanged. V3-aj to V3-am record the
 forge host fix (#13), made after the 0.3.0 tag. V3-an and V3-ao record the build of
-flagged paths in a working-tree bundle, made after 0.3.1. V3-ap and V3-aq record
-the `result_file` key for `--live` results, released with that fix as 0.4.0.
+flagged paths in a working-tree bundle, made after 0.3.1, and V3-ar its resume after a
+flag changes. V3-ap and V3-aq record the `result_file` key for `--live` results,
+released with that fix as 0.4.0.
 
 ## Release checks
 
@@ -294,3 +295,4 @@ only when the stage that judges it completes.
 | V3-am | A parent read that fails (for example a GitHub Enterprise Server without the `parent` field): stage 1 continues, `<ticket>.md` says `parent: not read`, the brief lists the gap with the host and gh's error, `<ticket>.parent.json` is absent and not in `forge_hashes` but is in `forge_gaps` with the ticket URL, and the hygiene scope reports a gap, not a mismatch; a later `/cca:resume` whose retry of that read exits 0 reruns stage 1, and one whose retry still fails keeps the gap and does not stop | not run: needs a live session with the plugin loaded and such a host | |
 | V3-ao | A `head: working-tree` bundle whose repo has a skip-worktree or assume-unchanged path, edited on disk: stage 1 maps the bundle `export`, not `direct (working tree)`, and agents read the exported head; the brief's Bundles section and the report's Coverage list the path as flagged at audit time, held at the index version, and Coverage says its local content is not in the head and a change to it during the run may escape the read-only check | not run: needs a live multi-agent audit run | |
 | V3-aq | `/cca:resume <run-id> --live <file>` with a `result_file` holding a multi-row query result: the copy and `SHA256SUMS` are under `live/results-<k>/`, the derivation names the copy, the second opinion and the late adversary get the copy as an input (stage 6 with a sentinel), and the report's status line reads `in live/results-<k>/<line>.txt, sha256:<hex>` | not run: needs a live multi-agent audit run | |
+| V3-ar | After a finished run on a `head: working-tree` bundle, a path gains or loses its skip-worktree or assume-unchanged flag with no change to any file, so the head sha stays the same: `/cca:resume` reruns stage 1, and the new brief lists the flagged paths as they are now, maps the bundle `export` when one is flagged and `direct (working tree)` when none is, and Coverage matches. Run it four ways: a flag added and a flag removed, each in the top level and in a checked-out submodule, once with a bundle read directly and once with a bundle already exported | not run: needs a live multi-agent audit run | |

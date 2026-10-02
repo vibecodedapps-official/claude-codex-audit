@@ -804,4 +804,9 @@ query that returns rows is kept verbatim rather than summarized by hand.
   unbounded inputs (2026-10-02 review): a live result value of any length, the
   `memory.sh` output (one claim with "Step 1" and "version 2" against 300 memory files
   printed 601 lines, all but one from the keys `1` and `2`; a cap per key with a count of
-  the rest would fix it), and the brief's list of untracked files.
+  the rest would fix it), and the brief's list of untracked files. 0.4.0 adds two more
+  (2026-10-02 review): a `result_file` copy, read in full by both reviews of a live
+  result (see its Limits above), and the brief's list of flagged paths, one line per
+  path, which a repo with thousands of skip-worktree bits (left after sparse checkout
+  was turned off by hand) would make long. Like the untracked list, a count with the
+  first paths in the brief and the full list in a run file would bound it.
