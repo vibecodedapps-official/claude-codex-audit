@@ -599,7 +599,12 @@ handoff with a GitHub parent would carry a permanent gap line.
   `Issue` type. Stopping there would end every such audit with a hint the user cannot
   act on, so the read is a gap: the brief lists it with the host and gh's error, the
   ticket file says `not read` or `parent: not read`, and the auditor treats `not read`
-  as a gap in what could be checked, never a mismatch.
+  as a gap in what could be checked, never a mismatch. A gap writes no file, so
+  `forge_hashes` cannot recheck it; stage 1 records it in `forge_gaps` with the
+  ticket's URL instead, and resume retries each one. A read that now succeeds
+  invalidates stage 1, so evidence that became readable is not left out for good; one
+  that still fails leaves the gap and does not stop resume, since a missing `parent`
+  field never comes back on its own.
 - **Resume.** Unless stage 1 reruns, resume names the host stage 1 used, read from the
   `url` in the saved `forge/<bundle>/pr.json` for the PR reads and in
   `forge/<bundle>/<ticket>.json` for that ticket's two reads. A manifest URL or a remote
@@ -620,9 +625,10 @@ handoff with a GitHub parent would carry a permanent gap line.
   `tests/lint.sh` fails on a `gh pr <sub>` or `gh issue <sub>` command with an argument
   that passes neither `-R` or `--repo` with a `<host>/<owner>/<repo>` value nor an
   argument that starts with `https://` or `http://` or is `<url>`, and on a `gh api`
-  command with an argument that lacks `--hostname`. A command may start after `;`, `|`,
-  `&`, or `(`. A single-quoted argument with no blank or separator in it counts without
-  its quotes; other single-quoted text is ignored. A span with no argument, such as
+  command with an argument that lacks the option `--hostname` with a value (text such
+  as `q=--hostname` inside another argument does not count). A command may start
+  after `;`, `|`, `&`, or `(`. A single-quoted argument with no blank or separator in
+  it counts without its quotes; other single-quoted text is ignored. A span with no argument, such as
   "`gh api` calls", is prose, and an argument starting with `*`, as in an allowed-tools
   pattern, does not count. A span across lines and fenced code blocks are not checked.
   A self-test runs the check on fixed lines against fixed results, and an awk failure
