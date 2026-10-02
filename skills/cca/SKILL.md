@@ -357,7 +357,7 @@ with `mv -f`. Never edit either in place.
 
 ```json
 {
-  "plugin_version": "0.3.0",
+  "plugin_version": "0.3.1",
   "approvals": [ { "kind": "fetch", "target": "<repo name>:<remote>",
                    "decision": "approved", "time": "2026-09-30T14:15:00Z",
                    "commands": ["git -C <repo> fetch --no-tags --refmap= ..."] } ],
@@ -401,7 +401,9 @@ with `mv -f`. Never edit either in place.
    files under `forge/`: `pr.hash.json`, a `jq` projection of the unprojected
    `pr.json` that leaves out the head and base shas and viewer-dependent fields,
    `pr-threads.json`, `<ticket>.json`, and `<ticket>.parent.json`, by run-relative
-   path, each with its hash, compared by resume; `pr.json` itself is not hashed), the
+   path, each with its hash, compared by resume; `pr.json` itself is not hashed),
+   `forge_gaps` (each such file a failed closing-issue or parent read did not write, by
+   run-relative path, with the ticket's URL, retried by resume), the
    `headRefOid` of each
    GitHub PR bundle, which is its pinned head, and its `baseRefOid`, information only
    (the base as GitHub last evaluated it, never pinned or compared: the pinned base is

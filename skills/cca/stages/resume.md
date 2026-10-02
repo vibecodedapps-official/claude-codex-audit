@@ -34,19 +34,35 @@ never loses a finished one. With `--live`, it first imports approved live check 
    onward with those; the invocation block's `manifest: none` and `inputs: none` are
    ignored. Only when stage 1 is `complete` and `audit-brief.md` exists, also read
    `audit-brief.md` and `common.md`, and run steps 3 to 6.
-3. **Head and base sha check.** For each bundle, resolve its head and base as stage 1
-   did and compare each with the head and base sha stage 1 recorded in
-   `audit-brief.md`. Resolve every ref through the mapping lines in the brief's Read
-   paths (`<ref as given> -> <remote>/...`) before `rev-parse`. For a GitHub PR, run
-   the `gh pr view` command of `1-orient.md` step 2 once, with its output redirected
-   to `forge/<bundle>/pr.json.new`; when `gh` exits non-zero or the file is empty,
-   stop resume with one line (the forge cannot be queried), never treating it as a
-   changed head. Read `headRefOid` from that file with `jq`;
-   step 5 projects the same file, with no second query. Its base is the sha the local
-   remote-tracking ref `<remote>/<baseRefName>` resolves to (`<remote>` selected as
-   `1-orient.md` A5 does for a PR bundle, from the `url` in `pr.json.new`); the PR's
-   `baseRefOid` is not compared, since it is GitHub's cached value. For any other
-   bundle, the shas its `branch` and `base` refs resolve to. A bundle with
+3. **Head and base sha check.** Every forge read of this step and step 5 names the host
+   stage 1 used (`1-orient.md` step 2), read from the saved forge files: the host of the
+   `url` in `forge/<bundle>/pr.json` for the PR reads (`gh pr view` and the review
+   threads), and the host of the `url` in `forge/<bundle>/<ticket>.json` for that
+   ticket's issue read and parent read. Before the first query, check those files: for
+   each `github:` PR bundle, `pr.json`, and for each ticket file the stage 1 entry's
+   `forge_hashes` names, `<ticket>.json`. Then resolve the host of each GitHub PR and
+   ticket id of the manifest again by `1-orient.md` A3, from the inputs step 5 merges
+   (`manifest.json`'s `source` key), and compare it with the host of the `url` in its
+   saved file, both normalized as A3 says. A ticket that came only from a PR's
+   `closingIssuesReferences` is not compared, since its host comes from `pr.json`. When
+   a file is missing, `jq -r .url <file>` fails or prints no URL with a host, A3 stops,
+   or a host differs, query nothing: the first stage to rerun is 1, handled as step 2
+   handles a missing `audit-brief.md` (remove any pre-existing
+   `forge/<bundle>/pr.json.new`, skip steps 3 to 6, then run steps 7 to 10), and stage
+   1 resolves each host from A3 again. With `--live`, stop instead, with the same line
+   as step 2, and change nothing.
+   Then, for each bundle, resolve its head and base as stage 1 did and compare each with
+   the head and base sha stage 1 recorded in `audit-brief.md`. Resolve every ref through
+   the mapping lines in the brief's Read paths (`<ref as given> -> <remote>/...`) before
+   `rev-parse`. For a GitHub PR, run the `gh pr view` command of `1-orient.md` step 2
+   once, with that host, and with its output redirected to `forge/<bundle>/pr.json.new`;
+   when `gh` exits non-zero or the file is empty, stop resume with one line (the forge
+   cannot be queried), never treating it as a changed head. Read `headRefOid` from that
+   file with `jq`; step 5 projects the same file, with no second query. Its base is the
+   sha the local remote-tracking ref `<remote>/<baseRefName>` resolves to (`<remote>`
+   selected as `1-orient.md` A5 does for a PR bundle, from the `url` in `pr.json.new`);
+   the PR's `baseRefOid` is not compared, since it is GitHub's cached value. For any
+   other bundle, the shas its `branch` and `base` refs resolve to. A bundle with
    `head: working-tree` has no ref for its head, so its head is rebuilt, and the sha
    printed is the current head: first run
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/working-tree.sh check <repo>`, which
@@ -84,8 +100,9 @@ never loses a finished one. With `--live`, it first imports approved live check 
    `<run dir>/live/`. Eligibility comes first, so nothing is installed for a resume that
    cannot use it:
    1. **Eligibility.** With `--live`, step 2 stopped a run whose `stages.json`, stage 1
-      entry, or `audit-brief.md` is missing, and step 3 stops a run whose head or base
-      changed, each without asking.
+      entry, or `audit-brief.md` is missing, and step 3 stops a run whose saved forge
+      files give no host or another host, or whose head or base changed, each without
+      asking.
    2. **Preliminary rerun stage.** Compute the first rerun stage by the rules of steps 5
       and 6, as if no live file existed (the live inputs of stages 6 to 8 are left out of
       the comparison), without removing any file, printing, or stopping. It may be none.
@@ -131,24 +148,35 @@ never loses a finished one. With `--live`, it first imports approved live check 
      The projection leaves out `headRefOid` and `baseRefOid`, which step 3 compares on
      their own. For `pr-threads.json`, each `<ticket>.json`, and each
      `<ticket>.parent.json`, run the identical `gh` command of step 2, with the same
-     owner, repo, number, and projection, and with
-     its `> <path>` redirect replaced by `| git hash-object --no-filters --stdin`, so
-     no file is written. Run every such pipeline with `set -o pipefail` in front of it
-     (or write the producer's output to a temporary file and hash it only when the
-     producer exited 0): a failed `gh` or `jq` would otherwise hash an empty input and
-     read as changed evidence. A producer failure stops resume with one line, since
-     the brief's evidence cannot be confirmed current; it is never treated as a
-     difference. A difference invalidates stage 1. So does a stage 1 entry of a run
-     with any `github:` PR or ticket that has no `forge_hashes` map (a run recorded
-     before the map existed). Keep each `forge/<bundle>/pr.json.new` until step 6
-     picks the first stage to rerun; step 6 removes them unless that stage is 1 (then
-     stage 1 renames them, `1-orient.md` section C), and any stop removes them;
+     host, owner, repo, number, and projection (the host as step 3 reads it: from
+     `pr.json` for `pr-threads.json`, and from `<ticket>.json` for that ticket's two
+     files), and with its `> <path>` redirect replaced by
+     `| git hash-object --no-filters --stdin`, so no file is written. Run every such
+     pipeline with `set -o pipefail` in front of it (or write the producer's output to a
+     temporary file and hash it only when the producer exited 0): a failed `gh` or `jq`
+     would otherwise hash an empty input and read as changed evidence. A producer
+     failure stops resume with one line, since the brief's evidence cannot be confirmed
+     current; it is never treated as a difference. A difference invalidates stage 1.
+     So does a stage 1 entry of a run with any `github:` PR or ticket that has no
+     `forge_hashes` map (a run recorded before the map existed). Keep each
+     `forge/<bundle>/pr.json.new` until step 6 picks the first stage to rerun; step 6
+     removes them unless that stage is 1 (then stage 1 renames them, `1-orient.md`
+     section C), and any stop removes them;
+   - the stage 1 `forge_gaps`: for each path in the map, run the `gh` command of
+     `1-orient.md` step 2 that would have written it (the ticket read for
+     `<ticket>.json`, the parent read for `<ticket>.parent.json`), with the host,
+     owner, repo, and number of the ticket URL the map gives, and its output discarded.
+     Exit 0 means the evidence can now be read, which invalidates stage 1, so the rerun
+     reads it. A non-zero exit leaves the gap as it was: it is neither a difference nor
+     a stop, since the read can keep failing for a reason that does not change, such as
+     a GitHub Enterprise Server with no `parent` field. An entry with no `forge_gaps`
+     key has no gaps;
    - the pinned sha of every reference and source of truth, by resolving each again as
      stage 1 did, through the brief's ref mapping lines (step 3); a changed one
      invalidates stage 1 (the bundles' head and base shas were already compared in
      step 3, which stops on any change);
    - upstream stage outputs, by `git hash-object --no-filters <file>`;
-   - `plugin_version`, which for this release is `0.3.0`.
+   - `plugin_version`, which for this release is `0.3.1`.
    - the live inputs of stages 6 to 8: `live/findings.md`, `live/claims.md`, and each
      `live/carried/<id>.md` that `live/findings.md` names, by `git hash-object
      --no-filters <file>` (`live.md`).

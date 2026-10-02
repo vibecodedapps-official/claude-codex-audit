@@ -45,6 +45,44 @@ step 1c, right after the baseline, for the same reason.
      such as `#159` is accepted only when the bundle's repo has exactly one GitHub
      remote (`git -C <repo> remote -v`); otherwise stop with
      `<id>: write it as github:owner/repo#n or file:<path>`.
+   - `<host>`: every GitHub PR and ticket id normalized here has a host, which its
+     reads in section C and step 2 name. Settle each bundle's PR first, then its
+     tickets. The host is the first of:
+     1. the host of its URL, when the manifest or a prompt input gave the id as a URL;
+     2. otherwise the host of the bundle repo's remote whose fetch URL names that owner
+        and repo and gives a host (the `(fetch)` lines of `git -C <repo> remote -v`).
+        When such remotes give different hosts, take `origin`'s when `origin` is one of
+        them; otherwise stop before stage 1 with
+        `<id>: write it as a URL to name its host`;
+     3. otherwise, for a ticket, the host of its bundle's GitHub PR, when it has one;
+     4. otherwise `github.com`.
+     The host of a URL: drop the scheme (`https://`, `http://`, or `ssh://`), then
+     everything through the last `@` before the first `/`, then cut at the first `/`;
+     the scp form `[user@]host:path`, which has no scheme, is also cut at its `:`. An
+     `https://` or `http://` host keeps any `:port`, since gh names such a host with its
+     port, and needs no check. An SSH host (`ssh://` or the scp form) drops any `:port`.
+     An SSH host of `github.com` or `ssh.github.com` gives `github.com`; any other counts
+     only when gh knows it, that is when
+     `gh auth status --json hosts --hostname <host> --jq '.hosts | length'` prints a
+     number above 0 (run once per distinct host per run; it is not pre-approved, so it
+     may prompt). That command exits 0 and lists a known host even when its login has
+     failed, so a known host with a broken login is still the host, and its read then
+     fails and stops the run below; it never falls through to another host. When it
+     prints 0 (gh knows no such host, as for an SSH config alias), that remote gives no
+     host. When it exits non-zero or prints anything else (gh older than 2.81.0 has no
+     `--json` here), stop before stage 1 with
+     `<id>: cannot tell whether gh knows <host>; write the id as a URL or use gh 2.81.0 or later`.
+     A local-path remote gives no host: a `file://` URL, a URL
+     with no `:` before its first `/`, or one whose part before the first `:` is a
+     single letter (a drive, as in `C:/src/app`) or holds `/` or `\`. Resolve each
+     repo's remote hosts once per run and reuse them for every id. Every host is
+     normalized, here and wherever one is compared (section C, resume step 3):
+     lowercased, and without a default `:443` for `https://` or `:80` for `http://`.
+     A ticket that comes only from a PR's `closingIssuesReferences` is not known
+     here: it takes the host of its `url` when step 2 reads `pr.json`. The host is not
+     part of the normalized id, so `manifest.json` and the id formats do not change.
+     When stage 1 reruns under `/cca:resume`, section A runs again from `source`, and the
+     same rule gives the same host.
    - `ticket_token`: an optional bundle key. A string becomes a one-element list. The
      saved manifest keeps the list; step 8.1 reads it for the bundle's exported tickets.
    - `head`: an optional bundle key, kept in the saved manifest. Its only value is
@@ -153,16 +191,19 @@ A claims file may be a handoff, written in the format of
    redirects to `forge/<bundle>/pr.json`. The output never passes through the model:
    a tool result cannot carry a large output, and the Write tool would re-serialize
    it. Under `/cca:resume`, when `forge/<bundle>/pr.json.new` exists (resume step 3
-   wrote it with the same command) and its `url` field names this bundle's owner, repo,
-   and PR number, rename it to `forge/<bundle>/pr.json` and query nothing; when the
-   `url` differs (the manifest changed the bundle's PR), remove the file and query as
-   on a new run. Read every PR field below from that file with `jq`, for example
+   wrote it with the same command) and its `url` field names this bundle's host (A3,
+   both normalized), owner, repo, and PR number, rename it to
+   `forge/<bundle>/pr.json` and query nothing; when the `url` differs (the manifest
+   changed the bundle's PR or its host), remove the file and query as on a new run.
+   Read every PR field below from that file with `jq`, for example
    `jq -r .headRefOid forge/<bundle>/pr.json`. When `gh` is missing or not
    authenticated, or `jq` is missing, stop and say the PR needs `gh` and `jq`, or an
-   exported file. A stop anywhere in this section removes what it wrote: on a new run,
-   the run directory (it holds only `forge/` files at that point, and `runs.json` is
-   written at D6, after this section); under `/cca:resume`, the `forge/<bundle>/pr.json`
-   files this section wrote or renamed.
+   exported file. When the read fails, stop with one line that names the host it
+   queried and says to give the PR id as a URL when that host is wrong. A stop anywhere
+   in this section removes what it wrote: on a new run, the run directory (it holds
+   only `forge/` files at that point, and `runs.json` is written at D6, after this
+   section); under `/cca:resume`, the `forge/<bundle>/pr.json` files this section wrote
+   or renamed.
 2. When the manifest gives a `branch` that is not the PR's `headRefName`, or a `base`
    that is not the PR's `baseRefName` (`<remote>/<name>` and `<name>` are equal), stop
    before stage 1 and show both values.
@@ -217,10 +258,11 @@ missing), and only rewrite the stage 1 entry as `running` with its inputs.
    it as `manifest.json` in the run directory.
 6. Add the run to `${CLAUDE_PLUGIN_DATA}/runs.json` with `state: running` (read the
    array, or start one; write a temporary file beside it; rename).
-7. Write `stages.json` with `plugin_version` `0.3.0`, empty `approvals`, and a stage 1
+7. Write `stages.json` with `plugin_version` `0.3.1`, empty `approvals`, and a stage 1
    entry with status `running` and inputs: the hashes of `manifest.json`, each claims
    file, the questions file, and every `file:` ticket or PR export, and
-   `plugin_version`. Step 10 adds the shas and `forge_hashes` to the final entry.
+   `plugin_version`. Step 10 adds the shas, `forge_hashes`, and `forge_gaps` to the
+   final entry.
 
 ## Steps
 
@@ -340,7 +382,8 @@ For each bundle, save under `forge/<bundle>/`:
   comments, rendered from the ticket's `.json` below (for a GitHub ticket, the pull
   requests that close it, from `closed_by`, are listed under links, and its parent, from
   `<ticket>.parent.json`, is written as `parent: github:<repo>#<number>`, or
-  `parent: none`). For an export, copy its content.
+  `parent: none`, or `parent: not read` when that read failed, below). For an export,
+  copy its content.
 
 Every saved `.md` file starts with a provenance block: the source (`gh`, or the export's
 `source`, `exported_by`, and `exported_at`), and the time it was read. When no forge
@@ -355,21 +398,42 @@ because resume step 3 compares them first and stops on a change. Resume runs the
 identical
 commands and the same `jq` projection.
 
+Every read names the host of the PR or ticket it reads, `github.com` included: `<host>`
+is that PR's or ticket's host from A3 (for a ticket that comes only from
+`closingIssuesReferences`, the host of its `url` in `pr.json`), and a parent read uses
+its ticket's host. Without it, gh uses its default host (`GH_HOST`, else the only saved
+login), which can differ from the bundle's host. When a `gh` read of this step fails:
+
+- a ticket the manifest or a prompt input names: stop the run with one line that names
+  the host it queried and says to give that ticket id as a URL when that host is wrong;
+- the review threads: stop the run with one line that names the read and the host;
+- a ticket known only from `closingIssuesReferences`, or the parent read of any ticket:
+  record a gap and go on. Its host came from a read that succeeded, so the failure is
+  not a wrong host: the token may not reach that repository, or a GitHub Enterprise
+  Server version may have no `parent` field on its GraphQL `Issue` type. Remove the file
+  the redirect left, write `<ticket>.md` saying the ticket was not read, or give its
+  parent as `parent: not read`, and list the gap in the brief's Forge section beside the
+  "not in export" keys, with the host and the first line of gh's error. The file it
+  would have written is neither a stage 1 output (step 10) nor in `forge_hashes`.
+  Step 10 records the read in `forge_gaps` instead, a map from that run-relative path
+  to the ticket's URL (its `url` in `pr.json` for a closing issue), so resume retries
+  it.
+
 - `forge/<bundle>/pr.json`, the one `gh pr view` call, unprojected (section C runs it
   and parses it; no second call is made):
-  `gh pr view <n> -R <owner>/<repo> --json number,url,title,body,state,headRefName,headRefOid,baseRefName,baseRefOid,closingIssuesReferences,reviews,comments > forge/<bundle>/pr.json`
+  `gh pr view <n> -R <host>/<owner>/<repo> --json number,url,title,body,state,headRefName,headRefOid,baseRefName,baseRefOid,closingIssuesReferences,reviews,comments > forge/<bundle>/pr.json`
 - `forge/<bundle>/pr.hash.json`, the hashed form of the PR, a `jq` projection of
   `pr.json` that leaves out `baseRefOid`, `headRefOid`, and the viewer-dependent
   fields:
   `jq '{number,url,title,body,state,headRefName,baseRefName,closingIssuesReferences: [.closingIssuesReferences[] | {number, url}],reviews: [.reviews[] | {author: .author.login, state, body, submittedAt}], comments: [.comments[] | {author: .author.login, body, createdAt}]}' forge/<bundle>/pr.json > forge/<bundle>/pr.hash.json`
 - `forge/<bundle>/pr-threads.json`, the review threads:
-  `gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {id, path, line, original_line, commit_id, body, user: .user.login, created_at, updated_at, in_reply_to_id}' > forge/<bundle>/pr-threads.json`
+  `gh api --hostname <host> --paginate repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {id, path, line, original_line, commit_id, body, user: .user.login, created_at, updated_at, in_reply_to_id}' > forge/<bundle>/pr-threads.json`
 - `forge/<bundle>/<ticket>.json`, one per GitHub ticket:
-  `gh issue view <n> -R <owner>/<repo> --json number,url,title,body,state,labels,comments,closedByPullRequestsReferences --jq '{number,url,title,body,state,labels: [.labels[].name], closed_by: [.closedByPullRequestsReferences[] | {number, url}], comments: [.comments[] | {author: .author.login, body, createdAt}]}' > forge/<bundle>/<ticket>.json`
+  `gh issue view <n> -R <host>/<owner>/<repo> --json number,url,title,body,state,labels,comments,closedByPullRequestsReferences --jq '{number,url,title,body,state,labels: [.labels[].name], closed_by: [.closedByPullRequestsReferences[] | {number, url}], comments: [.comments[] | {author: .author.login, body, createdAt}]}' > forge/<bundle>/<ticket>.json`
 - `forge/<bundle>/<ticket>.parent.json`, the parent of each GitHub ticket,
   `{"parent":null}` when it has none. `gh issue view` has no parent field, so this is a
   GraphQL read:
-  `gh api graphql -f query='query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { issue(number: $n) { parent { number url repository { nameWithOwner } } } } }' -f owner=<owner> -f repo=<repo> -F n=<n> --jq '{parent: (.data.repository.issue.parent | if . then {number, url, repo: .repository.nameWithOwner} else null end)}' > forge/<bundle>/<ticket>.parent.json`
+  `gh api --hostname <host> graphql -f query='query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { issue(number: $n) { parent { number url repository { nameWithOwner } } } } }' -f owner=<owner> -f repo=<repo> -F n=<n> --jq '{parent: (.data.repository.issue.parent | if . then {number, url, repo: .repository.nameWithOwner} else null end)}' > forge/<bundle>/<ticket>.parent.json`
 
 Hash `pr.hash.json`, `pr-threads.json`, and each `<ticket>.json` and
 `<ticket>.parent.json` with `git hash-object --no-filters <file>`; the threads, ticket,
@@ -648,8 +712,8 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
    recorded plus each bundle's head, base, and merge-base sha (the pinned base is the
    local sha of the base ref; `baseRefOid` is recorded beside it for a GitHub PR, for
    information only), `head_parent` and `head_tree` for each `head: working-tree`
-   bundle, the pinned sha of every reference and source of truth, and `forge_hashes`
-   (step 2).
+   bundle, the pinned sha of every reference and source of truth, `forge_hashes`, and
+   `forge_gaps` (step 2; an empty map when no read was a gap).
 7. Print the stage boundary line. With `budget: 0`, or `_test`
    `expire_budget_after_stage: 1`, the budget has now expired: go to stage 8. Otherwise
    start stages 2, 3, and 4 together.

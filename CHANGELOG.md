@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.1 - 2026-10-02
+
+### Fixed
+
+- Stage 1's GitHub reads name the host of the PR or ticket they read, `github.com`
+  included, so they no longer go to gh's default host (`GH_HOST`, else the only saved
+  login) when that differs from the bundle's host (#13). The host comes from the id's URL,
+  else from the bundle repo's remote for that owner and repo, else, for a ticket, from
+  the bundle's PR, else `github.com`. An SSH remote on a host other than GitHub's counts
+  only when gh knows that host, which needs gh 2.81.0 or later unless the id is given
+  as a URL; a known host whose login fails is never swapped for another. Resume and
+  `/cca:handoff` name the same host, and resume reruns stage 1 when a host changed.
+  When the PR read, its review threads, or a named ticket's read fails, the run stops
+  with a line that names the host it queried; give the id as a URL when that host is
+  wrong. A failed read of a closing issue, or of a ticket's parent, is a gap listed in
+  the brief, not a stop, and resume retries it. `tests/lint.sh` fails on a
+  `gh pr` or `gh issue` command in a code span under `agents/`, `skills/`, or
+  `commands/` that passes neither `-R <host>/<owner>/<repo>` nor a URL argument, and on
+  a `gh api` command without a `--hostname` option.
+
+### Changed
+
+- A run started under 0.3.0 and resumed under 0.3.1 reruns from stage 1.
+
 ## 0.3.0 - 2026-10-01
 
 Closes issues #5 to #11. No full multi-agent audit has run yet; see `docs/acceptance.md`.
