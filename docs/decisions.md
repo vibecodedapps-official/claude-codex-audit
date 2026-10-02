@@ -2,10 +2,10 @@
 
 This file records the design decisions behind cca 0.1.0, 0.2.0, and 0.3.0: the questions
 the design settled, the five platform decisions confirmed against Claude Code before the
-build, the choices made while building 0.1.0, the 0.2.0 and 0.3.0 decisions, what is still
-open, and what is deferred past 0.3. It replaces the pre-implementation spec,
-architecture, and build plan documents, in the repository history before this change;
-their user-facing content is in `README.md`.
+build, the choices made while building 0.1.0, the 0.2.0 and 0.3.0 decisions, the fixes
+after 0.3.0, what is still open, and what is deferred past 0.3. It replaces the
+pre-implementation spec, architecture, and build plan documents, in the repository
+history before this change; their user-facing content is in `README.md`.
 
 ## Resolved questions (2026-09-30)
 
@@ -539,6 +539,119 @@ it. The query and its projection were run on 2026-10-02 against an issue with a 
 (cli/cli#14529, giving `{"parent":{"number":14563,"repo":"cli/cli","url":...}}`) and one
 without (giving `{"parent":null}`). Documenting the gap instead was rejected: every
 handoff with a GitHub parent would carry a permanent gap line.
+
+## Fixes after 0.3.0 (2026-10-02)
+
+- **Forge host (#13).** Stage 1's four GitHub reads (`gh pr view`, the review threads,
+  `gh issue view`, and the GraphQL parent read) named no host, so gh sent them to its
+  default host: `GH_HOST` when set, else the only saved login. With only a GitHub
+  Enterprise login saved and `GH_TOKEN` holding a github.com token, the reads of a
+  github.com bundle went to the Enterprise host. There they failed, so the audit had no
+  forge data, or, when that host had a repository with the same owner and name, returned
+  that repository's PR, ticket, and parent. Every read now names its host:
+  `-R <host>/<owner>/<repo>` for `gh pr view` and `gh issue view`, and
+  `--hostname <host>` for both `gh api` calls. `github.com` is named too, so no read
+  depends on gh's default.
+- **Where the host comes from.** A3 settles `<host>` for every GitHub PR and ticket id it
+  normalizes, PR first, by first match: the host of its URL, when the id was given as
+  one; else the host of the bundle repo's remote whose fetch URL names that owner and
+  repo and gives a host, taking `origin`'s when such remotes differ and `origin` is one
+  of them, and stopping the run when it is not; else, for a ticket, the host of its
+  bundle's PR; else `github.com`. Only fetch URLs count, so a push URL on another host
+  does not stop the run. No rule takes the host of an unrelated remote such as `origin`,
+  since a GitLab `origin` would send GitHub reads to GitLab. So a branch-only bundle on
+  an Enterprise host, whose ticket names a repository no remote names, falls to
+  `github.com`, where gh's default host used to get it right; the workaround is to give
+  the ticket as a URL. A local path, including a Windows path such as `C:/src/app`,
+  gives no host. An `https://` host keeps its `:port`, since gh names such a host with
+  its port; userinfo such as `user:token@` is dropped. Hosts are compared lowercased and
+  without a default port. Each repo's remote hosts are resolved once per run. These ids
+  are settled before any read because nothing read later can give their host: the
+  normalized id `github:owner/repo#n` holds no host, and A5 selects the remote from the
+  `url` in `pr.json`, which is the output of the read that needs the host. A ticket
+  known only from the PR's `closingIssuesReferences` takes the host of its `url` there.
+  The host is not stored in the id, so `manifest.json` and the id formats are
+  unchanged. Section C reuses a `pr.json.new` only when its `url` names the bundle's
+  host as well as its owner, repo, and PR number.
+- **SSH hosts.** An SSH remote names `github.com` or `ssh.github.com` (GitHub's SSH over
+  port 443), both read as `github.com`, or another host, which may be an SSH config
+  alias such as `github-work` that gh does not know. Such a host counts only when gh
+  knows it: `gh auth status --json hosts --hostname <host>` lists it, run once per
+  distinct host. An unknown host gives no host and the next rule applies. The check asks
+  whether gh knows the host, never whether its login works: plain
+  `gh auth status --hostname <host>` exits 1 when any account on the host has a broken
+  login, and reading that as "unknown" would send an Enterprise ticket with an expired
+  token to `github.com`, where a same-named public repository could feed the audit
+  wrong data. A known host with a broken login stays the host, and its read fails and
+  stops the run. The `--json` form exits 0 in both cases; it needs gh 2.81.0, and with
+  an older gh, or any other output, the run stops and asks for the id as a URL rather
+  than guess. The check is not pre-approved, since a `*` pattern would also allow
+  `--show-token`, so it may prompt. Resolving aliases with `ssh -G` was tried and
+  dropped: OpenSSH runs `Match exec` commands from the SSH config during `ssh -G`, which
+  breaks the read-only contract. When the PR read or a named ticket's read fails, stage
+  1 stops with one line that names the host it queried and says to give the id as a URL
+  when the host is wrong. Before this change such a read went to gh's default host and
+  might have worked.
+- **Gaps, not stops.** A ticket known only from the PR's `closingIssuesReferences`, and
+  any ticket's parent read, take their host from a read that succeeded, so their
+  failure is not a wrong host. The token may not reach the closing issue's repository,
+  or a GitHub Enterprise Server version may have no `parent` field on its GraphQL
+  `Issue` type. Stopping there would end every such audit with a hint the user cannot
+  act on, so the read is a gap: the brief lists it with the host and gh's error, the
+  ticket file says `not read` or `parent: not read`, and the auditor treats `not read`
+  as a gap in what could be checked, never a mismatch.
+- **Resume.** Unless stage 1 reruns, resume names the host stage 1 used, read from the
+  `url` in the saved `forge/<bundle>/pr.json` for the PR reads and in
+  `forge/<bundle>/<ticket>.json` for that ticket's two reads. A manifest URL or a remote
+  whose host changed normalizes to the same `manifest.json`, so step 5's manifest
+  comparison cannot see it. Resume therefore resolves each manifest PR and ticket host
+  again by A3 from `source` and compares it with the saved `url`. A difference, a
+  missing file, or a `url` `jq` cannot read sends resume to stage 1 before any query, so
+  no file read from the old host is reused; with `--live` it stops, as it does for a
+  missing brief. Closing-issue tickets are not compared, since their host comes from
+  `pr.json`.
+- **Handoff.** `/cca:handoff` runs the stage 1 parent read, which now holds `<host>`, so
+  it resolves the host by the same A3 rule and names it on its `gh pr view` (unless the
+  id is a URL, which names its own host), its `gh issue view`, and the parent read. Its
+  `allowed-tools` patterns `Bash(gh pr view *)` and `Bash(gh issue view *)` still match,
+  and it gains `Bash(git -C * remote -v)`, as `SKILL.md` has, for the remote lookup of
+  the host rule.
+- **Lint.** In every backtick span under `agents/`, `skills/`, and `commands/`,
+  `tests/lint.sh` fails on a `gh pr <sub>` or `gh issue <sub>` command with an argument
+  that passes neither `-R` or `--repo` with a `<host>/<owner>/<repo>` value nor an
+  argument that starts with `https://` or `http://` or is `<url>`, and on a `gh api`
+  command with an argument that lacks `--hostname`. A command may start after `;`, `|`,
+  `&`, or `(`. A single-quoted argument with no blank or separator in it counts without
+  its quotes; other single-quoted text is ignored. A span with no argument, such as
+  "`gh api` calls", is prose, and an argument starting with `*`, as in an allowed-tools
+  pattern, does not count. A span across lines and fenced code blocks are not checked.
+  A self-test runs the check on fixed lines against fixed results, and an awk failure
+  fails the lint instead of passing it.
+
+Probes (2026-10-02, gh 2.91.0, Git Bash): `GH_CONFIG_DIR` pointed at a throwaway
+directory whose `hosts.yml` listed only `enterprise.example.invalid`, with a `users:`
+block (a bare `user:` entry was rewritten to `{}` by gh and did not reproduce), and
+`GH_TOKEN` set to a github.com token.
+
+- `gh issue view 7 -R vibecodedapps-official/claude-codex-audit`,
+  `gh api --paginate repos/vibecodedapps-official/claude-codex-audit/pulls/12/comments`,
+  and the stage 1 parent query each printed
+  `error connecting to enterprise.example.invalid`.
+- `gh pr view 12 -R vibecodedapps-official/claude-codex-audit` reached github.com and
+  succeeded in this setup. It names the host too: the issue's fix asks for it, gh does
+  not document its default host for `gh pr view`, and one rule then covers all four
+  reads.
+- With the host named, `-R github.com/...` and `--hostname github.com`, all four reads
+  succeeded.
+- With OpenSSH 10.5p1, `ssh -F <file> -G example.com`, where the file held
+  `Match exec "echo MATCH-EXEC-RAN >&2"`, printed `MATCH-EXEC-RAN`: `ssh -G` runs
+  programs from the SSH config, so the host rule does not use it.
+- With the same throwaway config and `GH_TOKEN` unset,
+  `gh auth status --json hosts --hostname enterprise.example.invalid --jq '.hosts | length'`
+  printed `1` and exited 0, though that login's state was `error`; the same command for
+  `github-work` printed `0` and exited 0. `gh auth status --help` says the plain form
+  exits 1 when an account on the host has authentication issues. `--json` for
+  `gh auth status` first appears in the gh v2.81.0 release notes (2025-10-01).
 
 ## Deferred past 0.3
 
