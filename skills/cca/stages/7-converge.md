@@ -26,9 +26,13 @@ by size has `<group>-<k>` parts), and `converged.md`.
    the Agent tool, in the background, never as a fork, with its `model` from `--models`
    or the manifest, else the agent's default. The prompt holds the paths of
    `audit-brief.md`, `common.md`, `ledger/5.md`, and `ledger/6.md`, the output path
-   `late/adversary.md`, and the list of ids to challenge:
+   `late/adversary.md`, and the path of the list of ids to challenge, which the script
+   builds, so no id is typed into the prompt: `mkdir -p <run dir>/tmp`, then `sh
+   ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh late-ids <run dir> --tier <tier>
+   --stage6 <complete|failed> > <run dir>/tmp/late-ids.txt` (`--stage6` is stage 6's
+   state, as `gate` takes it; a nonzero exit fails stage 7). It holds:
    - every late addition: `origin: pass2`, `origin: topup`, and `origin: codex`;
-   - every finding the second opinion asked to restore;
+   - every finding the second opinion asked to restore, at medium and high;
    - every finding `live/findings.md` lists, with its live result and derivation (a
      carried `X<n>` or `L<n>` is read from its `live/carried/<id>.md`, the ledger may no
      longer hold it); at low, these are the only ids, and the prompt also names
@@ -42,8 +46,9 @@ by size has `<group>-<k>` parts), and `converged.md`.
    For each id it gives one verdict block, `### verdict on <id>: <verdict>` (`survives`,
    `downgraded`, `reworded`, or `dropped`), with `- severity:`, `- label:`, `- evidence:`,
    and `- reason:` lines, reading the stage 5 verdicts in `ledger/5.md`. Anything it
-   raises itself is written as `### L<n>: <title>` with `origin: late` and an id `L<n>`, numbered after the highest carried `L<n>`
-   (`live/carried/L<n>.md`; a carried id is reserved), and stays provisional: there is no
+   raises itself is written as `### L<n>: <title>` with `origin: late` and an id `L<n>`,
+   numbered after the highest carried `L<n>` (`live/carried/L<n>.md`; a carried id is
+   reserved), and stays provisional: there is no
    further round. It ends with `runs:` and `status: complete`.
 
    Failure: an error, a missing file, no `status: complete`, a listed id without a
@@ -72,15 +77,16 @@ by size has `<group>-<k>` parts), and `converged.md`.
    section runs on into it).
 
 4. **Review gate.** A finding counts when a reviewer other than its author has
-   challenged it, and both a Claude adversary and the second opinion have seen it, in
-   any role. Write `gate.md` with `mkdir -p <run dir>/tmp`, then `sh
+   challenged it, and the second opinion gave a position on it when it is medium or
+   above, or acknowledged it when it is low or note (the rows below). Write `gate.md`
+   with `mkdir -p <run dir>/tmp`, then `sh
    ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh gate <run dir> --tier <tier>
    --stage6 complete|failed --late complete|failed|not-run > <run dir>/tmp/gate.md`, with
    the stage 6 status and the late adversary's outcome (`not-run` when none ran). Only on
    exit 0, run `mv -f <run dir>/tmp/gate.md <run dir>/gate.md`. A nonzero exit moves
    nothing, so no `gate.md` exists, and fails stage 7 (stage 8 then gates from the
-   ledger without reusing `gate.md`, its fallback path 2). Remove `tmp/gate.md` when done. The
-   script writes one line per ledger id, per `### X<n>:` and `### L<n>:` addition, and
+   ledger without reusing `gate.md`, its fallback path 2). Remove `tmp/gate.md` when
+   done. The script writes one line per ledger id, per `### X<n>:` and `### L<n>:` addition, and
    per carried id, `<id>: counts | provisional; <reason>`. The rules it applies:
 
    | Origin | Counts when | Otherwise |
@@ -265,8 +271,9 @@ by size has `<group>-<k>` parts), and `converged.md`.
    its first 50 lines (`head -n 50`), never the whole output. It checks that every
    finding id in the ledger files, every `### X<n>:` and `### L<n>:` addition, and every
    carried id sits in the `absorbs` list of exactly one item with no unknown id, that
-   each item's `gate` is `counts` exactly when an absorbed id counts, and that `gate.md`
-   equals the `gate` output. Then check by hand:
+   each item's `gate` is `counts` exactly when an absorbed id counts, that `gate.md`
+   equals the `gate` output, and that no id of the `late-ids` list lacks a verdict in
+   `ledger/7.md`. Then check by hand:
    - no item's severity differs from its source finding's severity without a cited
      verdict (a pass-two `downgraded`, a second-opinion recalibration, or a late
      verdict) that sets it, and a severity or label change is accepted only from a

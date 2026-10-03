@@ -14,7 +14,7 @@ The request's inputs are these run-directory files:
 - every `diffs/<bundle>.diff` and `diffs/<bundle>.stat`
 - `ledger/5.md` (every finding with its original text and every pass-two verdict,
   including dropped findings)
-- every `pass2/<group>.md` and `pass2/<group>-topup.md` (for the coverage gaps)
+- every `pass2/<scope>.md` and `pass2/<scope>-topup.md` (for the coverage gaps)
 - `live/findings.md` and each `live/carried/<id>.md` it names, when `live/findings.md`
   exists: the findings that a live result answers, with their derivations, and the text
   of each carried finding (`live.md`)
@@ -47,8 +47,10 @@ each one itself, wherever the run directory is. It carries no inline content and
 size cap, and no diff is dropped from it. An input Codex cannot open is caught by the
 acknowledgment rule below.
 
-The follow-up after a missing acknowledgment is the only inline text. It carries the
-unacknowledged inputs in this layout, as stage 6 step 8 describes:
+The follow-up after a missing acknowledgment is the only inline text. It is a file,
+`codex/followup.md`, which the call tells Codex to read by its absolute path, so no id
+is typed into a tool argument. It carries the unacknowledged inputs in this layout, as
+stage 6 step 8 describes:
 
 ```
 ===== input: codex/inputs/<run-relative path> =====
@@ -57,7 +59,7 @@ cca-sentinel: <run-relative path> <token>
 ===== end: codex/inputs/<run-relative path> =====
 ```
 
-When the follow-up would exceed 450,000 bytes (or `_test` `inline_cap_bytes`), it is
+When the follow-up file would exceed 450,000 bytes (or `_test` `inline_cap_bytes`), it is
 not sent and stage 6 fails. No diff is dropped from it.
 
 ## Request
@@ -91,12 +93,13 @@ An input you could not open is listed as "not read: <path>".
 1. For each finding at severity blocker, high, or medium, and each finding
    `live/findings.md` lists, judged with its live result: your verdict (agree,
    disagree, or change severity), with your own evidence, not the auditor's; <"for
-   these ids: <id list>" when stage 6 split the mandatory set (more than 60 ids), else "for every such
-   finding">. A finding that has a file under `live/carried/` is carried: its text is in
+   these ids: IDS-BATCH-<k>" when stage 6 split the mandatory set (more than 60 ids),
+   else "for every such finding"; the stage replaces the placeholder `IDS-BATCH-<k>` by
+   shell with the batch's ids>. A finding that has a file under `live/carried/` is carried: its text is in
    that file, and the ledger may no longer hold it.
 2. For each finding pass two downgraded or dropped: your position, with evidence;
-   <"for these ids: <id list>" when stage 6 split the mandatory set (more than 60
-   ids), else "for every such finding">.
+   <"for these ids: IDS-BATCH-<k>" (replaced by shell, as in ask 1) when stage 6 split
+   the mandatory set (more than 60 ids), else "for every such finding">.
 3. Dropped findings you would restore, each with the reason and evidence.
 4. Up to ten findings no reviewer raised, each in the finding schema from common.md,
    under a heading `### X<n>: <title>` with ids X1, X2, and so on, and the line

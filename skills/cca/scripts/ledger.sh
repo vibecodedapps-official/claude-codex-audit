@@ -6,12 +6,13 @@
 #   sh ledger.sh mandatory <run dir>
 #   sh ledger.sh seen      <run dir>
 #   sh ledger.sh missing   <run dir>
+#   sh ledger.sh late-ids  <run dir> --tier low|medium|high --stage6 complete|failed
 #   sh ledger.sh gate      <run dir> --tier low|medium|high --stage6 complete|failed
 #                                    --late complete|failed|not-run
 #   sh ledger.sh check     <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]
 #
 # All paths are relative to <run dir>. `check --through 6` needs --stage6; `--through 7`
-# needs all three flags. No other op takes a flag.
+# needs all three flags; `late-ids` needs --tier and --stage6. No other op takes a flag.
 #
 # Ops (the stage prompts redirect stdout to the file they write):
 #   build5     the finding sections of ledger/5.md, in the shape of stages/5-pass-two.md,
@@ -51,21 +52,32 @@
 #              In a response file, a line that is exactly `--- follow-up, thread <id> ---`
 #              or `--- batch <k> ---` closes any open fence and is never a position, so
 #              an answer that ends inside a fence does not hide the segment after it.
+#   late-ids   one id per line, sorted, unique: the ids the late adversary must challenge.
+#              At medium and high: every ledger/5.md id with origin pass2 or topup, every
+#              `### X<n>:` addition of ledger/6.md, and, with --stage6 complete, every
+#              ledger/6.md position section whose `- position:` starts with `restore
+#              requested`. At every tier: every `## <id>` of live/findings.md. ledger/6.md
+#              is read as `gate` reads it: required with --stage6 complete, optional with
+#              failed (an absent file adds nothing).
 #   check      print one `ledger: <problem>` line per problem, nothing when none:
 #              --through 5   reconcile the inventory with the files, then require the
 #                            part of ledger/5.md before its first `## Map corrections
 #                            applied` line (trailing blank lines ignored) to equal the
-#                            build5 output, and name each missing or unknown id.
+#                            build5 output, and name each missing or unknown id. The
+#                            file must also hold `## Map corrections applied` and then
+#                            `## Map corrections not applied`, each once.
 #              --through 6   also, for ledger/6.md: every `## <id>` position holds a
 #                            nonempty `- position:`, `- evidence:`, and `- answer
 #                            location:`, appears once, names a known id, and has a line
 #                            starting `<id>:` in codex/response.md or a
-#                            codex/response-<k>.md (leading spaces, `-`, `*`, `#`, and
+#                            codex/response-<k>.md (leading spaces, then one list number
+#                            `<digits>.` or `<digits>)`, then `-`, `*`, `#`, and
 #                            backticks stripped, then optional `*` or backticks before
 #                            the colon; lines inside ``` fences never count, and a response
 #                            file that ends inside a fence is not an error, since the
 #                            answer is not ours to reject: its later lines just give no
-#                            provenance); the `### X<n>:` additions equal the `#+ X<n>:`
+#                            provenance; a heading `#+ x<n>:` that is not `#+ X<n>:` is a
+#                            problem); the `### X<n>:` additions equal the `#+ X<n>:`
 #                            headings of those files and never reuse a carried id; and,
 #                            when --stage6 is complete, every mandatory id has a
 #                            position and `## Seen, no position` lists exactly the
@@ -77,7 +89,9 @@
 #                            the verdict words agree; and in converged.md (required)
 #                            every universe id sits in exactly one `- absorbs:` list and
 #                            each item's `- gate:` is `counts` exactly when an absorbed
-#                            id counts.
+#                            id counts; a `## C<n>:` item id used twice is a problem; and,
+#                            when --late is complete, every id `late-ids` lists has a
+#                            `## <id>` section with a `- verdict:` in ledger/7.md.
 #
 # Gate reasons. A line is `<id>: counts; <reason>` or `<id>: provisional; <reason>`:
 #   counts; stage 5 verdict, stage 6 position
@@ -113,12 +127,18 @@
 # topup record, and every complete pass1 scope has a pass2 record. Verdicts come only
 # from complete pass-two files; findings come from complete files (malformed blocks are
 # errors) and from failed files (malformed blocks are skipped and counted).
+# A complete record's file must also end, at its last nonblank line, with exactly
+# `status: complete`; the inventory alone does not make a file complete.
 #
 # Parsing (skills/cca/common.md, output contract). A finding block starts at
 # `### <id>: <title>`, a verdict block at `### verdict on <id>: <verdict>`. A block ends
-# at the next line starting `## ` or `### `, or starting `runs:`, `consumed:`, `opened:`,
-# or `status: `. Lines between ``` lines never start or end a block, and a file that
-# ends inside a fence is an error. Ids are `<scope>-F|P|T<n>`, `X<n>`, `L<n>`. A finding
+# at the next line starting `## ` or `### `, or at a line that is exactly `runs:`,
+# `runs: none`, `consumed:`, `consumed: none`, `opened:`, `opened: none`, or `status:
+# complete` (trailing blanks ignored). Any other line that starts with those words is
+# body text. Lines between ``` lines never start or end a block, and a file that
+# ends inside a fence is an error. A `### ` line whose first token (cut at a colon) looks
+# like an id in any letter case but is not exactly `### <id>: <title>` with a title is a
+# malformed heading, never skipped. Ids are `<scope>-F|P|T<n>`, `X<n>`, `L<n>`. A finding
 # block needs exactly one `- severity:` and one `- label:` line with an allowed value; a
 # verdict block needs a verdict word, one `- severity:` (`<old> -> <new>` or
 # `unchanged`), one `- label:`, and a nonempty `- evidence:`. A duplicate id, a second
@@ -148,6 +168,7 @@ export LC_ALL
 
 usage() {
 	echo "usage: ledger.sh build5|mandatory|seen|missing <run dir>" >&2
+	echo "       ledger.sh late-ids <run dir> --tier low|medium|high --stage6 complete|failed" >&2
 	echo "       ledger.sh gate <run dir> --tier low|medium|high --stage6 complete|failed --late complete|failed|not-run" >&2
 	echo "       ledger.sh check <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]" >&2
 	exit 2
@@ -163,7 +184,7 @@ op=$1
 run=$2
 shift 2
 case $op in
-build5 | mandatory | seen | missing | gate | check) ;;
+build5 | mandatory | seen | missing | late-ids | gate | check) ;;
 *) usage ;;
 esac
 
@@ -197,6 +218,9 @@ case $op in
 build5 | mandatory | seen | missing)
 	[ -z "$tier$stage6$late$through" ] || usage
 	;;
+late-ids)
+	[ -n "$tier" ] && [ -n "$stage6" ] && [ -z "$late$through" ] || usage
+	;;
 gate)
 	[ -n "$tier" ] && [ -n "$stage6" ] && [ -n "$late" ] && [ -z "$through" ] || usage
 	;;
@@ -221,6 +245,10 @@ mandatory | missing) need ledger/5.md ;;
 seen)
 	need ledger/5.md
 	need ledger/6.md
+	;;
+late-ids)
+	need ledger/5.md
+	[ "$stage6" = complete ] && need ledger/6.md
 	;;
 gate)
 	need ledger/inventory.txt
@@ -340,6 +368,14 @@ function idk(s) {
 	return substr(s, RSTART + 1, 1)
 }
 
+# isend: a line that only ends a block: runs:, consumed:, opened: (alone or with none),
+# or status: complete, ignoring trailing blanks. Any other line starting with those words
+# is body text.
+function isend(l) {
+	sub(/[ \t]+$/, "", l)
+	return (l == "runs:" || l == "runs: none" || l == "consumed:" || l == "consumed: none" || l == "opened:" || l == "opened: none" || l == "status: complete")
+}
+
 # classify: set K[i] for each line of a. H2 and H3 start a block, E is a line that only
 # ends one, C is a line inside a code fence (fence lines included), T is any other line.
 # Returns 1 when the file ends inside a fence.
@@ -361,7 +397,7 @@ function classify(a, n,   i, inf, t, l) {
 		}
 		if (index(l, "### ") == 1) K[i] = "H3"
 		else if (index(l, "## ") == 1) K[i] = "H2"
-		else if (index(l, "runs:") == 1 || index(l, "consumed:") == 1 || index(l, "opened:") == 1 || index(l, "status: ") == 1) K[i] = "E"
+		else if (isend(l)) K[i] = "E"
 		else K[i] = "T"
 	}
 	return inf
@@ -484,7 +520,7 @@ function malformed(head,   p, tok) {
 	tok = (p > 0 ? substr(head, 1, p - 1) : head)
 	p = index(tok, ":")
 	if (p > 0) tok = substr(tok, 1, p - 1)
-	return isid(tok)
+	return (isid(tok) || tok ~ /^[xl][0-9]+$/ || tok ~ /.-[fpt][0-9]+$/)
 }
 
 # ---------------------------------------------------------------------------
@@ -568,7 +604,7 @@ function sp(m) {
 	else prob(m)
 }
 
-function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, word, hd, cap, k, want, need_, unclosed) {
+function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, word, hd, cap, k, want, need_, unclosed, last, lastl) {
 	path = rp[r]
 	kind = rk[r]
 	sc = rs[r]
@@ -582,6 +618,13 @@ function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, wo
 	}
 	unclosed = classify(SA, n)
 	if (unclosed && !LEN) prob(path ": the file ends inside a code fence")
+	if (!LEN) {
+		last = n
+		while (last > 0 && trim(SA[last]) == "") last--
+		lastl = SA[last]
+		sub(/[ 	]+$/, "", lastl)
+		if (last == 0 || lastl != "status: complete") prob(path ": the inventory says complete, but the file does not end with status: complete")
+	}
 	i = 1
 	while (i <= n) {
 		if (K[i] == "H3") {
@@ -779,6 +822,8 @@ function load_l5(   n, i, rest, cur, mode, t, st, p, q, rem, w, pp) {
 	for (i = 1; i <= n; i++) {
 		if (K[i] == "H2") {
 			if (trim(L5A[i]) == "## Map corrections applied" && cutline > n) cutline = i
+			if (trim(L5A[i]) == "## Map corrections applied") { mapA++; if (mapA == 1) mapAline = i }
+			if (trim(L5A[i]) == "## Map corrections not applied") { mapN++; if (mapN == 1) mapNline = i }
 			rest = trim(substr(L5A[i], 4))
 			cur = ""
 			if (isid(rest)) {
@@ -920,6 +965,7 @@ function load_l6(   n, i, e, rest, cur, sec, t, id, who, k) {
 			cur = ""
 			sec = "other"
 			e = extent(i, n)
+			if (!fhead(substr(L6A[i], 5)) && malformed(substr(L6A[i], 5))) prob("ledger/6.md:" i ": malformed addition heading")
 			if (fhead(substr(L6A[i], 5)) && idk(HID) == "X") {
 				id = HID
 				if (id in x6seen) prob("ledger/6.md:" i ": duplicate addition " id)
@@ -989,6 +1035,7 @@ function load_l7(   n, i, e, rest, cur, id, t, w, p) {
 		if (K[i] == "H3") {
 			cur = ""
 			e = extent(i, n)
+			if (!fhead(substr(L7A[i], 5)) && malformed(substr(L7A[i], 5))) prob("ledger/7.md:" i ": malformed addition heading")
 			if (fhead(substr(L7A[i], 5)) && idk(HID) == "L") {
 				id = HID
 				if (id in l7Lseen) prob("ledger/7.md:" i ": duplicate addition " id)
@@ -1041,9 +1088,11 @@ function load_resp(   i, j, n, f, l, t, p, tok, id, inf) {
 				continue
 			}
 			if (inf) continue
-			l = RA[j]
 			t = l
-			sub(/^[ \t*#`-]+/, "", t)
+			sub(/^[ 	]+/, "", t)
+			sub(/^[0-9]+[.)]/, "", t)
+			sub(/^[ 	*#`-]+/, "", t)
+			if (l !~ /^#+ X[0-9]+:/ && l ~ /^#+ +[xX][0-9]+:/) cprob(f ":" j ": heading names an X addition but does not read #+ X<n>:")
 			p = index(t, ":")
 			if (p > 1) {
 				tok = substr(t, 1, p - 1)
@@ -1167,7 +1216,34 @@ function known(id) {
 	return (id in l5seen) || (id in x6seen) || (id in liveset) || (id in carset) || (id in l7Lseen)
 }
 
+function addli(id) {
+	if (id in liset) return
+	liset[id] = 1
+	lin++
+	liord[lin] = id
+}
+
+# late_ids: the ids the late adversary must challenge (liord[1..lin]).
+function late_ids(   i, id) {
+	lin = 0
+	if (tier != "low") {
+		for (i = 1; i <= l5n; i++) {
+			id = l5ord[i]
+			if (l5origin[id] == "pass2" || l5origin[id] == "topup") addli(id)
+		}
+		for (i = 1; i <= x6n; i++) addli(x6ord[i])
+		for (i = 1; i <= p6n; i++) {
+			id = p6list[i]
+			if (stage6 == "complete" && index(p6pos_v[id], "restore requested") == 1) addli(id)
+		}
+	}
+	for (i = 1; i <= livn; i++) addli(liveord[i])
+}
+
 function check5(   i, id, na, ne, m, k, first, nexp) {
+	if (mapA != 1) cprob(mapA == 0 ? "ledger/5.md: no '## Map corrections applied' heading" : "ledger/5.md: '## Map corrections applied' appears " mapA " times")
+	if (mapN != 1) cprob(mapN == 0 ? "ledger/5.md: no '## Map corrections not applied' heading" : "ledger/5.md: '## Map corrections not applied' appears " mapN " times")
+	if (mapA >= 1 && mapN >= 1 && mapNline < mapAline) cprob("ledger/5.md: '## Map corrections not applied' comes before '## Map corrections applied'")
 	for (i = 1; i <= nbid; i++) {
 		id = bid[i]
 		if (!(id in l5seen)) cprob("ledger/5.md: no section for " id)
@@ -1259,6 +1335,9 @@ function check7(   w7, i, id, n, k, p, items, nit, c, j, hd, e, abs, na, cnt, an
 			if (!(id in advL)) cprob("ledger/7.md: addition " id " is not in late/adversary.md")
 			if (id in carset) cprob("ledger/7.md: addition " id " reuses a carried id")
 		}
+		late_ids()
+		for (i = 1; i <= lin; i++)
+			if (l7v[liord[i]] == "") cprob("ledger/7.md: no late verdict for " liord[i] ", which late-ids lists")
 	}
 	# gate.md
 	np0 = np
@@ -1384,6 +1463,12 @@ BEGIN {
 		for (i_ = 1; i_ <= livn; i_++) if (!(liveord[i_] in prov)) emit(liveord[i_])
 		finish()
 	}
+	if (op == "late-ids") {
+		load_l6()
+		late_ids()
+		for (i_ = 1; i_ <= lin; i_++) emit(liord[i_])
+		finish()
+	}
 	if (op == "seen") {
 		load_l6()
 		for (i_ = 1; i_ <= l5n; i_++)
@@ -1433,7 +1518,7 @@ if [ -s "$tmp/prob" ]; then
 fi
 
 case $op in
-mandatory | missing) sort -u "$tmp/out" ;;
+mandatory | missing | late-ids) sort -u "$tmp/out" ;;
 build5 | seen | gate) cat "$tmp/out" ;;
 esac
 exit 0
