@@ -208,6 +208,11 @@ are relative to the manifest's directory.
   ticket's `id`, in place of the bare `id`, so a bare-number id matches `#4567` but not
   `build 4567 passed`. The boundary rule applies outside the whole token, so `#{n}` does
   not match `AB#4567`; list `AB#{n}` too for that. GitHub tickets keep their own rule.
+  A bundle may add `run_once`, a glob pattern or a list of them, repo-relative and using
+  git's glob pathspec rules (`*` does not cross `/`, `**` does), such as
+  `["migrations/*.sql", "db/scripts/**/*.sql"]`. Stage 1 lists the bundle's changed files
+  that match, with whether each exists at the merge-base, for the auditors. There is no
+  default.
   A bundle may add `"head": "working-tree"` (a manifest key only; its one value) to audit
   uncommitted work. The bundle's branch must be checked out, and stage 1 builds a commit
   from the working tree, with the modified files and the untracked files that are not

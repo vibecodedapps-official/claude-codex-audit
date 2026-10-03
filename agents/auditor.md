@@ -37,7 +37,8 @@ custom list.
 4. Read the three-dot diff for your bundle from `diffs/<bundle>.diff`, and the changed files
    at the head sha. Read the digests under `guidelines/` and the maps under `domain/` that
    exist now; use them as leads and cite the original document or source at its sha.
-5. Ask each question of your scope and answer it with evidence. Write each defect as one
+5. Ask each question of your scope and answer it with evidence. In a group or `combined`
+   scope, also run the checks in "Matcher and run-once checks" below on your files. Write each defect as one
    finding in the "Finding schema" block, with id `<scope>-F<n>`, and:
    - Label `verified fact` only when the defect itself is demonstrated, by a quote plus a
      causal explanation, or by a run. Otherwise label it `unverified assumption`, with
@@ -87,7 +88,13 @@ When your prompt names a specialist scope, apply its checklist across every bund
 prompt assigns, in addition to steps 1 to 11.
 
 1. Tests: coverage of new behavior; tests weakened, skipped, or deleted; assertions
-   loosened; CI configuration changes.
+   loosened; CI configuration changes. Read each added or changed test and flag one that
+   asserts the code's own constant or a value computed the way the code computes it, pins
+   text without running the code that produces it, or accepts a wrong outcome among the
+   ones it allows. A flag is a lead, not a finding. It becomes a finding under the
+   scope's test-adequacy question (Q2 or Q3 with the default questions) only when you name
+   the regression the test would miss, with the test quoted. This check reads the tests;
+   it does not run them.
 2. Work-item hygiene: each ticket matches the change; each acceptance criterion is met or
    not, with evidence; follow-ups are recorded; each `status` claim's parent and links match
    the forge data (a GitHub ticket's `<ticket>.md` gives its parent as
@@ -98,6 +105,34 @@ prompt assigns, in addition to steps 1 to 11.
    used in another; the stack order the brief records.
 4. Low tier: one auditor covers the ticket's group, tests, and work-item hygiene with the
    checklists above, and says so at the top of its output.
+
+## Matcher and run-once checks
+
+A group scope or the `combined` scope runs both checks on its files, in every tree mode,
+with `git show`, `git log`, and `git grep` only. A specialist scope does not run them.
+
+1. Matchers. For each literal string or data shape the change adds or alters a match on (a
+   pattern, a prefix, a key, a field), find the code that produces it with `git grep`. Read
+   the producer with `git -C <repo> show <sha>:<path>` at the head sha and at the base sha
+   the brief records. `git log <merge-base>..<base> -- <producer path>` gives leads. File a
+   finding only with evidence that the incompatible producer survives integration: the head
+   does not change the producer, and the base's version produces a form the change does
+   not match. Quote both reads. Skip a matcher the change leaves as it was. When the brief
+   says the base was not fetched ("base: local ref, refresh declined"), say in the finding
+   that the base read may be stale. This does not make a base change a deleted feature
+   (Traps, item 2): it asks whether the changed code still matches what the merged result
+   produces.
+2. Run-once scripts. The brief's run-once list names, for each bundle, the changed files
+   that match the manifest's run-once patterns, each with its change status and whether it
+   exists at the merge-base. For a file in your scope that exists at the merge-base and
+   whose change alters what the script does (not a comment-only edit, not a deletion), file
+   a finding: a run-once script that may already be applied was edited, and runners that
+   journal by name skip it, so the edit never runs where it was applied. Label it
+   `unverified assumption`, so severity is at most `medium`. Fill `live check` with a
+   concrete query: whether the script's name is in the journal (the table or file where
+   the runner records applied scripts) of each target environment, and what each result
+   changes. Journaled: the edit never runs there, so the change must be a new script. Not
+   journaled anywhere: no defect. An added file is not flagged by this rule.
 
 ## Top-up mode
 
