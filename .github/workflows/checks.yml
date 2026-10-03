@@ -22,6 +22,8 @@ jobs:
         run: m=$(sh tests/fixture/build.sh full) && sh tests/fixture/verify.sh "$m" full
       - name: build and verify fixture tokens
         run: m=$(sh tests/fixture/build.sh tokens) && sh tests/fixture/verify.sh "$m" tokens
+      - name: build and verify fixture patterns
+        run: m=$(sh tests/fixture/build.sh patterns) && sh tests/fixture/verify.sh "$m" patterns
 
   scripts:
     name: scripts (${{ matrix.os }})

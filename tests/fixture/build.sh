@@ -1,8 +1,9 @@
 #!/bin/sh
-# build.sh <name>: build the fixture <name> (solo, solo-dirty, full, or tokens) in a new
-# temp directory and print the absolute path of its manifest on stdout, nothing else.
+# build.sh <name>: build the fixture <name> (solo, solo-dirty, full, tokens, or patterns)
+# in a new temp directory and print the absolute path of its manifest on stdout, nothing
+# else.
 #
-# Usage: sh tests/fixture/build.sh solo | solo-dirty | full | tokens
+# Usage: sh tests/fixture/build.sh solo | solo-dirty | full | tokens | patterns
 #
 # Every expected outcome is listed as a literal in tests/fixture/expected.md. Git runs
 # with fixed identity, fixed commit dates, no global or system config, no signing, and
@@ -12,9 +13,9 @@ set -eu
 
 name=${1:-}
 case $name in
-solo | solo-dirty | full | tokens) ;;
+solo | solo-dirty | full | tokens | patterns) ;;
 *)
-	echo "build.sh: unknown fixture '$name'; expected solo, solo-dirty, full, or tokens" >&2
+	echo "build.sh: unknown fixture '$name'; expected solo, solo-dirty, full, tokens, or patterns" >&2
 	exit 2
 	;;
 esac
@@ -986,8 +987,376 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# patterns: one app repo and three tickets.
+
+# pat_users_sh <feature 0|1>: src/users.sh; the feature adds a check to deactivate_user.
+pat_users_sh() {
+	cat <<'EOF'
+#!/bin/sh
+# users.sh: manage the user records in data/users.csv.
+set -eu
+
+USERS_FILE=${USERS_FILE:-data/users.csv}
+
+# list_users: print every user row, without the header.
+list_users() {
+    tail -n +2 "$USERS_FILE"
+}
+
+# add_user <id> <name>: append one active user row.
+add_user() {
+    case ${1:-} in
+    '' | *[!0-9]*)
+        echo "invalid id" >&2
+        exit 1
+        ;;
+    esac
+    printf '%s,%s,active\n' "$1" "${2:-}" >> "$USERS_FILE"
+}
+
+# deactivate_user <id>: set the status of the user with this id to inactive.
+deactivate_user() {
+EOF
+	if [ "$1" = 1 ]; then
+		cat <<'EOF'
+    case ${1:-} in
+    '' | *[!0-9]*)
+        echo "invalid id" >&2
+        exit 1
+        ;;
+    esac
+EOF
+	fi
+	cat <<'EOF'
+    id=$1
+    tmp=$USERS_FILE.tmp
+    awk -F, -v OFS=, -v id="$id" '$1 == id { $3 = "inactive" } { print }' "$USERS_FILE" > "$tmp"
+    mv "$tmp" "$USERS_FILE"
+}
+
+case ${1:-} in
+list) list_users ;;
+add) shift; add_user "$@" ;;
+deactivate) shift; deactivate_user "$@" ;;
+*) echo "usage: users.sh <command> [args]" >&2; exit 2 ;;
+esac
+EOF
+}
+
+# pat_test_users_sh <PAT-1 0|1> <PAT-3 0|1>
+pat_test_users_sh() {
+	cat <<'EOF'
+#!/bin/sh
+# Tests for src/users.sh. run-tests.sh runs this file from the repo root.
+set -eu
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+USERS_FILE=$work/users.csv
+export USERS_FILE
+
+run() {
+    cp data/users.csv "$USERS_FILE"
+    "$1"
+    echo "pass $1"
+}
+
+test_list_users() {
+    [ "$(sh src/users.sh list | wc -l | tr -d ' ')" = 3 ]
+}
+
+test_add_user() {
+    sh src/users.sh add 4 Edsger
+    grep -q '^4,Edsger,active$' "$USERS_FILE"
+}
+EOF
+	if [ "$1" = 1 ]; then
+		cat <<'EOF'
+
+test_deactivate_rejects_bad_id() {
+    grep -q "invalid id" src/users.sh
+}
+
+test_deactivate_keeps_row() {
+    sh src/users.sh deactivate 2
+    grep -q '^2,Grace,inactive$' "$USERS_FILE"
+}
+EOF
+	fi
+	if [ "$2" = 1 ]; then
+		cat <<'EOF'
+
+test_migration_adds_last_login() {
+    sh migrations/002_add_last_login.sh
+    sh migrations/002_add_last_login.sh
+    [ "$(head -n 1 "$USERS_FILE")" = "id,name,status,last_login" ]
+    [ "$(sed -n 2p "$USERS_FILE")" = "1,Ada,active," ]
+}
+EOF
+	fi
+	echo
+	echo 'run test_list_users'
+	echo 'run test_add_user'
+	if [ "$1" = 1 ]; then
+		echo 'run test_deactivate_rejects_bad_id'
+		echo 'run test_deactivate_keeps_row'
+	fi
+	if [ "$2" = 1 ]; then
+		echo 'run test_migration_adds_last_login'
+	fi
+}
+
+# pat_log_sh <prefix>: src/log.sh with the warning prefix.
+pat_log_sh() {
+	cat <<EOF
+#!/bin/sh
+# log.sh: log helpers. Source this file.
+
+# log_warn <text>: print one warning line.
+log_warn() {
+    printf '$1%s\\n' "\$*"
+}
+EOF
+}
+
+# pat_migration_001 <email 0|1>
+pat_migration_001() {
+	cat <<'EOF'
+#!/bin/sh
+# 001_create_users.sh: create data/users.csv with its header when it is missing.
+set -eu
+
+f=${USERS_FILE:-data/users.csv}
+if [ ! -f "$f" ]; then
+    mkdir -p "$(dirname "$f")"
+EOF
+	echo '    echo "id,name,status" > "$f"'
+	echo 'fi'
+	if [ "$1" = 1 ]; then
+		cat <<'EOF'
+
+if ! head -n 1 "$f" | grep -q ',email'; then
+    tmp=$f.tmp
+    awk 'NR == 1 { print $0 ",email"; next } { print $0 "," }' "$f" > "$tmp"
+    mv "$tmp" "$f"
+fi
+EOF
+	fi
+}
+
+build_patterns() {
+	init app
+
+	# Base commit on main: this is the merge-base.
+	pat_users_sh 0 | put app/src/users.sh
+	put app/src/reactivate.sh <<'EOF'
+#!/bin/sh
+# reactivate.sh: set a user back to active. Usage: sh src/reactivate.sh <id>
+set -eu
+
+USERS_FILE=${USERS_FILE:-data/users.csv}
+
+# reactivate_user <id>: set the status of the user with this id to active.
+reactivate_user() {
+    id=$1
+    tmp=$USERS_FILE.tmp
+    awk -F, -v OFS=, -v id="$id" '$1 == id { $3 = "active" } { print }' "$USERS_FILE" > "$tmp"
+    mv "$tmp" "$USERS_FILE"
+}
+
+if [ $# -ne 1 ]; then
+    echo "usage: reactivate.sh <id>" >&2
+    exit 2
+fi
+reactivate_user "$1"
+EOF
+	pat_log_sh 'WARN: ' | put app/src/log.sh
+	put app/migrate.sh <<'EOF'
+#!/bin/sh
+# migrate.sh: apply migrations/*.sh in name order. Each applied name goes in the journal,
+# data/applied.txt, and a name already in the journal is skipped.
+set -eu
+
+journal=data/applied.txt
+mkdir -p data
+touch "$journal"
+for m in migrations/*.sh; do
+    name=$(basename "$m")
+    if grep -qx "$name" "$journal"; then
+        continue
+    fi
+    sh "$m"
+    echo "$name" >> "$journal"
+    echo "applied $name"
+done
+EOF
+	pat_migration_001 0 | put app/migrations/001_create_users.sh
+	put app/data/users.csv <<'EOF'
+id,name,status
+1,Ada,active
+2,Grace,active
+3,Linus,active
+EOF
+	put app/.gitignore <<'EOF'
+.test-output/
+data/applied.txt
+EOF
+	put app/run-tests.sh <<'EOF'
+#!/bin/sh
+# run-tests.sh: run every tests/test_*.sh from the repo root and write the results
+# to .test-output/results.txt.
+set -eu
+
+mkdir -p .test-output
+out=.test-output/results.txt
+: > "$out"
+fail=0
+for t in tests/test_*.sh; do
+    if sh "$t" >> "$out" 2>&1; then
+        echo "ok $t" >> "$out"
+    else
+        echo "FAIL $t" >> "$out"
+        fail=1
+    fi
+done
+cat "$out"
+exit "$fail"
+EOF
+	pat_test_users_sh 0 0 | put app/tests/test_users.sh
+	commit app "initial user records tool"
+
+	# Feature branch: tickets PAT-1, PAT-2, PAT-3.
+	g -C "$T/app" checkout -q -b feature
+	pat_users_sh 1 | put app/src/users.sh
+	pat_test_users_sh 1 0 | put app/tests/test_users.sh
+	commit app "PAT-1: reject non-numeric ids in deactivate"
+
+	put app/src/warnings.sh <<'EOF'
+#!/bin/sh
+# warnings.sh: count the warnings in a log file. Usage: sh src/warnings.sh count <file>
+set -eu
+
+# count_warnings <file>: print the number of lines that start with WARN:.
+count_warnings() {
+    grep -c '^WARN:' "$1" || true
+}
+
+case ${1:-} in
+count) shift; count_warnings "$@" ;;
+*) echo "usage: warnings.sh count <file>" >&2; exit 2 ;;
+esac
+EOF
+	put app/tests/test_log.sh <<'EOF'
+#!/bin/sh
+# Tests for src/warnings.sh. run-tests.sh runs this file from the repo root.
+set -eu
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+test_count_warnings() {
+    printf 'WARN: disk low\nINFO: started\nWARN: slow reply\n' > "$work/app.log"
+    [ "$(sh src/warnings.sh count "$work/app.log")" = 2 ]
+}
+
+test_count_warnings
+echo "pass test_count_warnings"
+EOF
+	commit app "PAT-2: add the warning count command"
+
+	pat_migration_001 1 | put app/migrations/001_create_users.sh
+	put app/migrations/002_add_last_login.sh <<'EOF'
+#!/bin/sh
+# 002_add_last_login.sh: add a last_login column to data/users.csv, empty for every row.
+set -eu
+
+f=${USERS_FILE:-data/users.csv}
+
+if head -n 1 "$f" | grep -q ',last_login$'; then
+    exit 0
+fi
+
+tmp=$f.tmp
+awk 'NR == 1 { print $0 ",last_login"; next } { print $0 "," }' "$f" > "$tmp"
+mv "$tmp" "$f"
+EOF
+	pat_test_users_sh 1 1 | put app/tests/test_users.sh
+	commit app "PAT-3: add the email and last_login columns"
+
+	# The base moves on after the merge-base.
+	g -C "$T/app" checkout -q main
+	pat_log_sh 'warning: ' | put app/src/log.sh
+	commit app "log: lowercase the warning prefix"
+	g -C "$T/app" checkout -q feature
+}
+
+write_patterns_exports() {
+	put exports/PAT-1.md <<'EOF'
+---
+id: PAT-1
+url: https://tickets.example.invalid/browse/PAT-1
+title: Reject non-numeric ids in deactivate
+state: In Progress
+description: |
+  The `deactivate <id>` command in src/users.sh must stop with the message
+  `invalid id` and a non-zero exit status when the id is not a number. Add a test.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/PAT-2.md <<'EOF'
+---
+id: PAT-2
+url: https://tickets.example.invalid/browse/PAT-2
+title: Count the warnings in a log file
+state: In Progress
+description: |
+  Add a command that prints the number of warnings in a log file:
+  `sh src/warnings.sh count <file>`. Warnings are the lines written by `log_warn`
+  in src/log.sh. Add a test.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+	put exports/PAT-3.md <<'EOF'
+---
+id: PAT-3
+url: https://tickets.example.invalid/browse/PAT-3
+title: Add email and last_login to users
+state: In Progress
+description: |
+  Users get two new columns in data/users.csv, `email` and `last_login`. Both are
+  empty for a user that has no value yet.
+source: file export
+exported_by: fixture
+exported_at: 2026-09-29
+---
+EOF
+}
+
+write_patterns_manifest() {
+	put manifest.json <<'EOF'
+{
+  "bundles": [
+    { "repo": "./app", "branch": "feature", "base": "main",
+      "run_once": ["migrations/*.sh"],
+      "tickets": ["file:./exports/PAT-1.md", "file:./exports/PAT-2.md",
+                  "file:./exports/PAT-3.md"] }
+  ]
+}
+EOF
+}
+
+# ---------------------------------------------------------------------------
 case $name in
 tokens) build_tokens ;;
+patterns)
+	build_patterns
+	write_patterns_exports
+	write_patterns_manifest
+	;;
 *)
 	build_app
 	write_exports
