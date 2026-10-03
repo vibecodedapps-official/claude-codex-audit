@@ -91,10 +91,12 @@ prompt assigns, in addition to steps 1 to 11.
    loosened; CI configuration changes. Read each added or changed test and flag one that
    asserts the code's own constant or a value computed the way the code computes it, pins
    text without running the code that produces it, or accepts a wrong outcome among the
-   ones it allows. A flag is a lead, not a finding. It becomes a finding under the
-   scope's test-adequacy question (Q2 or Q3 with the default questions) only when you name
-   the regression the test would miss, with the test quoted. This check reads the tests;
-   it does not run them.
+   ones it allows. A flag is a lead, not a finding. It becomes a finding only when you
+   name the regression the test would miss, with the test quoted. With the default
+   questions, file it under Q2: the change is not shown to do what the ticket says,
+   because its test would pass without it. With a custom question list, file it under the
+   question closest to test coverage, or the first question when none fits, and say so in
+   the finding. This check reads the tests; it does not run them.
 2. Work-item hygiene: each ticket matches the change; each acceptance criterion is met or
    not, with evidence; follow-ups are recorded; each `status` claim's parent and links match
    the forge data (a GitHub ticket's `<ticket>.md` gives its parent as
