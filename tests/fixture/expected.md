@@ -541,6 +541,9 @@ a trap, and `docs/acceptance.md` records it as one.
   exits 0 and prints nothing), although `deactivate_user` now rejects it with
   `invalid id`. The ticket names only `deactivate`, so the finding is about the sibling
   that has the same id handling, not about a ticket requirement.
+- With the outward trace, the `PAT-1` scope's entry for `deactivate_user` names
+  `reactivate_user` as a sibling, with the shared contract (the same id argument and the
+  same `users.csv` row match) and the finding's id.
 - Decoys: `list_users` (`src/users.sh` line 8) takes no id and correctly has no check.
   `add_user` (lines 13 to 21) already rejects a bad id.
 

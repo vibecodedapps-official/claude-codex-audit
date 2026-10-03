@@ -24,8 +24,8 @@ custom list.
 
 1. Read `common.md` first, in full, at the path your prompt gives. Follow its
    "Hard rules", "Evidence", "Finding schema" (with its "Ids and origin tags"),
-   "Verified OK list", "Claim kinds", "Claims list", "Decisions", "Scope", and "Output
-   contract" sections. Do not invent other shapes or ids.
+   "Verified OK list", "Outward trace", "Claim kinds", "Claims list", "Decisions",
+   "Scope", and "Output contract" sections. Do not invent other shapes or ids.
 2. Read `audit-brief.md`: bundles, head, base, and merge-base shas, the stack order, the
    source order, the tier, and the path the brief maps for each tree. Read only the trees
    the brief maps for you, plus the run directory files it names.
@@ -53,6 +53,14 @@ custom list.
      or `none`.
    - A missing rationale in a ticket or PR is not by itself a defect.
 6. Write the `## Verified OK` list: each item checked and found sound, with its evidence.
+   In a group or `combined` scope, then write `## Outward trace`, in the shape and with
+   the cap, bounds, and sibling rule that `common.md`'s "Outward trace" gives. Look
+   outward from each changed symbol to its siblings, the functions it newly calls, and
+   the consumers of any input or output it widens, in every tree the brief maps. Use only
+   the commands in "Boundaries", item 2. The trace complements "Matcher and run-once
+   checks" and does not replace it. A sibling that lacks the change is a finding only
+   under the sibling rule; write it as a finding in step 5's shape and name its id in the
+   entry. A specialist scope and a top-up write no trace.
 7. Write the `## Claims` list: every claim assigned to your scope, `true`, `false`, or
    `not verified`, with the finding id or the evidence. A `verification` claim takes the
    line shapes in "Claims list" and is `true, reproduced` only when you reproduced the

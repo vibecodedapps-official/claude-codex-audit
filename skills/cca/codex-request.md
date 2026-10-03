@@ -101,9 +101,12 @@ An input you could not open is listed as "not read: <path>".
    <"for these ids: IDS-BATCH-<k>" (replaced by shell, as in ask 1) when stage 6 split
    the mandatory set (more than 60 ids), else "for every such finding">.
 3. Dropped findings you would restore, each with the reason and evidence.
-4. Up to ten findings no reviewer raised, each in the finding schema from common.md,
-   under a heading `### X<n>: <title>` with ids X1, X2, and so on, and the line
-   "- origin: codex". <When
+4. Before you choose new findings, trace outward from at most 10 changed symbols,
+   riskiest first, as common.md's "Outward trace" section describes: siblings, newly
+   called functions, and consumers. The trace is for your own search; do not write it
+   out. Then give up to ten findings no reviewer raised, from the trace or anywhere else,
+   each in the finding schema from common.md, under a heading `### X<n>: <title>` with
+   ids X1, X2, and so on, and the line "- origin: codex". <When
    `live/carried/` holds an `X<n>`: "Number them after the highest carried X<n>, which
    is reserved for the carried finding", with the first number filled in.>
 5. Severity recalibration: any finding whose severity you would change, from and to,

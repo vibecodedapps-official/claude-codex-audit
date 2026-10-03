@@ -15,6 +15,11 @@
   that match, with whether each exists at the merge-base. An auditor reports an edit to
   an existing run-once script as an unverified finding with a live check on the
   environment's journal (part of #20).
+- Group and `combined` auditors write `## Outward trace`: for each changed symbol, up to
+  15 per scope, its siblings, new callees, and consumers, one hop out, each `sound`, a
+  finding, or `incomplete`. The pass-two adversary checks it is complete at every tier
+  and challenges entries as it does Verified OK. Omissions go to Coverage gaps and the
+  report's Coverage. The second opinion traces too before it picks new findings (#17).
 - The `patterns` fixture, with one planted case each for #17 to #20 and checks that show
   each defect is real.
 - `docs/acceptance.md` records two full multi-agent audit runs on it, before and after

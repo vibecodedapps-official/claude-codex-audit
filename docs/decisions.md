@@ -916,6 +916,36 @@ for the 0.5.1 ledger work.
   `docs/acceptance.md`, before and after this change, as observed results. One run each
   is one sample, not a rate. The reviewer's 20 cases are not in the repo yet.
 
+## Outward trace (#17, 2026-10-03)
+
+The same sweep found 8 of 20 defects next to a change, not in it: a sibling that lacked
+the change, a callee's failure branch, a consumer of a widened input. Group and
+`combined` auditors now write `## Outward trace`, one entry per changed symbol, and the
+pass-two adversary challenges it.
+
+- **No ledger change.** `ledger.sh` captures only `## Verified OK challenged` and
+  `## Coverage gaps` from a pass-two file and passes other sections by. The trace and
+  its challenge are report items, like Decisions and Scope. An omission is written in
+  `## Coverage gaps`, which the ledger and the report already carry. `tests/ledger.sh`
+  shows the new sections, with fenced heading examples, parse to the same ledger.
+- **Bounded.** At most 15 symbols per scope, riskiest first; one hop from each, with at
+  most 5 siblings, 5 callees, and 10 consumers checked. The rest are listed, never
+  dropped silently, and the report's Coverage names them. Removed symbols count, since
+  their consumers break first. A search that could not finish is `incomplete`, not
+  `sound`. The second opinion traces at most 10 symbols before it picks new findings.
+- **Siblings need a shared contract.** A sibling without the change is a finding only
+  when the auditor cites the contract it shares (the ticket, a ranked source, a shared
+  interface or caller, or the same input contract) and shows the violation. Otherwise
+  two functions that look alike would raise findings by resemblance.
+- **Consumers in every tree.** The trace searches every tree the brief maps. A low-tier
+  audit of several bundles has no `interactions` scope, so a trace limited to its own
+  bundle would miss cross-bundle consumers there. At medium and high, `interactions`
+  still owns cross-bundle contracts, and stage 7 merges a duplicate.
+- **Challenges by tier, completeness always.** The adversary checks at every tier that
+  every changed symbol is traced or listed as not traced. Entries are attacked like
+  Verified OK: none at low, up to 5 at medium, all at high. A missing trace or challenge
+  is recorded as not assessed or not challenged, not a failed scope, as for Decisions.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl

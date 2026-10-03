@@ -179,6 +179,68 @@ Items checked and found sound, each with evidence:
 - <scope>-OK<n>: <what was checked>; evidence: <quote, search, or run>
 ```
 
+## Outward trace
+
+A group scope and the `combined` scope write `## Outward trace` after `## Verified OK`
+and before `## Claims`. No other scope writes it. It records what the auditor checked
+outside the changed lines, so that pass two can challenge it. It is a report section, not
+a finding list.
+
+```
+## Outward trace
+- <scope>-OT<n>: <repo>:<path>:<symbol> (<repo>@<sha>:<path>:<line>); siblings: <names with citations, or none>; callees: <newly called functions and the failure branches the change handles or does not, or none>; consumers: <readers of any input or output the change widens, or none>; result: sound, evidence: <...> | finding <id>[, <id>] | incomplete: <what was not resolved>
+- not traced: <repo>:<path>:<symbol> (<path>:<line>), ... (cap reached)
+```
+
+- A changed symbol is each function, method, query, type, config key, or endpoint the
+  change adds, alters, or removes. Its identity is `<repo>:<path>:<symbol>`, and the
+  citation is at the head sha. A removed symbol is cited at the merge-base sha, the entry
+  says `removed`, and it is traced for its consumers.
+- The cap is 15 entries per scope, riskiest first: public entry points, changed
+  signatures, widened inputs, then error paths. The symbols over the cap go on one
+  `not traced:` line. Write no `not traced:` line when the cap was not reached. Write
+  `none` under the heading, and nothing else, when the scope changes no symbol, such as a
+  docs-only scope.
+- The trace goes one hop from each changed symbol. Siblings are its direct siblings: the
+  same family, the same query branches, and the types the ticket names. Callees are the
+  functions it directly calls that the change adds. Consumers are the code that directly
+  reads an input or output the change widens. Per symbol, check at most 5 siblings, 5
+  callees, and 10 consumers, riskiest first. When a list is cut, write
+  `(<k> of <n> checked)` after it.
+- Search for consumers in every tree the brief maps, not only the scope's bundle, as
+  "Reading trees and searching" says, with the commands hard rule 2 allows.
+- Result `sound` needs evidence (a quote, or a search with its empty result). Result
+  `finding` names the findings the entry raised. Result `incomplete` names what the
+  auditor could not resolve, such as a consumer outside the mapped trees; the report lists
+  it.
+- A sibling that lacks the change is a finding only when the entry cites the shared
+  contract and shows the sibling violates it. The contract is the ticket, a ranked source,
+  a shared interface or caller, or the same input contract. A ranked source's rule alone,
+  with no broken behavior shown, gives label `convention`. Otherwise the entry says why
+  the missing change is not a defect.
+
+The entry lines are `- ` list lines. Never write a `### ` line or a line that is only
+`runs:` or `status: complete` inside the section, so no trace line reads as a finding, a
+verdict, or the end of a block under the parsing rules.
+
+Pass two writes `## Outward trace challenged` when the pass-one report has
+`## Outward trace`:
+
+```
+## Outward trace challenged
+- <scope>-OT<n>: upheld | broken, finding <scope>-P<n>; evidence: <...>
+```
+
+At every tier, the adversary checks the list for completeness against the scope's diff.
+Each changed symbol that is neither traced nor on the `not traced:` line, and each symbol
+on the `not traced:` line, goes in `## Coverage gaps` as
+`outward trace: <repo>:<path>:<symbol> not traced`. Entries are attacked by tier: at
+`low` none, at `medium` up to 5 entries, the riskiest, and at `high` all of them. An
+attack repeats the entry's search or run and looks for a sibling, callee, or consumer it
+missed. Write one line for each attacked entry, or `none` when none was attacked. A broken
+entry becomes a new pass-two finding `<scope>-P<n>`, and the line names it. These lines
+are challenge lines, not findings, and are not in the ledger files.
+
 ## Claim kinds
 
 Every claim in `claims.md` has a kind. For a handoff, the kind comes from the handoff's
@@ -315,9 +377,10 @@ An adversary gives each finding exactly one verdict, with evidence:
 ```
 
 After the verdicts, a pass-two adversary attacks the Verified OK list as the tier
-allows (`## Verified OK challenged`, one line per item with its result), then writes
-`## Coverage gaps` and `## Map corrections`: map file, line, what is wrong, and the
-source quote that shows it, or `none`.
+allows (`## Verified OK challenged`, one line per item with its result), then, when the
+pass-one report has `## Outward trace`, writes `## Outward trace challenged` (see
+"Outward trace"), then writes `## Coverage gaps` and `## Map corrections`: map file,
+line, what is wrong, and the source quote that shows it, or `none`.
 
 At every tier, after `## Map corrections`, the adversary writes three challenge sections:
 
@@ -342,9 +405,11 @@ lines are not findings and are not in the ledger files.
 Every agent:
 
 1. Writes one output file, at the path its prompt names, and no other file. A pass-one
-   file holds, in order, its findings, `## Verified OK`, `## Claims`, `## Decisions`,
-   and, in a scope that holds `hygiene` claims, `## Scope`. A pass-two file holds its
-   verdicts, `## Verified OK challenged`, `## Coverage gaps`, `## Map corrections`,
+   file holds, in order, its findings, `## Verified OK`, `## Outward trace` (a group or
+   `combined` scope only), `## Claims`, `## Decisions`, and, in a scope that holds
+   `hygiene` claims, `## Scope`. A pass-two file holds its verdicts,
+   `## Verified OK challenged`, `## Outward trace challenged` (when the pass-one report
+   has `## Outward trace`), `## Coverage gaps`, `## Map corrections`,
    `## Claims challenged`, `## Decisions challenged`, and `## Scope challenged`.
 2. Lists every command it ran under a `runs:` heading, one per line: the command, the
    directory it ran in, and the exit status. `runs: none` when there were none.
