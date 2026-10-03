@@ -148,10 +148,12 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
    `ledger/5.md` or `live/findings.md`), treat that input's acknowledgment as missing for
    the first `times` checks, whatever the answer says. Also compute now, against the
    answer, the mandatory ids (step 4.3) that it leaves without a position, and whether a
-   second batch of asks 1 and 2 is due. First save the answer verbatim in
+   second batch of asks 1 and 2 is due. For Codex's answer, first save it verbatim in
    `codex/response.md` (step 9), since the missing ids are read from that file; a
-   follow-up's output is appended to it later and never overwrites it. Then compute the
-   missing ids with
+   follow-up's output is appended to it later and never overwrites it. A fallback batch
+   (step 11) saves nothing here: it already wrote its own `codex/response.md` or
+   `codex/response-<k>.md`, which this check reads, and the batches are appended to
+   `codex/response.md` only as step 11 says. Then compute the missing ids with
    `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh missing <run dir> >
    <run dir>/tmp/missing.txt`: it prints the mandatory ids with no provenance line in
    `codex/response*.md`, by the rules `check` uses. A nonzero exit fails stage 6. Count

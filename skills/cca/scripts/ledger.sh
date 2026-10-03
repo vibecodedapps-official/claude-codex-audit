@@ -48,6 +48,9 @@
 #              codex/response.md or a codex/response-<k>.md, one per line, sorted. The
 #              provenance and fence rules are those of `check --through 6`. It reads no
 #              ledger/6.md. No response file at all makes every mandatory id missing.
+#              In a response file, a line that is exactly `--- follow-up, thread <id> ---`
+#              or `--- batch <k> ---` closes any open fence and is never a position, so
+#              an answer that ends inside a fence does not hide the segment after it.
 #   check      print one `ledger: <problem>` line per problem, nothing when none:
 #              --through 5   reconcile the inventory with the files, then require the
 #                            part of ledger/5.md before its first `## Map corrections
@@ -1019,14 +1022,25 @@ function load_l7(   n, i, e, rest, cur, id, t, w, p) {
 # ---------------------------------------------------------------------------
 # The second opinion's answer and the late adversary's file.
 
-function load_resp(   i, j, n, f, l, t, p, tok, id) {
+function load_resp(   i, j, n, f, l, t, p, tok, id, inf) {
 	for (i = 1; i <= nfl; i++) {
 		f = FL[i]
 		if (f !~ /^codex\/response(-[0-9]+)?\.md$/) continue
 		n = readfile(run "/" f, RA)
-		classify(RA, n)
+		inf = 0
 		for (j = 1; j <= n; j++) {
-			if (K[j] == "C") continue
+			l = RA[j]
+			if (l ~ /^--- follow-up, thread .* ---$/ || l ~ /^--- batch [0-9]+ ---$/) {
+				inf = 0
+				continue
+			}
+			t = l
+			sub(/^[ 	]+/, "", t)
+			if (index(t, "```") == 1) {
+				inf = !inf
+				continue
+			}
+			if (inf) continue
 			l = RA[j]
 			t = l
 			sub(/^[ \t*#`-]+/, "", t)

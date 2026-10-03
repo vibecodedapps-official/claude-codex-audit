@@ -1172,6 +1172,20 @@ cp -R "$B" "$tmp/x3"
 rm "$tmp/x3/codex/response.md"
 run "missing, no response file" 0 "app-F1${nl}app-F3${nl}app-F4${nl}app-P1${nl}web-F1" missing "$tmp/x3"
 run "missing, malformed ledger/5.md" 1 "" missing "$tmp/r5"
+
+# Segment boundaries in a response file reset the fence state.
+cp -R "$B" "$tmp/y1"
+{ grep -v '^web-F1: confirmed blocker$' "$B/codex/response.md"; printf '```\nopen\n--- follow-up, thread t9 ---\nweb-F1: confirmed blocker\n'; } > "$tmp/y1/codex/response.md"
+run "missing, follow-up after an open fence" 0 "" missing "$tmp/y1"
+run "check 6, follow-up after an open fence" 0 "" check "$tmp/y1" --through 6 --stage6 complete
+
+cp -R "$B" "$tmp/y2"
+{ grep -v '^web-F1: confirmed blocker$' "$B/codex/response.md"; printf -- '--- follow-up, thread t9 ---\n```\nopen\nweb-F1: confirmed blocker\n'; } > "$tmp/y2/codex/response.md"
+run "missing, open fence inside the follow-up" 0 "web-F1" missing "$tmp/y2"
+
+cp -R "$B" "$tmp/y3"
+{ grep -v '^web-F1: confirmed blocker$' "$B/codex/response.md"; printf '```\nopen\n--- batch 2 ---\nweb-F1: confirmed blocker\n'; } > "$tmp/y3/codex/response.md"
+run "missing, batch boundary after an open fence" 0 "" missing "$tmp/y3"
 # ---------------------------------------------------------------------------
 # Usage errors and unreadable input: exit 2, nothing on stdout.
 usage_msg="usage: ledger.sh build5|mandatory|seen|missing <run dir>

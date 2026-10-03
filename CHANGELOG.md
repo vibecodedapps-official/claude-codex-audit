@@ -57,7 +57,10 @@ agent-driven cases in `docs/acceptance.md` are still `not run`.
 - Stage 6 never reads the mandatory id list: it goes to `ledger/mandatory.txt`, is
   counted with `wc -l`, split into `codex/batch-<k>.txt` files by shell, and written into
   each request's `for these ids:` slot by shell. The follow-up's missing ids come from
-  `ledger.sh missing`, which reads the saved answer by the same rules as `check`. Every `ledger.sh check` writes to a file and is read as a line count plus
+  `ledger.sh missing`, which reads the saved answer by the same rules as `check`. A
+  `--- follow-up, thread <id> ---` or `--- batch <k> ---` line closes any code fence the
+  text before it left open, so the follow-up's positions are read. Only Codex's answer is
+  saved before that check; a fallback batch keeps its own response file. Every `ledger.sh check` writes to a file and is read as a line count plus
   its first 50 lines, in stages 5 to 7.
 - A finding in a failed pass or top-up file is kept in `ledger/5.md` with the state `no
   verdict: output failed`. The failed review gives it no credit: a pass-one finding stays
