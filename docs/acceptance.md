@@ -296,3 +296,55 @@ only when the stage that judges it completes.
 | V3-ao | A `head: working-tree` bundle whose repo has a skip-worktree or assume-unchanged path, edited on disk: stage 1 maps the bundle `export`, not `direct (working tree)`, and agents read the exported head; the brief's Bundles section and the report's Coverage list the path as flagged at audit time, held at the index version, and Coverage says its local content is not in the head and a change to it during the run may escape the read-only check | not run: needs a live multi-agent audit run | |
 | V3-aq | `/cca:resume <run-id> --live <file>` with a `result_file` holding a multi-row query result: the copy and `SHA256SUMS` are under `live/results-<k>/`, the derivation names the copy, the second opinion and the late adversary get the copy as an input (stage 6 with a sentinel), and the report's status line reads `in live/results-<k>/<line>.txt, sha256:<hex>` | not run: needs a live multi-agent audit run | |
 | V3-ar | After a finished run on a `head: working-tree` bundle, a path gains or loses its skip-worktree or assume-unchanged flag with no change to any file, so the head sha stays the same: `/cca:resume` reruns stage 1, and the new brief lists the flagged paths as they are now, maps the bundle `export` when one is flagged and `direct (working tree)` when none is, and Coverage matches. Run it four ways: a flag added and a flag removed, each in the top level and in a checked-out submodule, once with a bundle read directly and once with a bundle already exported | not run: needs a live multi-agent audit run | |
+
+# Detection record: the `patterns` fixture (2026-10-03)
+
+These are the first full multi-agent audit runs recorded here. Each ran headless,
+`claude -p "/cca:audit <manifest> --effort medium --budget 100" --plugin-dir <snapshot>
+--model opus --output-format stream-json`, from the fixture's `app` checkout, on a fresh
+`sh tests/fixture/build.sh patterns` build (head `7bdaa0e`). The snapshot held only
+`.claude-plugin`, `agents`, `commands`, and `skills`, archived outside the repo, so no
+expected answer was readable. The stream's init line named the snapshot as the only `cca`
+plugin, and `plugin_version` reads `0.5.0` in both runs, so the snapshot commit is what
+tells them apart. Codex ran stage 6 in both.
+
+- Baseline: snapshot of `65c5beb` (0.5.0, before the #18, #19, and #20 rules), run
+  `2026-10-03-0158-app-feature`, started 05:58Z, ended `reported`, verdict `not ready`,
+  15 items (2 high, 4 medium, 4 low, 5 note), every stage complete. The session reported
+  a cost of $11.86.
+- After: snapshot of `9b30df2` (this change), run `2026-10-03-0222-app-feature`,
+  started 06:21Z, ended `reported`, verdict `not ready`, 13 items (2 high, 4 medium,
+  4 low, 3 note), every stage complete. The session reported a cost of $12.09.
+
+One run each is one sample, not a rate. Both runs found every planted case in pass one,
+so this fixture shows no gain in detection from the new rules; it is a check that they
+lose none. Measuring a gain needs harder cases, such as the reviewer's set (#21).
+
+| Case | Baseline: first stage, final item | After: first stage, final item |
+|---|---|---|
+| P17 sibling `reactivate_user` | pass one (`app-pat-1-F2`); C2, low, counts | pass one (`app-pat-1-F2`, `tests-hygiene-F8`); C2, low, counts (contested) |
+| P18 grep test | pass one (`app-pat-1-F1`, `tests-hygiene-F1`); C1, medium, `verified fact` | pass one (`app-pat-1-F1`, `app-pat-3-F4`, `tests-hygiene-F1`); C1, medium, `verified fact` |
+| P18, second case: `tests/test_log.sh` writes its own `WARN:` lines | pass one (`app-pat-2-F2`, `tests-hygiene-F3`); C6, medium | pass one (`app-pat-2-F2`, `tests-hygiene-F2`); C5, counts at high (contested) |
+| P19 base producer | pass one (`app-pat-2-F1`, `tests-hygiene-F2`); C5, high, `verified fact`, names `d84a2ec` | pass one (`app-pat-2-F1`); C4, high, `verified fact`, names `d84a2ec` |
+| P20 edited run-once 001 | pass one (`app-pat-3-F1`, `tests-hygiene-F4`); C9, high, `verified fact` | pass one (`app-pat-3-F1`, `tests-hygiene-F4`); C9, medium, `unverified assumption`, live check `grep -x 001_create_users.sh data/applied.txt` per target |
+
+Decoys: no run flagged `list_users` or the count at the head. The baseline's
+`tests-hygiene-F1` noted that `test_deactivate_keeps_row` also passes without the fix,
+but called it a harmless check of existing behavior and asked only for the grep test to
+change; it merged into C1. The after run listed `test_deactivate_keeps_row` as Verified
+OK. The baseline's C12 (low) called the guards of 001 and 002 fragile
+together; its point about 001's unanchored `,email` match is fair. The after run has no
+such item.
+
+What changed with the rules: the after run's brief listed `M
+migrations/001_create_users.sh exists at merge-base` and `A
+migrations/002_add_last_login.sh new` under `run-once patterns: migrations/*.sh`, and
+each group scope file carried its entries. P20 moved from `verified fact` at high to
+`unverified assumption` at medium with a concrete live check. That follows the
+auditor's rule that a finding needing a live check stays `unverified assumption`
+(`agents/auditor.md`, step 5); the baseline's label broke it, since its own item said
+real install reach was not verified.
+
+`tests/fixture/expected.md` first listed `tests/test_log.sh` as a decoy. Both runs
+reported it, and it is the #18 pattern (it pins the producer's text without running
+it), so the file now lists it as a second P18 case.

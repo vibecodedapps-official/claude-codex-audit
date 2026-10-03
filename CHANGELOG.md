@@ -17,6 +17,9 @@
   environment's journal (part of #20).
 - The `patterns` fixture, with one planted case each for #17 to #20 and checks that show
   each defect is real.
+- `docs/acceptance.md` records two full multi-agent audit runs on it, before and after
+  these rules. Both found every planted case in pass one. With the rules, the run-once
+  finding carries a live check, and its label follows the live check rule.
 
 ## 0.5.0 - 2026-10-03
 

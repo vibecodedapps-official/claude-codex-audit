@@ -567,9 +567,11 @@ a trap, and `docs/acceptance.md` records it as one.
 - Expected finding: after the merge, `log_warn` writes lines that start `warning: `, and
   `count_warnings` counts 0 for them. The command that `PAT-2` asks for reports no
   warnings. The finding names the base commit.
-- Decoys: `tests/test_log.sh` passes after the merge, because it writes its own `WARN:`
-  lines; it does not show the defect and is not a defect itself. The count at the head,
-  2 for two `log_warn` lines, is right.
+- Also expected, a second case of the P18 pattern: `tests/test_log.sh` lines 8 to 10
+  write their own `WARN:` lines instead of calling `log_warn`, so the test pins the
+  producer's text without running it and passes after the merge. A finding that says so
+  is correct, not a decoy that counts.
+- Decoy: the count at the head, 2 for two `log_warn` lines, is right.
 
 **P20: an edit to a run-once script that may already be applied (`PAT-3`).**
 
