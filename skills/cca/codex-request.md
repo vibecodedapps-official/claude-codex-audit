@@ -47,10 +47,14 @@ each one itself, wherever the run directory is. It carries no inline content and
 size cap, and no diff is dropped from it. An input Codex cannot open is caught by the
 acknowledgment rule below.
 
-The follow-up after a missing acknowledgment is the only inline text. It is a file,
-`codex/followup.md`, which the call tells Codex to read by its absolute path, so no id
-is typed into a tool argument. It carries the unacknowledged inputs in this layout, as
-stage 6 step 8 describes:
+The follow-up after a missing acknowledgment or a missing position is the only inline
+text. It is a file, `codex/followup.md`, whose ids shell writes. When every input was
+acknowledged, the call tells Codex to read it by its absolute path. When any input was
+unacknowledged, Codex may not be able to open run-directory files, so it could not
+open the follow-up either: the orchestrator reads the file in full and passes its text
+verbatim as the call's text. That transfer goes through the model, and the checks on
+the answer (the sentinels, `ledger.sh missing`) do not verify it. The file carries the
+unacknowledged inputs in this layout, as stage 6 step 8 describes:
 
 ```
 ===== input: codex/inputs/<run-relative path> =====
@@ -131,7 +135,9 @@ Also consider the coverage gaps the pass-two reports list.
 
 After the answer, compare each input's sentinel with the `## Acknowledgments` section.
 A sentinel not quoted exactly means access to that input is not confirmed. Retry once,
-carrying the unacknowledged inputs inline. If any input is still unacknowledged, stage 6
+carrying the unacknowledged inputs inline, in a follow-up whose text is passed in the
+call itself, since Codex may not be able to open the file. If any input is still
+unacknowledged, stage 6
 fails: the findings it covered do not pass the review gate on its account, and the run
 ends `partial`. With `_test` `drop_ack`, treat the named input's acknowledgment as
 missing in the first `times` answers. Stage 6 also checks that the answer gives a
