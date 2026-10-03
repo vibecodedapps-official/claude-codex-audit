@@ -385,7 +385,8 @@ applies none of it.
 A finding **counts** toward the verdict only when a reviewer other than its author has
 challenged it and the second opinion has seen it. "Seen" depends on severity, taken after
 pass two: a blocker, high, or medium finding needs a position from the second opinion,
-while a low or note finding may count on the second opinion's acknowledgment alone.
+while a low or note finding may count on the second opinion's acknowledgment alone. A
+finding the second opinion added counts once the late adversary has challenged it.
 Anything else is **provisional** and does not count. Reviewers who disagree are both kept,
 as a `contested` item; cca never picks a side.
 
@@ -571,8 +572,10 @@ report. Stage 6 always runs.
 cca never runs the `codex` CLI itself, except `codex --version` to check it is there.
 The request names every input by absolute path, and Codex acknowledges each input with
 its sentinel. Only an input it could not open goes inline, in the one follow-up (a file,
-`codex/followup.md`), under a 450,000-byte cap. Over the cap, the follow-up is not sent
-and stage 6 fails.
+`codex/followup.md`), under a 450,000-byte cap. When an input went unacknowledged, the
+follow-up's text is passed in the call itself, since Codex may not open the file;
+otherwise Codex reads the file by path. Over the cap, the follow-up is not sent and
+stage 6 fails.
 
 Codex reads a file outside every repo, such as a run directory in the plugin's data
 directory, by absolute path. That read was verified on Windows with codex-lite's elevated

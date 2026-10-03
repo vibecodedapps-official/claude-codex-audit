@@ -456,7 +456,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/6-second-opinion.md` when stage 5 
 builds the Codex request from `${CLAUDE_PLUGIN_ROOT}/skills/cca/codex-request.md`, calls
 `codex-lite:ask`, handles status and swaps, and writes `ledger/6.md`. The request names
 every input copy and audited source by absolute path, so Codex opens them wherever the
-run directory is; only the follow-up, a file `codex/followup.md`, carries inline text.
+run directory is; only the follow-up, a file `codex/followup.md`, carries inline text,
+and its text is passed in the call itself when an input went unacknowledged.
 Every mandatory finding id is requested in a run where stage 6 completes: in batches of at most 60,
 the first in the Codex request, at most 60 positions in the one Codex follow-up
 (missing first-batch ids first, then second-batch ids), and every id neither carries

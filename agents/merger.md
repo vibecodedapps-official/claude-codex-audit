@@ -38,11 +38,9 @@ files "for duplicate checks only"), in split mode as the final merger the
    maps to exactly one item. List each item's sources (every reviewer and origin that
    raised it) and the ledger ids it absorbs, on one line `- absorbs: <id>, <id>, ...`
    (a comma and a space), once per item.
-4. Give each item its gate. It `counts` when a reviewer other than its author has
-   challenged it, and the second opinion gave a position on it when it is medium or
-   above, or acknowledged it when it is low or note. Anything else, including what the
-   late adversary raised itself, is `provisional`.
-   Take each id's gate from `gate.md`. Write it as exactly one line `- gate: counts` or
+4. Give each item its gate. Each id's gate comes from `gate.md` only, which applies the
+   review gate rules in step 4 of `stages/7-converge.md`; do not work a gate out from
+   the ledger yourself. Write it as exactly one line `- gate: counts` or
    `- gate: provisional` per item, nothing after the word; `counts` exactly when an
    absorbed id counts.
 5. Give each item one disposition:
