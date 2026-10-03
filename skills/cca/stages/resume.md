@@ -181,7 +181,7 @@ never loses a finished one. With `--live`, it first imports approved live check 
      invalidates stage 1 (the bundles' head and base shas were already compared in
      step 3, which stops on any change);
    - upstream stage outputs, by `git hash-object --no-filters <file>`;
-   - `plugin_version`, which for this release is `0.5.1`.
+   - `plugin_version`, which for this release is `0.5.2`.
    - the live inputs of stages 6 to 8: `live/findings.md`, `live/claims.md`, and each
      `live/carried/<id>.md` that `live/findings.md` names, by `git hash-object
      --no-filters <file>` (`live.md`).

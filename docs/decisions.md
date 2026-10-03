@@ -916,6 +916,32 @@ for the 0.5.1 ledger work.
   `docs/acceptance.md`, before and after this change, as observed results. One run each
   is one sample, not a rate. The reviewer's 20 cases are not in the repo yet.
 
+## 0.5.2 decisions (2026-10-03)
+
+- **The late adversary's file is checked by script before the merge.** `check --through
+  7` already found a listed id without a late verdict, but only after the merger ran, so
+  the miss went down the merger's ladder, which cannot add a verdict. `late-check` runs
+  on the adversary's file alone, so a miss is a late adversary failure and gets a
+  relaunch. It is a separate op because `check --through 7` needs `converged.md`, which
+  does not exist yet, and `late-ids` generates a list rather than checking one. The
+  check after the merge stays, as a guard on the orchestrator's copy into `ledger/7.md`.
+- **An extra late verdict is a problem.** The late adversary is asked for verdicts on
+  the listed ids only. A verdict on another id would reach `ledger/7.md` and could set
+  a severity the merger then follows, so `late-check` rejects it and the adversary is
+  relaunched.
+- **The follow-up goes inline when an input was unacknowledged.** 0.5.1 made the
+  follow-up a file read by path, so that no id passes through text the model writes.
+  When an input went unacknowledged, Codex may be unable to open run-directory files at
+  all, and then it cannot open the follow-up either. In that case only, the orchestrator
+  reads the file in full and passes its text in the call. Shell still writes the ids into
+  the file, but the model carries the text, and neither the sentinels nor `missing`
+  proves the text arrived unchanged. When every input was acknowledged, the call stays
+  by path.
+- **A partial `ledger/6.md` is read leniently only when stage 6 failed.** A failed stage
+  6 can leave the file mid-block, and nothing in it passes the gate on stage 6's
+  account. Failing `late-ids` and `gate` on it then failed stage 7 for no gain. With
+  stage 6 complete the file was already checked, so its problems stay errors.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl
