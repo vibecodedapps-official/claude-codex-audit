@@ -42,17 +42,32 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
    1. `converged.md`, whenever it exists and the stage 7 entry records
       `"converged_check": "pass"`, whatever stage 7's status (a failed late adversary
       does not discard a checked merge): use its items, gates, and dispositions.
-   2. Else the ledger files that exist: one item per ledger finding, with its state after the last verdict it has. Compute its gate with the rules
-      in `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/7-converge.md` step 4 from the ledger files present; a
-      finding that has not passed them is `provisional`. The finding set is the ledger
-      findings plus every active carried finding (`live/carried/<id>.md`), one item per
-      id, each carried finding joined with its positions in `ledger/6.md` and
-      `ledger/7.md` and gated by the live rule. A position on a finding whose live review
+   2. Else, when `ledger/5.md` exists and the stage 5 entry does not record
+      `"ledger_build": "failed"`, the ledger files that exist: one item per ledger
+      finding, with its state after the last verdict it has in `ledger/5.md` and
+      `ledger/6.md` (a `no verdict: ...` state, `output failed` included, earns no
+      credit; `ledger/7.md` verdicts are not applied: path 2 runs only when no merge
+      passed stage 7's checks, so they are unchecked). Path 2 never reuses
+      `gate.md`, which may have been written before stage 7's checks failed. Compute each
+      gate with `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh gate <run dir>
+      --tier <tier> --stage6 <stage 6 status> --late failed`, per the rules in
+      `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/7-converge.md` step 4. Late verdicts are
+      therefore not credited: in a path 2 report every `P`, `T`, and `X` finding is
+      `provisional`, and the report's limits say why. Stage 6 credit stays, since stage 6
+      is `complete` only after `check --through 6` passed. When the script exits nonzero
+      (its `ledger: ` lines are on stderr, no output), or a ledger file it needs is
+      missing, compute the gates by hand from the ledger files present under the same
+      rules and note the script failure in the report's limits. A finding that has not
+      passed the rules is `provisional`. The finding set is the ledger findings plus
+      every active carried finding (`live/carried/<id>.md`), one item per
+      id, each carried finding joined with its positions in `ledger/6.md`
+      (and `ledger/7.md`, listed as unchecked) and gated by the live rule. A position on a finding whose live review
       has not completed is `pending review`: it is listed under the item and never sets
       its severity, label, or disposition (stage 7, step 6). Disposition: `dismissed` when
       its last verdict is `dropped` and no one asked to restore it, `contested` when
       verdicts disagree on existence or severity, else `agreed`.
-   3. Else the `pass1/` and `pass2/` files: one item per finding, every one
+   3. Else (no `ledger/5.md`, or stage 5 recorded the ledger build as failed) the
+      `pass1/` and `pass2/` files: one item per finding, every one
       `provisional`, with the pass-two verdicts that exist, and the carried findings added
       the same way.
 
@@ -100,7 +115,7 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
       disposition, item id (`C<n>`), and absorbed ledger ids. Each item sits under a
       heading `#### C<n>: <title>`, so the work-items validator can find it. A
       `provisional` item says which review it still lacks, from its reason in
-      `gate.md` or from the gate rules when `gate.md` does not exist.
+      `gate.md`, or from the `gate` output when `gate.md` is not used (path 2).
    3. Verified as sound: every Verified OK item from the pass-one reports, marked
       `challenged` when a pass-two adversary's `## Verified OK challenged` list names
       it, else

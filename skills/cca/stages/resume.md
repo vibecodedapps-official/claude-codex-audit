@@ -9,7 +9,11 @@ never loses a finished one. With `--live`, it first imports approved live check 
 
 1. **Find the run.** Read `${CLAUDE_PLUGIN_DATA}/runs.json` and take the entry whose
    `run_id` is the invocation's `run-id`. When there is none, or its `path` no longer
-   exists, stop with one line saying so. The run directory is that `path`.
+   exists, stop with one line saying so. The run directory is that `path`. Append this
+   invocation's block to `<run dir>/invocations.md` (SKILL.md, Invocation block). After a
+   compaction, read the `--from` and `--live` values from the last block there; a run from
+   0.4.0 or earlier has no `invocations.md`, and the block in your context is the only
+   copy.
 2. **Recover state.** Read, in the run directory, `manifest.json` and `stages.json`
    only. If `manifest.json` is missing, stop with one line saying the run directory is
    unrecoverable. With `--live`, a missing `stages.json`, a stage 1 entry that is missing
@@ -177,7 +181,7 @@ never loses a finished one. With `--live`, it first imports approved live check 
      invalidates stage 1 (the bundles' head and base shas were already compared in
      step 3, which stops on any change);
    - upstream stage outputs, by `git hash-object --no-filters <file>`;
-   - `plugin_version`, which for this release is `0.4.0`.
+   - `plugin_version`, which for this release is `0.5.0`.
    - the live inputs of stages 6 to 8: `live/findings.md`, `live/claims.md`, and each
      `live/carried/<id>.md` that `live/findings.md` names, by `git hash-object
      --no-filters <file>` (`live.md`).
@@ -192,6 +196,9 @@ never loses a finished one. With `--live`, it first imports approved live check 
    - the first stage, in the order 1 to 8, whose entry is missing, or whose status is
      anything other than `complete` or `not_applicable` (such as `running`, `failed`,
      or `superseded`), or that is `complete` but lists an output that does not exist;
+   - stage 5, when its entry is `complete` but its outputs do not include
+     `ledger/inventory.txt` (a run from 0.4.0 or earlier): it is not reusable and the run
+     reruns from stage 5, since `ledger.sh` needs the inventory;
    - the first stage whose input hashes changed;
    - stage 1, when any tree `audit-brief.md` maps as `direct` fails a direct-read
      condition now: `git -C <repo> rev-parse HEAD` is not the pinned sha,

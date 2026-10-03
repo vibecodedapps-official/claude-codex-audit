@@ -36,11 +36,14 @@ files "for duplicate checks only"), in split mode as the final merger the
 3. Group ledger findings that describe the same defect into one item. Every ledger finding
    and every carried id (`live/carried/<id>.md`, a finding the ledger may no longer hold)
    maps to exactly one item. List each item's sources (every reviewer and origin that
-   raised it) and the ledger ids it absorbs.
+   raised it) and the ledger ids it absorbs, on one line `- absorbs: <id>, <id>, ...`
+   (a comma and a space), once per item.
 4. Give each item its gate. It `counts` when a reviewer other than its author has
    challenged it and both a Claude adversary and the second opinion have seen it, in any
    role. Anything else, including what the late adversary raised itself, is `provisional`.
-   Take each id's gate from `gate.md`.
+   Take each id's gate from `gate.md`. Write it as exactly one line `- gate: counts` or
+   `- gate: provisional` per item, nothing after the word; `counts` exactly when an
+   absorbed id counts.
 5. Give each item one disposition:
    - `agreed`: the reviewers who saw it accept it at one severity.
    - `contested`: they disagree on existence or severity. Keep every position with its
@@ -54,11 +57,14 @@ files "for duplicate checks only"), in split mode as the final merger the
    disposition, so a reviewed duplicate absorbed into the same item is the only thing
    that sets them. Once its review completed, those are ordinary positions, and its
    derivation reads "live result, approved by <who> at <time>".
+   Likewise a counted item's severity, label, and disposition come only from absorbed ids
+   whose `gate.md` line counts: a provisional duplicate absorbed into the same item never
+   raises them.
 7. Ids are `C<n>`. When your prompt gives an earlier `converged.md`, keep its id for each
    item it already has. In split mode as a group merger, write
    `converged/<group>.md` with each item's sources, each position's severity and label,
    disposition, gate, absorbed ledger ids, and ledger section pointer, and no `C<n>` ids;
-   the final merger assigns them.
+   the final merger assigns them and keeps the `- absorbs:` and `- gate:` forms.
 8. Close the file as the "Output contract" section says, with `runs: none` (you have
    no shell), the `opened:` heading step 2 describes when you opened any full ledger
    file or ledger section, `consumed: none` (you read no digest or map), and

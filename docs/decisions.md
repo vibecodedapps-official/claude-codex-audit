@@ -780,6 +780,88 @@ query that returns rows is kept verbatim rather than summarized by hand.
   `import` checks the copies before it commits. Otherwise each retried `--live` would
   commit one more import before the reconcile failed again.
 
+## Review of 0.4.0 (2026-10-02)
+
+A review of 0.4.0 found that stages 5 to 7 trusted the orchestrator to carry every id
+through three hand-written ledgers, that a medium finding could count with no position,
+and a few documented paths no stage used. A second opinion converged on the plan; every
+change stays inside the plugin.
+
+- **The ledger script.** `skills/cca/scripts/ledger.sh` builds what is mechanical and
+  checks coverage. Scripted: the finding sections of `ledger/5.md` (originals, verdict
+  lines, state after pass two) from the output files listed in `ledger/inventory.txt`,
+  the mandatory id set, the list of ids seen without a position, `gate.md` (a pure
+  function of the ledgers, the stage status, the tier, and `live/findings.md`), and these
+  checks: the finding part of `ledger/5.md` equals what the script builds from the pass
+  files (the inventory is reconciled against `pass1/` and `pass2/`); at stage 6, every
+  mandatory id has a position with provenance in a response file, and every other
+  `ledger/5.md` id has a position or is on the seen list; Codex and late additions match
+  the raw answers; `gate.md` equals the computed gate; every id is absorbed by exactly
+  one converged item with a matching gate. Model-judged, as before: whether evidence
+  holds, the map corrections and their rejection reasons, the stage 6 positions
+  (condensed from the second opinion's answer), the severity and contested checks,
+  dedupe, and the report.
+  The parsing rules are one paragraph in `common.md`, so an agent's output and the script
+  agree on what a block is. A problem fails the stage; it is never repaired silently.
+- **The medium rule.** A stage 6 position is now mandatory for every finding at medium
+  severity or above after pass two, plus every downgraded or dropped id and every live
+  id, as before. The gate requires a position for medium and above; a low or note
+  finding may count on the acknowledgment alone, and the gate reason names which. Before,
+  a medium finding listed as seen with no position counted, so a run could end `merge
+  after fixes` on one reviewer's word. A missing mandatory position still fails stage 6,
+  so the run is `audit incomplete`, never `ready to merge`. Eligibility is the severity
+  after pass two, and a later recalibration upward is itself a position, so a reviewer
+  cannot bypass it. A counted item's severity, label, and disposition come only from
+  absorbed ids that count, so a provisional duplicate never raises them.
+- **One live path.** `live.md` is the only path: the orchestrator never asks for live
+  access during a run, a needed check becomes a report item, and approvals come only from
+  a `--live` file through `/cca:resume`. The stages never asked, so the older text (hard
+  rule 5, the orchestrator preamble) described a path that did not exist, and the agent
+  boundary clause "use one only when your prompt says the user approved that named check"
+  was emitted by no stage. It is removed from the four agent files that carried it. The
+  boundary itself stays in each agent file: an agent definition loads before `common.md`,
+  and a safety rule belongs where the agent reads it first.
+- **Launch order.** The queue now starts digests, then maps, then pass one. The barrier
+  waits for digests and maps, and pass one that starts first reaches it before them, which
+  is what forces a top-up auditor to read what the first auditor missed. Starting the
+  digests and maps first lets more of them finish before the barrier. It reduces misses
+  and cannot remove them, since a digest can still outlast an auditor or the queue cap
+  can delay it, so top-ups stay. The cost is that auditors may start a little later.
+- **Invocations on disk.** The invocation block is appended to `invocations.md` in the
+  run directory once the run directory is known, one block per command, never rewritten.
+  After a compaction the last block is re-read. `manifest.json` held the audit's inputs,
+  but a resume's `--from` and `--live`, and an act's items and `--per-item`, were on no
+  disk, although the orchestrator was told to re-read them. A run from 0.4.0 or earlier
+  has no file, and the block in context stays the only copy.
+- **Disclosure, not a mechanism, for attribution and one blind spot.** An ignored-file
+  write is accepted when an agent's own `runs:` list logs a run in that repo, so the
+  attribution is self-reported and repo-level. A `.git` created inside a tracked
+  directory is pruned by the scan and is not seen. The README says both in its limits. A
+  mechanism for either would cost a trace of every agent command or a full scan for
+  nested `.git` entries, which is not worth it for this check.
+- **Fault injection moved out.** The `_test` rules are in
+  `skills/cca/fault-injection.md`, read only when the manifest has `_test`. They are test
+  scaffolding, unused outside the acceptance runs, and 28 lines of every run's
+  orchestrator context. The stage files keep their one-line mentions.
+- **`exported_by` stays required.** Stage 1 copies it into every provenance block, so
+  dropping the requirement would leave blocks with a hole, and a missing key is cheap to
+  fix.
+- **Findings of a failed output are kept, provisional.** A failed pass or top-up file
+  used to drop out of `ledger/5.md`, so a finding it held vanished. The script now keeps
+  every well-formed finding with the state `no verdict: output failed` and no verdict
+  credit from the failed review, so it is visible. A pass-one finding then stays
+  provisional; a pass-two or top-up addition can count only through the late adversary
+  and a second-opinion position, like any late addition, since excluding a reviewed
+  finding would only make the verdict more lenient. A block it cannot parse is counted on the
+  file's `## Failed outputs` line, which is the one place nothing is listed.
+- **Resume rule instead of a version bump.** A complete stage 5 entry without
+  `ledger/inventory.txt` among its outputs is not reusable, so a run from 0.4.0 or earlier
+  reruns from stage 5. Bumping `plugin_version` is a release decision, and it would rerun
+  every old run from stage 1, which rereads the forge for no reason.
+- **Not changed.** Stage 1's label order (editorial, a large diff in a 732-line file for
+  no behavior gain), live.sh's size, the line formats of the ledgers, forge adapters, and
+  a first full multi-agent run are follow-ups.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl

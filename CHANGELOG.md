@@ -1,5 +1,95 @@
 # Changelog
 
+## 0.5.0 - 2026-10-03
+
+Adds `ledger.sh` and its checks, a medium-severity rule for the second opinion, one path
+for live checks, and `invocations.md`. No full multi-agent audit has run yet; the
+agent-driven cases in `docs/acceptance.md` are still `not run`.
+
+### Added
+
+- `skills/cca/scripts/ledger.sh`, with `tests/ledger.sh`. It builds the finding sections
+  of `ledger/5.md`, the mandatory id list, the list of ids seen without a position, and
+  `gate.md`. Its checks: the finding part of `ledger/5.md` equals what the script builds
+  from the pass files (the inventory is reconciled against `pass1/` and `pass2/`); at
+  stage 6, every mandatory id has a position with provenance in a Codex response file,
+  and every other `ledger/5.md` id has a position or is on the seen list; Codex and late
+  additions match the raw answers; `gate.md` equals the computed gate; and every id is
+  absorbed by exactly one converged item whose gate matches. Evidence, the condensation
+  of positions, dedupe, and the severity and contested checks stay model-judged. Stages 5
+  to 8 run it, and stage 5 writes `ledger/inventory.txt` for it. The parsing rules are in
+  `common.md`.
+- `invocations.md` in the run directory: each invocation block, appended verbatim and
+  never rewritten, re-read after a compaction. `/cca:resume` and `/cca:act` read their
+  `--from`, `--live`, items, and `--per-item` values from the last block. A run from
+  0.4.0 or earlier has none.
+- `skills/cca/fault-injection.md`, the `_test` rules moved out of `SKILL.md`, read only
+  when the manifest has a `_test` key.
+- The README says that ignored-file write attribution is self-reported and repo-level,
+  that a `.git` created inside a tracked directory is not detected, and that Codex's
+  read of a file outside every repo was verified on Windows with the elevated sandbox
+  only. It recommends an ignored in-repo scratch directory or the manifest `scratch` key.
+
+### Changed
+
+- A run started under 0.4.0 or earlier and resumed under 0.5.0 reruns from stage 1.
+- A stage 6 position is mandatory for every finding at medium severity or above, not
+  only blocker and high. A low or note finding may still count on the second opinion's
+  acknowledgment, and the gate reason says which. A medium finding no longer counts with
+  no position. The README says what "seen" means.
+- Live access has one path. The orchestrator never asks for it during a run, a needed
+  check becomes a report item, and approvals come only from a `--live` file. The agent
+  boundary clause that allowed a check "when your prompt says the user approved" it is
+  removed from the auditor, digester, mapper, and adversary.
+- The queue launches digests, then maps, then pass one, so more digests and maps finish
+  before the barrier. Top-ups stay, since the order cannot remove misses.
+- `readonly.sh` compares with awk and hashes in batches, with the same output.
+- A merged item's severity, label, and disposition come only from absorbed ids that
+  count.
+- The README opens with what cca mainly is: an evidence-reading audit, strongest on
+  drift between claims, tickets, and code, that runs local tests and lint where
+  supported, and sees runtime behavior only through live results you supply.
+- Stage 6 launches the fallback batches for ids that neither the Codex request nor its
+  follow-up carries before the follow-up call, then waits without any other call.
+- `ledger/5.md` and `gate.md` are built in `tmp/` and moved into place only when the
+  script succeeds, so a failed build leaves no file for stage 8 to trust. Stage 8's
+  ledger fallback never reuses `gate.md` and gives late verdicts no credit, since stage
+  7's checks did not pass; P, T, and X findings are provisional in that report.
+- Stage 6 never reads the mandatory id list: it goes to `ledger/mandatory.txt`, is
+  counted with `wc -l`, split into `codex/batch-<k>.txt` files by shell, and written into
+  each request's `for these ids:` slot by shell. The follow-up's missing ids come from
+  `ledger.sh missing`, which reads the saved answer by the same rules as `check`. A
+  `--- follow-up, thread <id> ---` or `--- batch <k> ---` line closes any code fence the
+  text before it left open, so the follow-up's positions are read. Only Codex's answer is
+  saved before that check; a fallback batch keeps its own response file. Every `ledger.sh check` writes to a file and is read as a line count plus
+  its first 50 lines, in stages 5 to 7.
+- A finding in a failed pass or top-up file is kept in `ledger/5.md` with the state `no
+  verdict: output failed`. The failed review gives it no credit: a pass-one finding stays
+  provisional, and a pass-two or top-up addition counts only through the late adversary
+  and a second-opinion position, like any late addition. A block that cannot be parsed
+  is counted on that file's `## Failed outputs` line.
+- `check --through 7` rejects a `C<n>` heading that appears twice in `converged.md`.
+- `/cca:resume` reruns from stage 5 when a complete stage 5 entry has no
+  `ledger/inventory.txt` in its outputs (a run from 0.4.0 or earlier), since `ledger.sh`
+  needs it.
+- `report.md` points to `stages/8-report.md`, steps 4 and 5, for the verdict rules.
+- `working-tree.sh`'s header says `check` covers the refusals only, not failures of
+  `build`'s git steps.
+
+### Fixed
+
+- `readonly.sh` reports `touched b.txt` when `a b.txt` is edited and `b.txt` is touched:
+  it matches the exact path, not a suffix of the line.
+- `readonly.sh` reads a relative baseline or out prefix such as `k=v/b` as a file, not
+  an awk assignment, and hashes a path starting with `"` on its own, outside the batch.
+- `work-items.sh` writes its missing-`jq` message to stderr.
+- `live.md` ends a block at one or more `#` and a space, as `live.sh` does.
+- `common.md` writes every finding id as `<scope>-F<n>`, `<scope>-P<n>`, or
+  `<scope>-T<n>`.
+- The README's development section lists all seven scripts, every test, the `tokens`
+  fixture, and what CI runs (the mawk step runs handoff, readonly, live, memory,
+  working-tree, and ledger), and its low-tier late adversary cell matches the stages.
+
 ## 0.4.0 - 2026-10-02
 
 Adds `result_file` to `--live` results and builds working-tree bundles that have

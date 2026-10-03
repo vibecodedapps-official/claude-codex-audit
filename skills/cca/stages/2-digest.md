@@ -56,7 +56,7 @@ auditors cite the original document at its pinned sha, never the digest.
    The chunk's scope id is `digest-N`. Keep the list of files split by range, with
    each file's ranges, for the stage 2 entry (step 6.2).
 4. **Launch.** Queue one `cca:digester` per chunk (SKILL.md, Queue and Agent launch
-   rules; digests launch after pass one). With `_test` `hold` naming stage 2, queue
+   rules; digests launch first). With `_test` `hold` naming stage 2, queue
    them but launch none until the named stage's initial agents have ended. The prompt
    gives the absolute paths of `audit-brief.md`, `common.md`, `claims.md`,
    `groups.md`, every `diffs/<bundle>.stat`, the chunk file

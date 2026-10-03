@@ -33,6 +33,7 @@
 # 26 a linked worktree as the repo
 # 27 a linked worktree in an ignored directory of the repo
 # 28 a configured core.fsmonitor hook is not run
+# 29 touched b.txt next to a blocked `a b.txt`  30 one of two identical config lines removed
 #
 # Prints one line per mismatch, then `readonly test: ok` when there were none. Exit 0
 # when every case matches, otherwise 1.
@@ -496,6 +497,44 @@ snap "$R/b"
 ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
 expect "case 28" 0 '' ''
 [ ! -e "$root/fsmonitor-ran" ] || mismatch "case 28: the fsmonitor hook ran"
+
+# 29. a blocked line for `a b.txt` does not hide a touched b.txt: the touched filter compares
+# whole paths, not the end of the blocked line.
+case_id="case 29"
+fresh
+printf 'one\n' > "$A/a b.txt"
+printf 'one\n' > "$A/b.txt"
+g -C "$A" add "a b.txt" b.txt || mismatch "case 29: add failed"
+g -C "$A" commit -q -m two-files || mismatch "case 29: commit failed"
+snap "$R/b"
+printf 'two\n' > "$A/a b.txt"
+touch -d '2037-01-01T00:00:00' "$A/a b.txt" "$A/b.txt"
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 29" 1 'blocked hashes + f719efd430d52bcfc8566a43b2eb655688d38871 a b.txt\nblocked status + 1 .M N... 100644 100644 100644 5626abf0f72e58d7a153368ba57db4c673c0e171 5626abf0f72e58d7a153368ba57db4c673c0e171 a b.txt\ntouched b.txt\n' ''
+
+# 30. one of two identical config lines removed: still reported, as the sorted compare did.
+case_id="case 30"
+fresh
+git -C "$A" config --add test.dup v
+git -C "$A" config --add test.dup v
+snap "$R/b"
+git -C "$A" config --unset-all test.dup
+git -C "$A" config --add test.dup v
+ro check "$A" "$R" "$R/b" "$R/b" "$R/c"
+expect "case 30" 1 'blocked config - test.dup=v\n' ''
+
+# 31. a relative prefix that awk would take for an assignment (k=v/...): the check still
+# compares the files.
+case_id="case 31"
+fresh
+cwd0=$(pwd)
+cd "$R" || exit 1
+ro snapshot "$A" "$R" k=v/b
+[ "$rc" = 0 ] || mismatch "case 31: snapshot exit $rc: $(cat "$tmp/err")"
+printf '%s\n' 'Second local edit.' >> "$A/README.md"
+ro check "$A" "$R" k=v/b k=v/b k=v/c
+cd "$cwd0" || exit 1
+expect "case 31" 1 "blocked hashes + $hash_edit README.md\nblocked hashes - $hash_orig README.md\n" ''
 
 if [ "$bad" -gt 0 ]; then
 	exit 1

@@ -253,12 +253,13 @@ missing), and only rewrite the stage 1 entry as `running` with its inputs.
    or, failing that, the bundle's `branch`, never the file path. When
    `${CLAUDE_PLUGIN_DATA}/runs.json` already has that id or `<scratch>/cca/<run-id>/`
    exists, add `-2`, then `-3`, and so on.
-4. Create `<scratch>/cca/<run-id>/`. This is the run directory.
+4. Create `<scratch>/cca/<run-id>/`. This is the run directory. Append the invocation
+   block to `invocations.md` in it (SKILL.md, Invocation block).
 5. State the merged, normalized manifest to the user as a fenced JSON block and save
    it as `manifest.json` in the run directory.
 6. Add the run to `${CLAUDE_PLUGIN_DATA}/runs.json` with `state: running` (read the
    array, or start one; write a temporary file beside it; rename).
-7. Write `stages.json` with `plugin_version` `0.4.0`, empty `approvals`, and a stage 1
+7. Write `stages.json` with `plugin_version` `0.5.0`, empty `approvals`, and a stage 1
    entry with status `running` and inputs: the hashes of `manifest.json`, each claims
    file, the questions file, and every `file:` ticket or PR export, and
    `plugin_version`. Step 10 adds the shas, `forge_hashes`, and `forge_gaps` to the

@@ -92,6 +92,5 @@ files in your chunk and any skipped binary files), and your output file
    brief's mode `direct (working tree)`), search only with `git -C <repo> grep <pattern>
    <head sha>`, never `rg` over `git ls-files`; the files the brief lists as untracked at
    audit time are part of the head and valid evidence, cited at the head sha.
-4. Never ask for or use live systems or credentials yourself (hard rule 5). Use one only
-   when your prompt says the user approved that named check; otherwise mark the answer
+4. Never ask for or use live systems or credentials yourself (hard rule 5). Mark the answer
    `needs a live check`.

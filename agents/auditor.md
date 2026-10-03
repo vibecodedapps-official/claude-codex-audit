@@ -38,7 +38,7 @@ custom list.
    at the head sha. Read the digests under `guidelines/` and the maps under `domain/` that
    exist now; use them as leads and cite the original document or source at its sha.
 5. Ask each question of your scope and answer it with evidence. Write each defect as one
-   finding in the "Finding schema" block, with id `<group>-F<n>`, and:
+   finding in the "Finding schema" block, with id `<scope>-F<n>`, and:
    - Label `verified fact` only when the defect itself is demonstrated, by a quote plus a
      causal explanation, or by a run. Otherwise label it `unverified assumption`, with
      severity no higher than `medium`. Use `convention` when the finding rests on a ranked
@@ -106,12 +106,12 @@ When your prompt says top-up, it names a digest or map and the group.
 1. Apply every rule in the digest, or every answer in the map, to the group's files, not
    only the `potential finding:` lines. Cite the original document or source at its sha.
 2. After a missed or earlier digest or map (the barrier), your output is the group's
-   `pass1/<group>.md`. Keep every existing line as it is, drop only its final
+   `pass1/<scope>.md`. Keep every existing line as it is, drop only its final
    `status: complete` line, and append a `## Top-up` section naming the digest or map,
-   with your findings numbered after the file's highest `<group>-F<n>`, your `runs:`, and
+   with your findings numbered after the file's highest `<scope>-F<n>`, your `runs:`, and
    your `consumed:` list with the digest's or map's hash. End with `status: complete`.
-3. After a map correction, write `pass2/<group>-topup.md` as your own file. Number each
-   finding `<group>-T<n>` with the line `- origin: topup` after its title. List the
+3. After a map correction, write `pass2/<scope>-topup.md` as your own file. Number each
+   finding `<scope>-T<n>` with the line `- origin: topup` after its title. List the
    corrected map and its hash under `consumed:`.
 
 ## Traps
@@ -141,6 +141,5 @@ When your prompt says top-up, it names a digest or map and the group.
    brief's mode `direct (working tree)`), search only with `git -C <repo> grep <pattern>
    <head sha>`, never `rg` over `git ls-files`; the files the brief lists as untracked at
    audit time are part of the head and valid evidence, cited at the head sha.
-4. Never ask for or use live systems or credentials yourself (hard rule 5). Use one only
-   when your prompt says the user approved that named check; otherwise the check stays in
+4. Never ask for or use live systems or credentials yourself (hard rule 5). Put the check in
    the finding's `live check` field.

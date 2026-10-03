@@ -319,6 +319,13 @@ snapshot() {
 			die "find failed: $u"
 	done < "$tmp/uninit"
 
+	# Symlinks, directories, and vanished paths are recorded one at a time. Regular files go
+	# to one `git hash-object --no-filters --stdin-paths` call, whose output lines pair with
+	# the listed paths by position. If that call fails (a file vanished or cannot be read)
+	# or does not give one hash per path, each file is hashed on its own: a vanished file is
+	# `deleted`, and any other failure exits 2.
+	: > "$tmp/files"
+	: > "$tmp/files.one"
 	while IFS= read -r p; do
 		if [ -L "$top/$p" ]; then
 			t=$(readlink "$top/$p") || die "readlink failed: $p"
@@ -326,6 +333,18 @@ snapshot() {
 		elif [ -d "$top/$p" ]; then
 			printf 'dir %s\n' "$p"
 		elif [ -f "$top/$p" ]; then
+			case $p in
+			'"'*) printf '%s\n' "$p" >> "$tmp/files.one" ;;
+			*) printf '%s\n' "$p" >> "$tmp/files" ;;
+			esac
+		else
+			printf 'deleted %s\n' "$p"
+		fi
+	done < "$tmp/paths" > "$tmp/hashes.raw"
+	# A path that starts with a double quote would be unquoted by --stdin-paths, so it is
+	# always hashed on its own.
+	hash_each() {
+		while IFS= read -r p; do
 			if h=$(git -C "$top" hash-object --no-filters -- "$p" 2> /dev/null); then
 				printf '%s %s\n' "$h" "$p"
 			elif [ -e "$top/$p" ] || [ -L "$top/$p" ]; then
@@ -333,10 +352,18 @@ snapshot() {
 			else
 				printf 'deleted %s\n' "$p"
 			fi
+		done < "$1" >> "$tmp/hashes.raw"
+	}
+	if [ -s "$tmp/files" ]; then
+		if git -C "$top" hash-object --no-filters --stdin-paths < "$tmp/files" > "$tmp/fh" 2> /dev/null &&
+			awk 'NR == FNR { f[FNR] = $0; n = FNR; next } { print $0 " " f[FNR]; m++ }
+				END { exit !(m == n) }' "$tmp/files" "$tmp/fh" > "$tmp/fh.merged"; then
+			cat "$tmp/fh.merged" >> "$tmp/hashes.raw" || die "cat failed"
 		else
-			printf 'deleted %s\n' "$p"
+			hash_each "$tmp/files"
 		fi
-	done < "$tmp/paths" > "$tmp/hashes.raw"
+	fi
+	hash_each "$tmp/files.one"
 	sort "$tmp/hashes.raw" > "$tmp/hashes" || die "sort failed"
 
 	sort "$tmp/ign.paths" > "$tmp/ign.sorted" || die "sort failed"
@@ -392,13 +419,6 @@ snapshot() {
 	done
 }
 
-# diff_lines <sorted baseline> <sorted now>: write the lines only in the baseline to
-# only.base and the lines only now to only.now (both files sorted in the C locale).
-diff_lines() {
-	comm -23 "$1" "$2" > "$tmp/only.base" || die "comm failed"
-	comm -13 "$1" "$2" > "$tmp/only.now" || die "comm failed"
-}
-
 # check <repo> <run dir> <baseline prefix> <ignored base prefix> <out prefix>
 check() {
 	# A .. component would let the path resolve to another place once its missing
@@ -449,28 +469,47 @@ check() {
 
 	: > "$tmp/blocked"
 	: > "$tmp/remote"
-	for n in status stash config hashes; do
-		sort "$base.$n" > "$tmp/b.sorted" || die "sort failed"
-		sort "$out.$n" > "$tmp/n.sorted" || die "sort failed"
-		diff_lines "$tmp/b.sorted" "$tmp/n.sorted"
-		sed "s/^/blocked $n - /" "$tmp/only.base" >> "$tmp/blocked" || die "sed failed"
-		sed "s/^/blocked $n + /" "$tmp/only.now" >> "$tmp/blocked" || die "sed failed"
-	done
-
-	sort "$base.refs" > "$tmp/b.sorted" || die "sort failed"
-	sort "$out.refs" > "$tmp/n.sorted" || die "sort failed"
-	diff_lines "$tmp/b.sorted" "$tmp/n.sorted"
-	for sign in - +; do
-		if [ "$sign" = - ]; then f=$tmp/only.base; else f=$tmp/only.now; fi
-		BLK=$tmp/blocked REM=$tmp/remote awk -v sign="$sign" '
-			BEGIN { blk = ENVIRON["BLK"]; rem = ENVIRON["REM"] }
-			{
-				n = index($0, "\t")
-				ref = substr($0, n + 1)
-				if (n > 0 && index(ref, "refs/remotes/") == 1) print "remote-ref " sign " " $0 >> rem
-				else print "blocked refs " sign " " $0 >> blk
-			}' "$f" || die "awk failed"
-	done
+	# An awk operand such as k=v.status would be taken as an assignment, so a relative
+	# prefix gets ./ in front for the compare.
+	case $base in /*|[A-Za-z]:*) cb=$base ;; *) cb=./$base ;; esac
+	case $out in /*|[A-Za-z]:*) cn=$out ;; *) cn=./$out ;; esac
+	# One awk pass over the baseline and current file of every kind, counting each distinct
+	# line, so a line present twice in the baseline and once now is reported once, as
+	# `comm` on the sorted files did. Lines only in the baseline are `-`, only now `+`. A
+	# refs line whose ref name starts with refs/remotes/ is a remote-ref line. The order of
+	# the output does not matter: the final print sorts each group.
+	BLK=$tmp/blocked REM=$tmp/remote awk -v kinds="status stash config hashes refs" '
+		BEGIN {
+			blk = ENVIRON["BLK"]; rem = ENVIRON["REM"]
+			nk = split(kinds, kn, " ")
+			for (i = 1; i <= nk; i++) {
+				kind[ARGV[2 * i - 1]] = kn[i]; side[ARGV[2 * i - 1]] = "b"
+				kind[ARGV[2 * i]] = kn[i]; side[ARGV[2 * i]] = "n"
+			}
+		}
+		{
+			key = kind[FILENAME] SUBSEP $0
+			if (side[FILENAME] == "b") cb[key]++
+			else cn[key]++
+		}
+		function emit(key, times, sign,   k, line, n, ref, i) {
+			k = index(key, SUBSEP)
+			line = substr(key, k + 1)
+			k = substr(key, 1, k - 1)
+			for (i = 0; i < times; i++) {
+				if (k == "refs") {
+					n = index(line, "\t")
+					ref = substr(line, n + 1)
+					if (n > 0 && index(ref, "refs/remotes/") == 1) print "remote-ref " sign " " line >> rem
+					else print "blocked refs " sign " " line >> blk
+				} else print "blocked " k " " sign " " line >> blk
+			}
+		}
+		END {
+			for (key in cb) if (cb[key] > cn[key] + 0) emit(key, cb[key] - cn[key], "-")
+			for (key in cn) if (cn[key] > cb[key] + 0) emit(key, cn[key] - cb[key], "+")
+		}' "$cb.status" "$cn.status" "$cb.stash" "$cn.stash" "$cb.config" "$cn.config" \
+		"$cb.hashes" "$cn.hashes" "$cb.refs" "$cn.refs" < /dev/null || die "awk failed"
 
 	# Ignored files, by path, on size and mtime.
 	{
@@ -571,21 +610,49 @@ check() {
 		{
 			sed 's/^/B /' "$tmp/blocked" && sed 's/^/C /' "$tmp/cand.free"
 		} > "$tmp/both" || die "sed failed"
+		# The paths of the blocked status and hashes lines, compared to each candidate
+		# whole, so touching b.txt is not hidden by a blocked line for `a b.txt`. A symlink
+		# line is `symlink <target> <path>` and either part may hold a space, so every
+		# suffix after a space is taken as a path for it.
 		awk '
+			function rest(s, n,   i) {
+				for (i = 0; i < n; i++) sub(/^[^ ]+ /, "", s)
+				return s
+			}
+			function addpaths(p,   k, i, parts) {
+				k = split(p, parts, "\t")
+				for (i = 1; i <= k; i++) bp[parts[i]] = 1
+			}
 			{
 				tag = substr($0, 1, 1)
 				body = substr($0, 3)
 				if (tag == "B") {
-					k = split(body, parts, "\t")
-					for (i = 1; i <= k; i++) blocked[++nb] = parts[i]
+					if (!match(body, /^blocked [a-z]+ [-+] /)) next
+					line = substr(body, RLENGTH + 1)
+					kind = substr(body, 9, index(substr(body, 9), " ") - 1)
+					if (kind == "status") {
+						t = substr(line, 1, 1)
+						if (t == "?") addpaths(substr(line, 3))
+						else if (t == "1") addpaths(rest(line, 8))
+						else if (t == "2") addpaths(rest(line, 9))
+						else if (t == "u") addpaths(rest(line, 10))
+					} else if (kind == "hashes") {
+						if (substr(line, 1, 8) == "symlink ") {
+							s = substr(line, 9)
+							while ((i = index(s, " ")) > 0) {
+								s = substr(s, i + 1)
+								bp[s] = 1
+							}
+						} else if (substr(line, 1, 4) == "dir ") bp[substr(line, 5)] = 1
+						else if (substr(line, 1, 8) == "deleted ") bp[substr(line, 9)] = 1
+						else {
+							i = index(line, " ")
+							if (i > 0) bp[substr(line, i + 1)] = 1
+						}
+					}
 					next
 				}
-				for (j = 1; j <= nb; j++) {
-					s = blocked[j]
-					if (length(s) > length(body) &&
-					    substr(s, length(s) - length(body)) == " " body) next
-				}
-				print "touched " body
+				if (!(body in bp)) print "touched " body
 			}' "$tmp/both" > "$tmp/touched" || die "awk failed"
 	fi
 

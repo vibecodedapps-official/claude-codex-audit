@@ -543,6 +543,9 @@ run build "$A"
 [ "$(tail -n 1 "$tmp/err")" = "working-tree: git add failed" ] ||
 	mismatch "case 8b: stderr ends with [$(tail -n 1 "$tmp/err")]"
 [ "$(idx "$A")" = "$i0" ] || mismatch "case 8b: the index changed"
+# check runs the refusals only, not build's git steps, so it exits 0 in this setup.
+run check "$A"
+expect "case 8b, check" 0 '' ''
 
 # 9. a path that is not a git work tree, and usage errors: exit 2, nothing on stdout.
 usage="usage: working-tree.sh build <repo>\n       working-tree.sh check <repo>\n"

@@ -56,25 +56,36 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
       a sentinel, are never copied, and are named by their read path and sha from the
       brief. Keep every path and token for the stage entry's `sentinels` map.
    2. Write `codex/request.md`, filling the template: the inputs, then the acknowledgment
-      section, then the asks in the template's order (every blocker and high, every
-      pass-two downgrade or drop, dropped findings to restore including dismissed ones, up
-      to ten new findings, severity recalibration, a non-binding merge verdict per
-      bundle), within the 3,000-word answer cap and two quoted lines per citation. Ask 1
+      section, then the asks in the template's order (every blocker, high, and medium finding,
+      every pass-two downgrade or drop, dropped findings to restore including dismissed
+      ones, up to ten new findings, severity recalibration, a non-binding merge verdict
+      per bundle), within the 3,000-word answer cap and two quoted lines per citation. Ask 1
       also covers each finding `live/findings.md` lists, judged with its live result, and
       names each carried one with its carried file. When `live/carried/` holds an `X<n>`,
       ask 4 numbers the additions after the highest carried `X<n>`: the carried ids are
       reserved, so an addition never reuses one. Asks 1 and 2 each end with the template's
       id slot: when step 4.3 splits the mandatory set, `for these ids: <the batch's ids>`
-      (the first batch here); otherwise `for every such finding`. It names each input copy
-      by its absolute path, and each audited source by its absolute read path and sha from
-      the brief.
-   3. **Mandatory id set and batches.** From `ledger/5.md`, collect every finding id at
-      severity blocker or high, every finding id that pass two downgraded or dropped, and
-      every finding id `live/findings.md` lists (a carried id may have no section in
-      `ledger/5.md`). Asks 1 and 2 require a position for each, and no mandatory id may be
-      left unrequested in a run that completes. The 3,000-word answer cap cannot hold
-      more than 60 ids, so when the set has more, split it in id order into batches of
-      at most 60 ids; each batch is the id list in the slot of asks 1 and 2.
+      (the first batch here, from `codex/batch-1.txt` by shell, step 4.3); otherwise
+      `for every such finding`. It names each input copy by its absolute path, and each
+      audited source by its absolute read path and sha from the brief.
+   3. **Mandatory id set and batches.** Never take the id list into the conversation.
+      Run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh mandatory <run dir> >
+      <run dir>/tmp/mandatory.txt` and, only on exit 0, `mv -f <run dir>/tmp/mandatory.txt
+      <run dir>/ledger/mandatory.txt`. Its content, one id per line, sorted and unique,
+      is the mandatory set: every `ledger/5.md` finding id whose state after pass two is
+      blocker, high, or medium, every id that pass two downgraded or dropped, and every id
+      `live/findings.md` lists (a carried id may have no section in `ledger/5.md`). It is
+      one deduplicated set for the request, the follow-up, the fallback batches, and the
+      completion check (step 10). An id that asks 1 and 2 both apply to (a downgrade of a
+      high, say) gets one position, not two. Asks 1 and 2 require a position for each, and
+      no mandatory id may be left unrequested in a run that completes. A nonzero exit
+      fails stage 6 (the run will end `partial`). Count it with `wc -l`. The 3,000-word
+      answer cap cannot hold more than 60 ids, so when the set has more, split it in id
+      order by shell (`split -l 60`, or awk) into batch files `codex/batch-<k>.txt` of at
+      most 60 ids, numbered from 1; each batch is the id list in the slot of asks 1 and
+      2. Fill each request's `for these ids:` slot by shell from its batch file, for
+      example `paste -sd, <batch file> | sed 's/,/, /g' >> <request file>`, never by
+      typing ids.
       - Codex: `codex/request.md` carries the first batch and the one follow-up (step
         8) carries at most 60 positions in total: the first batch's ids still without a
         position come first, then the second batch's ids in order until 60 is reached.
@@ -113,8 +124,10 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
    ```
 
    Record the model and timeout passed for this call. The call can take longer than a
-   foreground command allows and move to the background: wait for its completion
-   notification, do not poll, and use no other tool meanwhile.
+   foreground command allows and move to the background. The fallback batches for ids
+   neither the request nor the follow-up carries (step 4.3) are launched before the
+   follow-up call (step 8); once a call is made, wait for its completion notification
+   without polling or any other tool call.
 
 7. **Parse the result.** codex-lite ends its output with a line `status: <value>`, where
    the value is `ok`, `failed`, `refused`, or `timeout`, and prints a line
@@ -135,7 +148,17 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
    `ledger/5.md` or `live/findings.md`), treat that input's acknowledgment as missing for
    the first `times` checks, whatever the answer says. Also compute now, against the
    answer, the mandatory ids (step 4.3) that it leaves without a position, and whether a
-   second batch of asks 1 and 2 is due.
+   second batch of asks 1 and 2 is due. For Codex's answer, first save it verbatim in
+   `codex/response.md` (step 9), since the missing ids are read from that file; a
+   follow-up's output is appended to it later and never overwrites it. A fallback batch
+   (step 11) saves nothing here: it already wrote its own `codex/response.md` or
+   `codex/response-<k>.md`, which this check reads, and the batches are appended to
+   `codex/response.md` only as step 11 says. Then compute the missing ids with
+   `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh missing <run dir> >
+   <run dir>/tmp/missing.txt`: it prints the mandatory ids with no provenance line in
+   `codex/response*.md`, by the rules `check` uses. A nonzero exit fails stage 6. Count
+   with `wc -l` and never read the list into the conversation; build the follow-up's id
+   slots from that file by shell.
    - All inputs acknowledged, no mandatory id without a position, and no second batch
      due: continue to step 9.
    - Anything else (an input unacknowledged, a mandatory id without a position, or a
@@ -146,7 +169,9 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
      headers) with a request to acknowledge them and revise any answer that depended on
      them; and asks 1 and 2 for at most 60 ids in total, ending each ask with
      `for these ids: <id list>`: the first batch's ids still without a position, then
-     the second batch's ids in order as far as 60 allows (step 4.3; `batched` is then
+     the second batch's ids in order as far as 60 allows, the list built by shell from
+     `tmp/missing.txt` and the batch files and appended to the follow-up file in the
+     same `for these ids:` form (step 4.3; `batched` is then
      true). Second-batch ids that do not fit are not asked here; step 4.3 sends them to
      the fallback: launch those fallback batches now, before this follow-up call
      (step 11, numbered as step 9 says), so they run while Codex answers and a budget
@@ -170,7 +195,8 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
    10. Ids neither carried are not part of the follow-up: step 11 launches them.
 
 9. **Save the answer verbatim** in `codex/response.md`: the codex-lite output as
-   returned, unchanged. A follow-up's output is appended after a line
+   returned, unchanged, written at step 8 before the missing ids are computed. A
+   follow-up's output is appended after a line
    `--- follow-up, thread <id> ---`. The fallback batches of step 4.3 are known once
    step 8 has composed the follow-up, so launch them then, before the follow-up call
    (they are Agent launches, not Codex calls), and wait for them before step 10.
@@ -185,7 +211,8 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
     from `ledger/5.md` and `live/findings.md`; all of them are requested across the
     batches), and compare
     them with the finding ids the answer, with any follow-up appended, addresses with a
-    position. When an id has a position in more than one place, the later one replaces
+    position, by the same `ledger.sh missing` output to `tmp/missing.txt` (a nonzero
+    exit fails stage 6; the list is counted with `wc -l`, never read). When an id has a position in more than one place, the later one replaces
     the earlier; both stay in `codex/response.md`. For Codex this is a check after the
     fact: the follow-up for missing positions was already sent in step 8, and step 10
     sends none. A mandatory id the request or the follow-up asked for, still without a
@@ -195,6 +222,18 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
     fallback, whether it fills the role or only the batches Codex did not carry, a mandatory
     id of that launch's batch without a position fails the attempt (the ladder in step
     11). "seen, no position" applies only to ids outside the mandatory set.
+
+    Write the position sections and the other parts first, then append `## Seen, no
+    position` with the output of `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh
+    seen <run dir> >> <run dir>/ledger/6.md`, redirected and never read (the script reads `ledger/6.md`, so the file must exist first).
+    `ledger/6.md` is complete only then and is not rewritten after. Before marking stage
+    6 complete, run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh check <run dir>
+    --through 6 --stage6 complete > <run dir>/tmp/check6.txt` and read only `wc -l` of
+    that file and its first 50 lines (`head -n 50`). It covers one position per id, each position's
+    provenance line in the response files, the mandatory set, the `## Seen, no position`
+    list, and the `X<n>` additions. A nonzero exit fails stage 6 like a missing position:
+    append its `ledger: ` lines to `ledger/6.md` under `## Stage failure` and list them in
+    the stage entry, and mark that no finding passes the review gate on stage 6's account.
 
     `ledger/6.md` holds, in this order. Each part that is not a finding section sits
     under its own `## ` heading that is not a finding id (the names are in brackets),
@@ -216,13 +255,20 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
       - answer location: codex/response.md, <heading or line>
       ```
 
+      Each of the three lines is nonempty; one section per id, the later position
+      replacing the earlier. The check requires that some `codex/response.md` or
+      `codex/response-<k>.md` has a line starting with the id and `:` (after leading
+      spaces, `-`, `*`, `#`, and backticks); the answer location is a nonempty pointer for
+      readers and is not checked.
+
     - Codex additions, each in the `common.md` schema (heading `### X<n>: <title>`)
       with `origin: codex` and an id `X<n>`. They are late additions;
     - the non-binding merge verdict per bundle, marked as such; it never replaces the
       report's verdict rules (`## Merge verdict (non-binding)`);
-    - every `ledger/5.md` finding id the answer does not address and that is not
-      mandatory, listed as "seen, no position" (`## Seen, no position`). A mandatory
-      id is never listed so: with no position it fails the stage, as above;
+    - every `ledger/5.md` finding id that is not mandatory and has no position section
+      above, listed as `- <id>` lines under "seen, no position" (`## Seen, no position`),
+      from `ledger.sh seen`. A mandatory id is never listed so: with no position it fails
+      the stage, as above;
     - when stage 6 failed, the missing positions or unacknowledged inputs and the mark
       that no finding passes the review gate on its account (`## Stage failure`).
 
@@ -270,7 +316,7 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
 12. **Stage completion.** Stage 6 is `complete` when an answer from Codex or the
     fallback is saved, every input is acknowledged by whoever filled the role, every id
     step 10 requires (every mandatory id, step 4.3) has a position, and `ledger/6.md` is
-    written; otherwise `failed`, and the run will end `partial`.
+    written and passes `check --through 6 --stage6 complete`; otherwise `failed`, and the run will end `partial`.
 
 13. **Read-only check.** Run the check in `${CLAUDE_PLUGIN_ROOT}/skills/cca/SKILL.md` and write
     `baseline/6-check.md`. codex-lite's own request and thread files in its data

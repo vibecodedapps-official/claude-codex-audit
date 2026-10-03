@@ -8,8 +8,14 @@ separate command that acts on items you approve by id.
 Each pull request in a large bundle can look fine alone while the bundle drifts from its
 tickets, breaks rules in a guidelines corpus nobody reread, and carries claims in the
 build session's summary that were never true. cca checks the bundle as a whole: every
-finding cites evidence, is challenged by a reviewer other than its author, and is seen by
-both a fresh Claude adversary and a second opinion before it counts toward the verdict.
+finding cites evidence, is challenged by a fresh Claude adversary other than its author,
+and, at medium severity or above, needs a position from a second opinion before it counts
+toward the verdict.
+
+cca is mainly an evidence-reading audit, and it is strongest on drift between the claims,
+the tickets, and the code. It runs the repo's local tests and lint where it can (not in an
+exported tree). It sees runtime behavior only through live check results you supply in a
+`--live` file.
 
 cca is the pair of [ccl](https://github.com/vibecodedapps-official/claude-codex-loop)
 (claude-codex-loop): ccl builds and publishes one unit of work, cca audits what was
@@ -358,22 +364,30 @@ applies none of it.
    Stages 2, 3, and 4 start together, and a top-up auditor covers any digest or map a
    group's auditor missed.
 5. **Pass two.** A fresh adversary per pass-one report opens every citation, looks for
-   counter-evidence, and rules on each finding.
+   counter-evidence, and rules on each finding. `ledger.sh` builds the finding sections
+   of `ledger/5.md` from the pass-one and pass-two files on disk.
 6. **Second opinion.** Codex, or the fallback, reviews every finding, including dropped
-   ones, and may restore findings or add new ones. Every blocker, high, and
+   ones, and may restore findings or add new ones. Every blocker, high, medium, and
    downgraded or dropped finding must get a position, in batches of at most 60 ids
-   (Codex takes two batches; the fallback takes any further ones).
+   (Codex takes two batches; the fallback takes any further ones). A low or note finding
+   needs only the acknowledgment that the second opinion received it.
 7. **Converge.** A late adversary challenges late additions (at medium and high), then
    a merger folds the ledger into one item per distinct defect, `C1`, `C2`, and so on.
+   `ledger.sh` builds the review gate (`gate.md`) from the ledger files and checks that
+   `gate.md` matches it and that every id is absorbed by exactly one converged item with
+   a matching gate. Evidence, the condensed positions, dedupe, and the severity and
+   contested checks stay with the models.
 8. **Report.** The verdict and the report, written from what is on disk. Stage 8 writes
    three outputs: `report.md`, `claims-verdicts.md` (see Handoff and claims), and
    `work-items.jsonl` (see Work-item operations).
 9. **Act.** Only through `/cca:act`, on items you approve.
 
 A finding **counts** toward the verdict only when a reviewer other than its author has
-challenged it and both a Claude adversary and the second opinion have seen it. Anything
-else is **provisional** and does not count. Reviewers who disagree are both kept, as a
-`contested` item; cca never picks a side.
+challenged it and the second opinion has seen it. "Seen" depends on severity, taken after
+pass two: a blocker, high, or medium finding needs a position from the second opinion,
+while a low or note finding may count on the second opinion's acknowledgment alone.
+Anything else is **provisional** and does not count. Reviewers who disagree are both kept,
+as a `contested` item; cca never picks a side.
 
 The verdict is `not ready`, `merge after fixes`, or `ready to merge`, from the items that
 count. An incomplete audit says `audit incomplete` and never `ready to merge`.
@@ -405,7 +419,7 @@ audit brief states the tier and why.
 
 | Tier | Conditions | Pass one | Pass two on Verified OK | Late adversary |
 |---|---|---|---|---|
-| low | 1 bundle, 1 ticket, under 500 changed lines | one auditor covering the ticket, tests, and work-item hygiene | no | no; late additions stay provisional |
+| low | 1 bundle, 1 ticket, under 500 changed lines | one auditor covering the ticket, tests, and work-item hygiene | no | only when `live/` lists ids; otherwise late additions stay provisional |
 | medium | up to 3 bundles, up to 5 tickets, under 5,000 changed lines | one auditor per group, plus one for tests and work-item hygiene, plus cross-bundle interactions when there is more than one bundle | up to 5 items per report | yes |
 | high | anything else | one per group, plus tests, plus work-item hygiene, plus cross-bundle interactions when there is more than one bundle | all items | yes |
 
@@ -430,7 +444,9 @@ any directory.
 The run directory holds all state: the normalized `manifest.json`, `stages.json` (the
 only record of which stages are complete), `audit-brief.md`, `claims.md`, `groups.md`,
 the diffs, the per-stage outputs, the ledger files, `converged.md`, `report.md`,
-`claims-verdicts.md`, `work-items.jsonl`, `act/log.md`, and `usage.md`. A crashed or
+`claims-verdicts.md`, `work-items.jsonl`, `act/log.md`, `usage.md`, and
+`invocations.md` (each invocation's block, appended verbatim, which a run re-reads after a
+context compaction; a run from 0.4.0 or earlier has none). A crashed or
 interrupted run loses no finished stage, and `/cca:resume` never reuses a stale one.
 
 ### Terminal states
@@ -452,7 +468,9 @@ run directory, `runs.json`, codex-lite's own request and thread files in its dat
 directory, and an explicit `git fetch --no-tags --refmap=` into remote-tracking refs after you
 approve the listed commands (a remote configured with `remote.<name>.prune` may also
 delete stale remote-tracking refs). An ignored file written by a check run that an
-agent logged is allowed and reported.
+agent logged is allowed and reported. That attribution is self-reported: it rests on the
+agent's own `runs:` list, and it is repo-level, so any logged run in a repo accounts for
+any ignored-file change in that repo.
 
 When a repo's checkout is not at the audited sha, or has changes, cca exports the exact
 tree into the run directory from git objects, so no checkout filter or attribute runs and
@@ -535,6 +553,8 @@ What is not detected:
   config;
 - a change inside a repository that sits in an ignored directory, such as a linked
   worktree, other than an entry added or removed at its top level;
+- a `.git` created inside a directory the repo already tracks, which the scan prunes and
+  does not report as a nested repository;
 - changes outside the audited repos.
 
 The report says so. Do not edit an audited repo during a run: your own edits trip the
@@ -553,14 +573,23 @@ The request names every input by absolute path, and Codex acknowledges each inpu
 its sentinel. Only an input it could not open goes inline, in the one follow-up, under a
 450,000-byte cap. Over the cap, the follow-up is not sent and stage 6 fails.
 
+Codex reads a file outside every repo, such as a run directory in the plugin's data
+directory, by absolute path. That read was verified on Windows with codex-lite's elevated
+sandbox only (`docs/decisions.md`, "Absolute-path Codex requests"); on Linux and macOS it
+relies on Codex's documented read-only policy. To stay clear of it, keep the run
+directory inside a repo: use an ignored in-repo scratch directory, or the manifest
+`scratch` key.
+
 ## Live data and external text
 
 - **Live data.** Credentials and live systems (databases, dashboards, production APIs)
-  are used only when a question cannot be answered from code, and only after you say yes
-  to that access. Each access is logged in the report. A check you did not approve is
-  listed in the report's Live checks section, with the query, where it runs, and what
-  each result would mean; the finding stays an unverified assumption, capped at medium,
-  until a live result for it has passed the review gate. A verification check tagged
+  are used only when a question cannot be answered from code, and only on a result you
+  supply in a `--live` file after approving the access. cca never asks for live access during a run, and no agent or the
+  orchestrator uses it. A check a question needs becomes an item in the report's Live
+  checks section, with the query, where it runs, and what each result would mean; the
+  finding stays an unverified assumption, capped at medium, until a live result for it
+  has passed the review gate. Approvals come only from a `--live` file, which names who
+  approved the access, and each access is logged in the report. A verification check tagged
   `env: <name>;` in a handoff is listed there too, by claim number, and is never `true`
   or `false` from a run in this environment.
 - **Live results.** Run an approved check yourself, then write its result in a `--live`
@@ -623,14 +652,27 @@ form. Automatic chaining from ccl, and ccl writing a handoff itself, are not imp
 
 ## Development
 
-The plugin is prompt files and three small shell scripts (`readonly.sh`, `handoff.sh`,
-and `work-items.sh`, under `skills/cca/scripts/`): commands, one orchestrator skill with
-its stage files and templates, and five agent definitions. Its checks are:
+The plugin is prompt files and seven small shell scripts under `skills/cca/scripts/`
+(`readonly.sh`, `handoff.sh`, `work-items.sh`, `working-tree.sh`, `live.sh`, `memory.sh`,
+and `ledger.sh`): commands, one orchestrator skill with its stage files and templates, and
+five agent definitions. The scripts are:
+
+- `readonly.sh`: snapshots an audited repo and checks it later for changes.
+- `handoff.sh`: validates a handoff and lists its claims and commits.
+- `work-items.sh`: validates `work-items.jsonl` against the report and `claims.md`.
+- `working-tree.sh`: builds a commit from a working tree, or checks that it can.
+- `live.sh`: validates, imports, and reconciles `--live` results.
+- `memory.sh`: lists the memory files that mention a claim the audit found false.
+- `ledger.sh`: builds the finding sections of `ledger/5.md`, the mandatory and seen id
+  lists, and `gate.md`, and checks the ledger files against the pass files, the Codex
+  answers, and `converged.md`.
+
+Its checks are:
 
 - `sh tests/lint.sh`: checks the static parts (command and agent frontmatter, no agent
   with Edit or NotebookEdit, every stage file the skill names exists).
-- `sh tests/fixture/build.sh <solo|solo-dirty|full>`: builds a throwaway fixture in a
-  temp directory and prints its manifest path. Expected outcomes are listed in
+- `sh tests/fixture/build.sh <solo|solo-dirty|full|tokens>`: builds a throwaway fixture in
+  a temp directory and prints its manifest path. Expected outcomes are listed in
   `tests/fixture/expected.md`.
 - `sh tests/fixture/verify.sh <manifest path> [name]`: checks a built fixture against
   the key literals in `tests/fixture/expected.md` and prints one line per mismatch. CI
@@ -641,11 +683,21 @@ its stage files and templates, and five agent definitions. Its checks are:
   copies, and compares claims, commits, and error lines with literals.
 - `sh tests/work-items.sh`: runs `work-items.sh` on a valid file and broken copies. It
   needs `jq`; without it, it prints a note and exits 0.
+- `sh tests/working-tree.sh`: runs `working-tree.sh` on copies of the solo fixture and on
+  inline repos, with literal shas and refusal lines.
+- `sh tests/live.sh`: runs `live.sh` `check` on a valid `--live` file and broken copies,
+  then each bookkeeping mode in a fresh run directory.
+- `sh tests/memory.sh`: runs `memory.sh find` on the solo fixture's verdicts and on inline
+  verdicts files that cover each key grammar.
+- `sh tests/ledger.sh`: runs `ledger.sh` on inline ledger inputs and compares each op's
+  output and exit status with literals.
 
-CI runs the existing lint and fixture job, and a `scripts` job that runs the three new
-tests on Linux, macOS, and Windows (under Git Bash). On Linux the default `awk` is gawk,
-and a second step runs the awk-using tests (`tests/handoff.sh` and `tests/readonly.sh`)
-with mawk first on `PATH` as `awk`. macOS runs them with its own BSD awk.
+CI runs a `checks` job (lint, then a fixture build and verify for `solo`, `solo-dirty`,
+`full`, and `tokens`) and a `scripts` job that runs the readonly, handoff, work-items,
+working-tree, live, memory, and ledger tests on Linux, macOS, and Windows (under Git
+Bash). On Linux the default `awk` is gawk, and a second step runs the awk-using tests
+(handoff, readonly, live, memory, working-tree, and ledger) with mawk first on `PATH` as
+`awk`. macOS runs them with its own BSD awk.
 
 Acceptance results are recorded in `docs/acceptance.md` and design decisions in
 `docs/decisions.md`. On Windows, run the scripts under Git Bash.

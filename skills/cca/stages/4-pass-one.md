@@ -71,9 +71,11 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
    Finding ids are `<scope>-F<n>`. Record each launch (type, model, scope, start time)
    for the stage entry.
 
-5. **Queue rule.** One queue serves stages 2 to 7. Pass-one jobs go in first, then
-   digests, then maps, so auditors start at once. Never have more than `--max-agents`
-   agents running (default 8). Each completion notification drives the next launch.
+5. **Queue rule.** One queue serves stages 2 to 7. Digest jobs go in first, then maps,
+   then pass-one jobs, so that more digests and maps finish before the barrier and fewer
+   top-ups run. The order cannot remove top-ups, and auditors may start a little later.
+   Never have more than `--max-agents` agents running (default 8). Each completion
+   notification drives the next launch.
 
 6. **`_test.hold`.** Apply the preamble's hold rule. When `_test.hold` has `until: 4`,
    the held stage's jobs wait until every pass-one auditor launched in step 4 has ended

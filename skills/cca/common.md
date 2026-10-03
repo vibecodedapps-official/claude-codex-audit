@@ -57,12 +57,13 @@ These hold for every stage, for the orchestrator and every agent.
    ticket text, and drafted comments. The report is internal and may name them.
 4. **No advisor tool**, in the orchestrator or any agent.
 5. **Live data.** Credentials and live systems (databases, dashboards, production APIs)
-   are used only when a question cannot be answered from code, and only after the user
-   says yes to that access. Each access is logged in the report. A check not approved is
-   listed in the report's Live checks section. An agent never asks for or uses live
-   access itself; it writes a `live check` field, and the orchestrator asks the user. The
-   result of a check the user ran comes back in a `--live` file (`live.md`), and its
-   approval is recorded from that file, never asked for again.
+   are used only when a question cannot be answered from code, and only on a result the
+   user supplies in a `--live` file after approving the access. There is one path: a needed check becomes a report item in
+   the Live checks section. Neither an agent nor the orchestrator asks for or uses live
+   access during a run; an agent writes a `live check` field and nothing more. The user
+   runs the check and returns the result in a `--live` file through `/cca:resume`
+   (`live.md`), and the approval is recorded from that file. Each access is logged in
+   the report.
 6. **Evidence.** A claim is not a fact until evidence is cited (see Evidence).
 7. **Disk first.** Every agent writes its output file before it reports back and
    returns only the path and a one-line status.
@@ -139,7 +140,7 @@ and the sha it is pinned at.
 Each finding uses exactly this block:
 
 ```
-### <group>-F<n>: <one-line title>
+### <scope>-F<n>: <one-line title>
 - severity: blocker | high | medium | low | note
 - question: Q1 | Q2 | Q3 | Q4 | <custom id>
 - label: verified fact | unverified assumption | convention
@@ -157,15 +158,16 @@ Each finding uses exactly this block:
 
 Ids and origin tags:
 
-- Pass one: `<group>-F<n>`. A barrier top-up appended to `pass1/<group>.md` continues
+- Pass one: `<scope>-F<n>`. A barrier top-up appended to `pass1/<scope>.md` continues
   the numbering under a `## Top-up` heading.
-- A new finding raised by a pass-two adversary is `<group>-P<n>` and adds the line
+- A new finding raised by a pass-two adversary is `<scope>-P<n>` and adds the line
   `- origin: pass2` after the title.
 - A finding written by a top-up auditor after a map correction, in
-  `pass2/<group>-topup.md`, is `<group>-T<n>` and adds `- origin: topup`.
+  `pass2/<scope>-topup.md`, is `<scope>-T<n>` and adds `- origin: topup`.
 - A finding the second opinion adds is `X<n>` and adds `- origin: codex`; one the late
   adversary raises is `L<n>` and adds `- origin: late`.
 
+A scope is a group or a specialist scope; its id has no space or colon.
 Every finding with an origin line is a **late addition**.
 
 ## Verified OK list
@@ -174,7 +176,7 @@ Items checked and found sound, each with evidence:
 
 ```
 ## Verified OK
-- <group>-OK<n>: <what was checked>; evidence: <quote, search, or run>
+- <scope>-OK<n>: <what was checked>; evidence: <quote, search, or run>
 ```
 
 ## Claim kinds
@@ -292,7 +294,7 @@ line.
 When an entry shows a defect (a `stale deferral` or `needs <owner>` the bundle's work
 depends on, or a scope fact that ships a regression), file a separate Q4 finding and name it
 in the entry's `finding:` field. A defect the adversary finds first is a pass-two addition
-(`<group>-P<n>`). Those findings go through the gate like any other.
+(`<scope>-P<n>`). Those findings go through the gate like any other.
 
 ## Pass-two verdicts
 
@@ -367,3 +369,17 @@ consumed:
 - guidelines/digest-1.md 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432
 status: complete
 ```
+
+Parsing rules, which `scripts/ledger.sh` enforces on every output it reads. A finding block
+starts at a line `### <id>: <title>` and a verdict block at
+`### verdict on <id>: <verdict>`. A block ends at the next line that starts `## ` or
+`### `, at a line that starts `runs:`, `consumed:`, or `opened:` (so `runs: none` ends
+it), or at a line that starts `status: `. A fence line is one whose first non-blank
+characters are three backticks; lines between two fence lines never start or end a block,
+and a file that ends inside a fence is an error. An id is `<scope>-F<n>`, `<scope>-P<n>`, `<scope>-T<n>`, `X<n>`, or `L<n>`.
+A finding block has exactly one `- severity:` line and one `- label:` line, each with an
+allowed value. A verdict block has exactly one verdict word and one `- severity:`,
+`- label:`, and nonempty `- evidence:` line. A duplicate id, two verdicts for one id, a
+verdict for an id with no finding, a pass-one finding with no verdict in a complete pass-two
+file, and a malformed block are errors; the script prints
+them and the stage that ran it fails.
