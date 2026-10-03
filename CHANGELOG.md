@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 - 2026-10-03
 
-Fixes from a review of 0.5.1.
+Fixes from a review of 0.5.1. A run started under 0.5.1 or earlier reruns from stage 1
+on resume.
 
 ### Added
 
