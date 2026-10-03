@@ -7,12 +7,14 @@
 #   sh ledger.sh seen      <run dir>
 #   sh ledger.sh missing   <run dir>
 #   sh ledger.sh late-ids  <run dir> --tier low|medium|high --stage6 complete|failed
+#   sh ledger.sh late-check <run dir> --tier low|medium|high --stage6 complete|failed
 #   sh ledger.sh gate      <run dir> --tier low|medium|high --stage6 complete|failed
 #                                    --late complete|failed|not-run
 #   sh ledger.sh check     <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]
 #
 # All paths are relative to <run dir>. `check --through 6` needs --stage6; `--through 7`
-# needs all three flags; `late-ids` needs --tier and --stage6. No other op takes a flag.
+# needs all three flags; `late-ids` and `late-check` need --tier and --stage6. No other
+# op takes a flag.
 #
 # Ops (the stage prompts redirect stdout to the file they write):
 #   build5     the finding sections of ledger/5.md, in the shape of stages/5-pass-two.md,
@@ -56,9 +58,20 @@
 #              At medium and high: every ledger/5.md id with origin pass2 or topup, every
 #              `### X<n>:` addition of ledger/6.md, and, with --stage6 complete, every
 #              ledger/6.md position section whose `- position:` starts with `restore
-#              requested`. At every tier: every `## <id>` of live/findings.md. ledger/6.md
-#              is read as `gate` reads it: required with --stage6 complete, optional with
-#              failed (an absent file adds nothing).
+#              requested` in any letter case. At every tier: every `## <id>` of
+#              live/findings.md. ledger/6.md is read as `gate` reads it: required with
+#              --stage6 complete, optional with failed (an absent file adds nothing).
+#              With failed, ledger/6.md may be partial: a file that ends inside a fence, a
+#              malformed addition heading, and the `### X<n>:` block that holds the open
+#              fence are left out without an error, in late-ids and gate, and `check`
+#              still reports them. With complete they are errors of every op that reads it.
+#   late-check print one `ledger: <problem>` line per problem in late/adversary.md,
+#              nothing when none, as `check` does. It reads the file as `check --through 7
+#              --late complete` does (the rules of Parsing below; a last nonblank line
+#              other than `status: complete`; an end inside a fence; an `L<n>` addition
+#              that reuses a carried id) and also requires a `### verdict on <id>:` block
+#              for every id `late-ids` lists and none for an id it does not list. A
+#              missing file is a problem, not a usage error.
 #   check      print one `ledger: <problem>` line per problem, nothing when none:
 #              --through 5   reconcile the inventory with the files, then require the
 #                            part of ledger/5.md before its first `## Map corrections
@@ -81,12 +94,16 @@
 #                            headings of those files and never reuse a carried id; and,
 #                            when --stage6 is complete, every mandatory id has a
 #                            position and `## Seen, no position` lists exactly the
-#                            ledger/5.md ids that are neither mandatory nor positioned.
-#              --through 7   also: when --late is complete, the `### L<n>:` additions
-#                            and the verdicts of ledger/7.md equal those of
-#                            late/adversary.md and no L reuses a carried id; gate.md
-#                            has one line per universe id and equals the gate output;
-#                            the verdict words agree; and in converged.md (required)
+#                            ledger/5.md ids that are neither mandatory nor positioned;
+#                            a position whose first word is `restore` (any letter case)
+#                            but which does not start with `restore requested` is a
+#                            problem, since only that phrase asks for a late verdict.
+#              --through 7   also: when --late is complete, late/adversary.md ends, at
+#                            its last nonblank line, with `status: complete`, the
+#                            `### L<n>:` additions and the verdicts of ledger/7.md equal
+#                            those of late/adversary.md and no L reuses a carried id;
+#                            gate.md has one line per universe id and equals the gate
+#                            output; the verdict words agree; and in converged.md (required)
 #                            every universe id sits in exactly one `- absorbs:` list and
 #                            each item's `- gate:` is `counts` exactly when an absorbed
 #                            id counts; a `## C<n>:` item id used twice is a problem; and,
@@ -138,7 +155,9 @@
 # body text. Lines between ``` lines never start or end a block, and a file that
 # ends inside a fence is an error. A `### ` line whose first token (cut at a colon) looks
 # like an id in any letter case but is not exactly `### <id>: <title>` with a title is a
-# malformed heading, never skipped. Ids are `<scope>-F|P|T<n>`, `X<n>`, `L<n>`. A finding
+# malformed heading, never skipped; in a pass file only the `<scope>-F|P|T<n>` shape
+# counts in any letter case, since X and L ids never belong there, so `### x86: notes`
+# is text. Ids are `<scope>-F|P|T<n>`, `X<n>`, `L<n>`. A finding
 # block needs exactly one `- severity:` and one `- label:` line with an allowed value; a
 # verdict block needs a verdict word, one `- severity:` (`<old> -> <new>` or
 # `unchanged`), one `- label:`, and a nonempty `- evidence:`. A duplicate id, a second
@@ -146,12 +165,12 @@
 # pass-one finding without a verdict in a complete pass-two file, and a malformed block
 # are errors in every op.
 #
-# Exit codes: 0 ok. 1 problems: check prints one `ledger: <problem>` line each on
-# stdout; the other ops print them on stderr and nothing on stdout. 2 on a usage error or
-# an unreadable required file, one line starting `ledger: ` on stderr (the inventory;
-# ledger/5.md; ledger/6.md when stage 6 is complete; ledger/7.md and late/adversary.md
-# when --late is complete; codex/response.md and gate.md for check at the stage that
-# reads them).
+# Exit codes: 0 ok. 1 problems: check and late-check print one `ledger: <problem>` line
+# each on stdout; the other ops print them on stderr and nothing on stdout. 2 on a usage
+# error or an unreadable required file, one line starting `ledger: ` on stderr (the
+# inventory; ledger/5.md; ledger/6.md when stage 6 is complete; ledger/7.md and
+# late/adversary.md when --late is complete; codex/response.md and gate.md for check at
+# the stage that reads them). late-check reads late/adversary.md without needing it.
 #
 # Still model-judged: whether evidence supports a finding, whether a map correction is
 # right, the content of every position and verdict, severity and contested calls in the
@@ -169,6 +188,7 @@ export LC_ALL
 usage() {
 	echo "usage: ledger.sh build5|mandatory|seen|missing <run dir>" >&2
 	echo "       ledger.sh late-ids <run dir> --tier low|medium|high --stage6 complete|failed" >&2
+	echo "       ledger.sh late-check <run dir> --tier low|medium|high --stage6 complete|failed" >&2
 	echo "       ledger.sh gate <run dir> --tier low|medium|high --stage6 complete|failed --late complete|failed|not-run" >&2
 	echo "       ledger.sh check <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]" >&2
 	exit 2
@@ -184,7 +204,7 @@ op=$1
 run=$2
 shift 2
 case $op in
-build5 | mandatory | seen | missing | late-ids | gate | check) ;;
+build5 | mandatory | seen | missing | late-ids | late-check | gate | check) ;;
 *) usage ;;
 esac
 
@@ -218,7 +238,7 @@ case $op in
 build5 | mandatory | seen | missing)
 	[ -z "$tier$stage6$late$through" ] || usage
 	;;
-late-ids)
+late-ids | late-check)
 	[ -n "$tier" ] && [ -n "$stage6" ] && [ -z "$late$through" ] || usage
 	;;
 gate)
@@ -246,7 +266,7 @@ seen)
 	need ledger/5.md
 	need ledger/6.md
 	;;
-late-ids)
+late-ids | late-check)
 	need ledger/5.md
 	[ "$stage6" = complete ] && need ledger/6.md
 	;;
@@ -325,9 +345,10 @@ function prob(m) {
 	pm[np] = "ledger: " m
 }
 
-# cprob: a problem only the check op reports.
+# cprob: a problem only the check op reports, and late-check while it reads the late
+# file (inadv), since a problem of another file is not the late adversary's to fix.
 function cprob(m) {
-	if (op == "check") prob(m)
+	if (op == "check" || (op == "late-check" && inadv)) prob(m)
 }
 
 function pprob(c, m) {
@@ -515,12 +536,15 @@ function fhead(head,   p, id) {
 }
 
 # malformed: a "### " heading that names an id but is not a finding or verdict heading.
-function malformed(head,   p, tok) {
+# xl is 0 for a pass file, where an X or L id never belongs, so `### x86: notes` there
+# is text; it is 1 for the files that carry additions, where a lower-case x<n> or l<n>
+# is a mis-cased id.
+function malformed(head, xl,   p, tok) {
 	p = index(head, " ")
 	tok = (p > 0 ? substr(head, 1, p - 1) : head)
 	p = index(tok, ":")
 	if (p > 0) tok = substr(tok, 1, p - 1)
-	return (isid(tok) || tok ~ /^[xl][0-9]+$/ || tok ~ /.-[fpt][0-9]+$/)
+	return (isid(tok) || (xl && tok ~ /^[xl][0-9]+$/) || tok ~ /.-[fpt][0-9]+$/)
 }
 
 # ---------------------------------------------------------------------------
@@ -678,7 +702,7 @@ function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, wo
 					else if (kind == "pass2") Lp[sc] = Lp[sc] " " id
 					else Lt[sc] = Lt[sc] " " id
 				}
-			} else if (malformed(head)) sp(path ":" i ": malformed finding heading")
+			} else if (malformed(head, 0)) sp(path ":" i ": malformed finding heading")
 			i = e + 1
 			continue
 		}
@@ -931,11 +955,16 @@ function ismand(id) {
 	return (sevmed(l5sev[id]) || l5state[id] == "downgraded" || l5state[id] == "dropped")
 }
 
-function load_l6(   n, i, e, rest, cur, sec, t, id, who, k) {
+function load_l6(   n, i, e, rest, cur, sec, t, id, who, k, unclosed, len6) {
 	n = readfile(run "/ledger/6.md", L6A)
 	if (n < 0) return
 	l6ok = 1
-	if (classify(L6A, n)) prob("ledger/6.md: the file ends inside a code fence")
+	# With stage 6 failed the file may be partial: a file that ends inside a fence, a
+	# malformed addition heading, and the X block that holds the open fence are problems
+	# of check only, and that block is left out. With stage 6 complete they are errors.
+	len6 = (stage6 == "failed")
+	unclosed = classify(L6A, n)
+	if (unclosed) pprob(len6, "ledger/6.md: the file ends inside a code fence")
 	cur = ""
 	sec = ""
 	i = 1
@@ -965,10 +994,11 @@ function load_l6(   n, i, e, rest, cur, sec, t, id, who, k) {
 			cur = ""
 			sec = "other"
 			e = extent(i, n)
-			if (!fhead(substr(L6A[i], 5)) && malformed(substr(L6A[i], 5))) prob("ledger/6.md:" i ": malformed addition heading")
+			if (!fhead(substr(L6A[i], 5)) && malformed(substr(L6A[i], 5), 1)) pprob(len6, "ledger/6.md:" i ": malformed addition heading")
 			if (fhead(substr(L6A[i], 5)) && idk(HID) == "X") {
 				id = HID
-				if (id in x6seen) prob("ledger/6.md:" i ": duplicate addition " id)
+				if (len6 && unclosed && e == n) {
+				} else if (id in x6seen) prob("ledger/6.md:" i ": duplicate addition " id)
 				else {
 					x6seen[id] = 1
 					x6n++
@@ -1035,7 +1065,7 @@ function load_l7(   n, i, e, rest, cur, id, t, w, p) {
 		if (K[i] == "H3") {
 			cur = ""
 			e = extent(i, n)
-			if (!fhead(substr(L7A[i], 5)) && malformed(substr(L7A[i], 5))) prob("ledger/7.md:" i ": malformed addition heading")
+			if (!fhead(substr(L7A[i], 5)) && malformed(substr(L7A[i], 5), 1)) prob("ledger/7.md:" i ": malformed addition heading")
 			if (fhead(substr(L7A[i], 5)) && idk(HID) == "L") {
 				id = HID
 				if (id in l7Lseen) prob("ledger/7.md:" i ": duplicate addition " id)
@@ -1112,10 +1142,20 @@ function load_resp(   i, j, n, f, l, t, p, tok, id, inf) {
 	}
 }
 
-function load_adv(   n, i, e, rest, p, id, word, head) {
+function load_adv(   n, i, e, rest, p, id, word, head, last, lastl) {
 	n = readfile(run "/late/adversary.md", AA)
-	if (n < 0) return
+	if (n < 0) {
+		if (op == "late-check") prob("late/adversary.md: cannot read the file")
+		return
+	}
+	advok = 1
 	if (classify(AA, n)) cprob("late/adversary.md: the file ends inside a code fence")
+	last = n
+	while (last > 0 && trim(AA[last]) == "") last--
+	lastl = AA[last]
+	sub(/[ \t]+$/, "", lastl)
+	if (last == 0 || lastl != "status: complete")
+		cprob("late/adversary.md: " (op == "late-check" ? "" : "--late complete, but ") "the file does not end with status: complete")
 	i = 1
 	while (i <= n) {
 		if (K[i] == "H3") {
@@ -1131,6 +1171,7 @@ function load_adv(   n, i, e, rest, p, id, word, head) {
 					if (id in advv) prob("late/adversary.md:" i ": duplicate verdict for " id)
 					else {
 						advv[id] = word
+						advline[id] = i
 						advn++
 						advord[advn] = id
 						parse_verdict(AA, i, e, word, "late/adversary.md:" i ": verdict on " id ": ", 0)
@@ -1146,7 +1187,7 @@ function load_adv(   n, i, e, rest, p, id, word, head) {
 					advLn++
 					advLord[advLn] = id
 				}
-			} else if (malformed(head)) prob("late/adversary.md:" i ": malformed finding heading")
+			} else if (malformed(head, 1)) prob("late/adversary.md:" i ": malformed finding heading")
 			i = e + 1
 			continue
 		}
@@ -1223,9 +1264,22 @@ function addli(id) {
 	liord[lin] = id
 }
 
+# restore_req: a stage 6 position that asks for a restore, in any letter case.
+function restore_req(v) {
+	return (index(tolower(v), "restore requested") == 1)
+}
+
+# restore_word: a position whose first word is restore (restore:, Restore please), not
+# a longer word such as restores.
+function restore_word(v) {
+	v = tolower(v)
+	return (index(v, "restore") == 1 && substr(v, 8, 1) !~ /[a-z]/)
+}
+
 # late_ids: the ids the late adversary must challenge (liord[1..lin]).
 function late_ids(   i, id) {
 	lin = 0
+	split("", liset)
 	if (tier != "low") {
 		for (i = 1; i <= l5n; i++) {
 			id = l5ord[i]
@@ -1234,7 +1288,7 @@ function late_ids(   i, id) {
 		for (i = 1; i <= x6n; i++) addli(x6ord[i])
 		for (i = 1; i <= p6n; i++) {
 			id = p6list[i]
-			if (stage6 == "complete" && index(p6pos_v[id], "restore requested") == 1) addli(id)
+			if (stage6 == "complete" && restore_req(p6pos_v[id])) addli(id)
 		}
 	}
 	for (i = 1; i <= livn; i++) addli(liveord[i])
@@ -1272,6 +1326,7 @@ function check6(   i, id, k, n, s6c, expect) {
 		id = p6list[i]
 		if (!known(id)) cprob("ledger/6.md:" p6ord[id] ": position for unknown id " id)
 		if (p6pos_v[id] == "") cprob("ledger/6.md:" p6ord[id] ": " id " has no nonempty - position: line")
+		else if (restore_word(p6pos_v[id]) && !restore_req(p6pos_v[id])) cprob("ledger/6.md:" p6ord[id] ": " id ": a restore position must start with \"restore requested\"")
 		if (p6ev_v[id] == "") cprob("ledger/6.md:" p6ord[id] ": " id " has no nonempty - evidence: line")
 		if (p6loc_v[id] == "") cprob("ledger/6.md:" p6ord[id] ": " id " has no nonempty - answer location: line")
 		if (!(id in prov)) cprob("ledger/6.md:" p6ord[id] ": no line starting '" id ":' in the codex response files")
@@ -1469,6 +1524,19 @@ BEGIN {
 		for (i_ = 1; i_ <= lin; i_++) emit(liord[i_])
 		finish()
 	}
+	if (op == "late-check") {
+		load_l6()
+		inadv = 1
+		load_adv()
+		late_ids()
+		for (i_ = 1; advok && i_ <= lin; i_++)
+			if (!(liord[i_] in advv)) prob("late/adversary.md: no verdict for " liord[i_] ", which late-ids lists")
+		for (i_ = 1; i_ <= advn; i_++)
+			if (!(advord[i_] in liset)) prob("late/adversary.md:" advline[advord[i_]] ": verdict on " advord[i_] ", which late-ids does not list")
+		for (i_ = 1; i_ <= advLn; i_++)
+			if (advLord[i_] in carset) prob("late/adversary.md: addition " advLord[i_] " reuses a carried id")
+		finish()
+	}
 	if (op == "seen") {
 		load_l6()
 		for (i_ = 1; i_ <= l5n; i_++)
@@ -1509,7 +1577,7 @@ if [ "$st" -ne 0 ] && [ "$st" -ne 1 ]; then
 fi
 
 if [ -s "$tmp/prob" ]; then
-	if [ "$op" = check ]; then
+	if [ "$op" = check ] || [ "$op" = late-check ]; then
 		cat "$tmp/prob"
 	else
 		cat "$tmp/prob" >&2

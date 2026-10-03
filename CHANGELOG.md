@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.5.2 - 2026-10-03
+
+Fixes from a review of 0.5.1. A run started under 0.5.1 or earlier reruns from stage 1
+on resume.
+
+### Added
+
+- `ledger.sh late-check <run dir> --tier <tier> --stage6 complete|failed` checks
+  `late/adversary.md` as soon as the late adversary returns: the final
+  `status: complete`, the parse rules, a verdict for every id `late-ids` lists and none
+  for an id it does not, and no `L` addition that reuses a carried id. A problem now
+  takes the late adversary's retry ladder in stage 7 step 2. Before, a missing late
+  verdict surfaced only in the check after the merge, as a merger failure the merger
+  could not fix.
+
+### Fixed
+
+- `check --through 7 --late complete` accepted a late adversary file without a final
+  `status: complete`.
+- A stage 6 position reading `Restore requested` (any letter case) now puts the id on the
+  late adversary's list. A position whose first word is `restore` but which does not
+  start with `restore requested` is a `check --through 6` problem, so a reworded request
+  is no longer dropped without notice.
+- With stage 6 failed, a partial `ledger/6.md` that ends inside a fence or holds a
+  malformed addition heading no longer makes `late-ids` and `gate` exit 1. The bad block
+  is left out, and `check` still reports it. With stage 6 complete these stay errors.
+- A pass file subheading such as `### x86: notes` is no longer a malformed finding
+  heading. Lower-case `x<n>` and `l<n>` count as mis-cased ids only in the files that
+  carry additions.
+- The shell examples in stage 6 step 4.3 and stage 7 step 7.2 name every path under
+  `<run dir>/`. As written they ran against the audited repo's working directory.
+- When an input went unacknowledged, the stage 6 follow-up passes the text of
+  `codex/followup.md` in the call itself. A Codex that could not open the run directory
+  could not open the follow-up file either, so the recovery could never succeed.
+- The follow-up leaves asks 1 and 2 out when no id needs asking, and the placeholder
+  replacement fails the stage when no line held the placeholder or the id list is empty,
+  instead of sending `for these ids:` with nothing after it.
+- `merger.md`, stage 7 step 4, and the README no longer restate a gate rule that
+  contradicted the script for a second-opinion addition, which counts on a late verdict
+  alone. The merger takes each gate from `gate.md`.
+
 ## 0.5.1 - 2026-10-03
 
 Hardens the ledger checks of 0.5.0: ids and follow-up asks no longer pass through the

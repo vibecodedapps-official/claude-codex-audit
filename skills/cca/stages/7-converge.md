@@ -51,8 +51,21 @@ by size has `<group>-<k>` parts), and `converged.md`.
    reserved), and stays provisional: there is no
    further round. It ends with `runs:` and `status: complete`.
 
-   Failure: an error, a missing file, no `status: complete`, a listed id without a
-   verdict, or a listed live true claim without a `## Claims challenged` line. A
+   When it returns, check its file by script: `sh
+   ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh late-check <run dir> --tier <tier>
+   --stage6 <complete|failed> > <run dir>/tmp/late-check.txt` (`--stage6` as for
+   `late-ids`), then read only `wc -l` of that file and its first 50 lines (`head -n
+   50`), never the whole output. It prints one `ledger: ` line per problem in
+   `late/adversary.md`: a missing file, no final `status: complete`, a file ending
+   inside a fence, a malformed or duplicate heading, a bad verdict or finding body, a
+   verdict for an id `late-ids` does not list, an `L<n>` that reuses a carried id, or a
+   listed id without a verdict. It exits 0 with no output when the file is sound, 1
+   when there is any problem, and 2 on a usage error. The hand check of live true
+   claims below stays.
+
+   Failure: an error, a nonzero exit or any line from `late-check`, a missing file, no
+   `status: complete`, a listed id without a verdict, or a listed live true claim
+   without a `## Claims challenged` line. A
    `_test.fail` entry with `role: adversary` and scope `late` or `any` applies. Ladder:
    first failure, relaunch on the same model; second, relaunch with `model: fable`,
    recorded as a swap; third, the late adversary scope failed: record it in the stage
@@ -76,9 +89,8 @@ by size has `<group>-<k>` parts), and `converged.md`.
    ids it would have challenged, under a `## Late adversary failed` heading (so no finding
    section runs on into it).
 
-4. **Review gate.** A finding counts when a reviewer other than its author has
-   challenged it, and the second opinion gave a position on it when it is medium or
-   above, or acknowledged it when it is low or note (the rows below). Write `gate.md`
+4. **Review gate.** Whether a finding counts follows the rows below, which the script
+   applies; `gate.md` is the one source of each id's gate. Write `gate.md`
    with `mkdir -p <run dir>/tmp`, then `sh
    ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh gate <run dir> --tier <tier>
    --stage6 complete|failed --late complete|failed|not-run > <run dir>/tmp/gate.md`, with
@@ -96,9 +108,10 @@ by size has `<group>-<k>` parts), and `converged.md`.
    | `codex` | the late adversary gave a verdict | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
    | `late` | never, except a carried `L<n>` under the live rule below | provisional |
 
-   Medium rule: a finding at medium or above needs a stage 6 position; at low or note,
-   stage 6 having `complete` and requested it (the acknowledgment) is enough, and the
-   reason says so. A late verdict replaces the stage 5 verdict for `pass2` and `topup`
+   Medium rule, for the `pass1`, `pass2`, and `topup` rows: a finding at medium or above
+   needs a stage 6 position; at low or note, stage 6 having `complete` and requested it
+   (the acknowledgment) is enough, and the reason says so. A late verdict replaces the
+   stage 5 verdict for `pass2` and `topup`
    rows. When stage 6 failed, no finding passes the gate on its account. A finding whose
    stage 5 scope failed has no stage 5 verdict. A `dropped` verdict still counts as a
    challenge; the disposition decides what happens to it.
@@ -207,26 +220,28 @@ by size has `<group>-<k>` parts), and `converged.md`.
       without a colon stay inside. Every other part of a ledger file (the role, the
       acknowledgments, the merge verdict, the "seen, no position" list, the map
       corrections, a failure note) sits under a `## ` heading that is not a finding
-      id, which ends a section and is never extracted:
+      id, which ends a section and is never extracted. The working directory is not
+      the run directory, so every path starts with `<run dir>/`; `<slice>` stands for the
+      slice's full path, `<run dir>/ledger/slices/<group>.md` (or the part's file):
 
       ```
       # ledger/5.md
-      awk -v id=<id> '/^## /{p = ($0 == "## " id); if (p) f = 1} END{exit !f}' ledger/5.md &&
+      awk -v id=<id> '/^## /{p = ($0 == "## " id); if (p) f = 1} END{exit !f}' <run dir>/ledger/5.md &&
         printf 'source: ledger/5.md, section <id>\n' >> <slice> &&
-        awk -v id=<id> '/^## /{p = ($0 == "## " id)} p' ledger/5.md >> <slice>
+        awk -v id=<id> '/^## /{p = ($0 == "## " id)} p' <run dir>/ledger/5.md >> <slice>
       # ledger/6.md and ledger/7.md (<n> is 6 or 7)
-      awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1); if (p) f = 1} END{exit !f}' ledger/<n>.md &&
+      awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1); if (p) f = 1} END{exit !f}' <run dir>/ledger/<n>.md &&
         printf 'source: ledger/<n>.md, section <id>\n' >> <slice> &&
-        awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1)} p' ledger/<n>.md >> <slice>
+        awk -v id=<id> '/^## |^### [^ :]+: /{p = ($0 == "## " id || index($0, "### " id ": ") == 1)} p' <run dir>/ledger/<n>.md >> <slice>
       # live/findings.md, when it has a section for the id; a carried id's file whole
-      awk -v id=<id> '/^## /{p = ($0 == "## " id); if (p) f = 1} END{exit !f}' live/findings.md &&
+      awk -v id=<id> '/^## /{p = ($0 == "## " id); if (p) f = 1} END{exit !f}' <run dir>/live/findings.md &&
         printf 'source: live/findings.md, section <id>\n' >> <slice> &&
-        awk -v id=<id> '/^## /{p = ($0 == "## " id)} p' live/findings.md >> <slice>
-      [ -f live/carried/<id>.md ] &&
+        awk -v id=<id> '/^## /{p = ($0 == "## " id)} p' <run dir>/live/findings.md >> <slice>
+      [ -f <run dir>/live/carried/<id>.md ] &&
         printf 'source: live/carried/<id>.md\n' >> <slice> &&
-        cat live/carried/<id>.md >> <slice>
+        cat <run dir>/live/carried/<id>.md >> <slice>
       # once per id, after its sections
-      awk -v id=<id> 'index($0, id ": ") == 1' gate.md >> <slice>
+      awk -v id=<id> 'index($0, id ": ") == 1' <run dir>/gate.md >> <slice>
       ```
 
       When a slice exceeds 450,000
@@ -273,7 +288,9 @@ by size has `<group>-<k>` parts), and `converged.md`.
    carried id sits in the `absorbs` list of exactly one item with no unknown id, that
    each item's `gate` is `counts` exactly when an absorbed id counts, that `gate.md`
    equals the `gate` output, and that no id of the `late-ids` list lacks a verdict in
-   `ledger/7.md`. Then check by hand:
+   `ledger/7.md`. That last check guards the orchestrator's copy of the late
+   adversary's verdicts into `ledger/7.md` (step 3); `late-check` in step 2 guards the
+   adversary's own file. Then check by hand:
    - no item's severity differs from its source finding's severity without a cited
      verdict (a pass-two `downgraded`, a second-opinion recalibration, or a late
      verdict) that sets it, and a severity or label change is accepted only from a
