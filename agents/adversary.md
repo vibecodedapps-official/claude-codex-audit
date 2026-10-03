@@ -42,7 +42,7 @@ the Verified OK list the tier lets you attack.
    becomes a new finding.
 6. Write `## Coverage gaps`: changed files in the group, assigned claims, or questions the
    report did not cover, and digests or maps missing from its `consumed:` list.
-7. Write each new finding in the "Finding schema" block with id `<group>-P<n>` and the
+7. Write each new finding in the "Finding schema" block with id `<scope>-P<n>` and the
    line `- origin: pass2` after its title.
 8. Write `## Map corrections`: for each wrong answer in a map the report used, the map
    file, the line, what is wrong, and the source quote at its sha that shows it, or
@@ -64,7 +64,7 @@ the Verified OK list the tier lets you attack.
     ranking facts against the sources. Write `agree` or `disagree, <what differs>` with
     your evidence. Write `none` only when the report has no entry. A challenge line is not
     a finding. A defect an entry shows that no finding names is a new finding
-    `<group>-P<n>` (step 7).
+    `<scope>-P<n>` (step 7).
 12. Close the file as the "Output contract" section says: every command you ran under
     `runs:` (command, directory, exit status), every digest and map file you read under
     `consumed:` with its `git hash-object --no-filters <file>` hash, `none` under either
@@ -87,15 +87,17 @@ the Verified OK list the tier lets you attack.
    the query the check names. A carried finding (`X<n>` or `L<n>`) is read from its
    `live/carried/<id>.md`, since the ledger may no longer hold it. When your prompt is a
    low-tier run, these are the only ids you challenge. You never run a live check
-   yourself (boundary 4).
+   yourself (boundary 4). Write one `### verdict on <id>: <word>` block per id, with
+   `- severity: <old> -> <new>` (or `unchanged`), `- label:`, a nonempty `- evidence:`,
+   and `- reason:` lines.
 3. Write `## Claims challenged` after the verdicts, as step 9 of pass two says: a line
    for every claim `live/claims.md` derives `true, reproduced`, upheld or overturned with
    your evidence. A live env claim is reproduced only by a result from the environment it
    names; a result under another `env` does not uphold it. Write `none` when
    `live/claims.md` derives none.
-4. Anything you raise yourself is provisional: number it `L<n>` with the line
-   `- origin: late` after its title, numbered after the highest carried `L<n>` (a carried
-   id is reserved for its finding). No further round follows.
+4. Anything you raise yourself is provisional: write it as `### L<n>: <title>` with the
+   line `- origin: late` after its title, numbered after the highest carried `L<n>` (a
+   carried id is reserved for its finding). No further round follows.
 5. Finish with steps 12 and 13.
 
 ## Second-opinion fallback mode
@@ -114,10 +116,11 @@ You stand in for Codex and answer the same request it would have received.
    reserved for its finding), at most 3,000 words in total and at most two quoted lines
    per citation, ending with the non-binding merge verdict per bundle. When asks 1 and 2
    end with `for these ids: <id list>`, give a position for every id in that list and for
-   no other, judging a finding that `live/findings.md` lists with its live result and
-   reading a carried one from the carried file the request names; when a request holds
-   only asks 1 and 2 (a later batch), answer those and give no additions or merge
-   verdicts.
+   no other, one position per id even when asks 1 and 2 both cover it (ask 1 covers
+   blocker, high, and medium findings, ask 2 pass-two downgrades and drops), judging a
+   finding that `live/findings.md` lists with its live result and reading a carried one
+   from the carried file the request names; when a request holds only asks 1 and 2 (a
+   later batch), answer those and give no additions or merge verdicts.
 4. Your output file is the one your prompt names (`codex/response.md`, or
    `codex/response-<k>.md` for a later batch). After the merge verdicts (or, for a later
    batch, the last position), finish with steps 12 and 13.
@@ -140,8 +143,7 @@ You stand in for Codex and answer the same request it would have received.
    brief's mode `direct (working tree)`), search only with `git -C <repo> grep <pattern>
    <head sha>`, never `rg` over `git ls-files`; the files the brief lists as untracked at
    audit time are part of the head and valid evidence, cited at the head sha.
-4. Never ask for or use live systems or credentials yourself (hard rule 5). Use one only
-   when your prompt says the user approved that named check; otherwise the check stays in
-   the finding's `live check` field.
+4. Never ask for or use live systems or credentials yourself (hard rule 5). The check
+   stays in the finding's `live check` field.
 5. Claims are not facts, and neither is a reviewer's conclusion. The base's later commits
    are not "deleted features".

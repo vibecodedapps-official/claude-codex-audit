@@ -51,6 +51,8 @@ jobs:
         run: sh tests/live.sh
       - name: memory
         run: sh tests/memory.sh
+      - name: ledger
+        run: sh tests/ledger.sh
       - name: awk tests with mawk
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -64,4 +66,5 @@ jobs:
           sh tests/readonly.sh
           sh tests/live.sh
           sh tests/memory.sh
+          sh tests/ledger.sh
           sh tests/working-tree.sh

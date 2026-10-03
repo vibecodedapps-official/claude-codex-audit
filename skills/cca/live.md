@@ -14,7 +14,7 @@ this file; the resume procedure that calls it is in
 
 A live entry names one of:
 
-- a finding id of a Live checks block: `<group>-F<n>`, `<group>-P<n>`, or `<group>-T<n>`
+- a finding id of a Live checks block: `<scope>-F<n>`, `<scope>-P<n>`, or `<scope>-T<n>`
   from `ledger/5.md` (a merged group's id reads `g1+g2-F3`), a second-opinion addition
   `X<n>`, or a late addition `L<n>`;
 - `claim <n>`, an environment claim of `claims.md` (see "Env claims" in `common.md`).
@@ -28,7 +28,7 @@ those carries the finding with it (see "Carried findings").
 
 Report section 9 holds one block per live check, so every value is a whole line. A block
 starts at a heading `#### live <finding id>` or `#### live claim <n>` and runs to the
-next line that starts with `#`:
+next line that starts with one or more `#` and a space:
 
 ```
 #### live <finding id> | live claim <n>

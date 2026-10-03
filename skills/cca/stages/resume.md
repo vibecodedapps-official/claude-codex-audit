@@ -9,7 +9,11 @@ never loses a finished one. With `--live`, it first imports approved live check 
 
 1. **Find the run.** Read `${CLAUDE_PLUGIN_DATA}/runs.json` and take the entry whose
    `run_id` is the invocation's `run-id`. When there is none, or its `path` no longer
-   exists, stop with one line saying so. The run directory is that `path`.
+   exists, stop with one line saying so. The run directory is that `path`. Append this
+   invocation's block to `<run dir>/invocations.md` (SKILL.md, Invocation block). After a
+   compaction, read the `--from` and `--live` values from the last block there; a run from
+   0.4.0 or earlier has no `invocations.md`, and the block in your context is the only
+   copy.
 2. **Recover state.** Read, in the run directory, `manifest.json` and `stages.json`
    only. If `manifest.json` is missing, stop with one line saying the run directory is
    unrecoverable. With `--live`, a missing `stages.json`, a stage 1 entry that is missing

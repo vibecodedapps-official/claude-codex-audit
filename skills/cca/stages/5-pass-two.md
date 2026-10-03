@@ -8,7 +8,8 @@ Inputs: `audit-brief.md`, `common.md`, every complete `pass1/<scope>.md`, and th
 `domain/*-map.md` files.
 
 Outputs: `pass2/<scope>.md` per pass-one report, `domain/<source>-map.r2.md` per
-corrected map, `pass2/<group>-topup.md` per map-correction top-up, and `ledger/5.md`.
+corrected map, `pass2/<group>-topup.md` per map-correction top-up, `ledger/inventory.txt`,
+and `ledger/5.md`.
 
 ## Steps
 
@@ -103,39 +104,78 @@ corrected map, `pass2/<group>-topup.md` per map-correction top-up, and `ledger/5
 
 6. **Write `ledger/5.md` once**, after every adversary and every top-up has finished or
    failed. It holds every finding ever raised in stages 4 and 5; nothing is left out,
-   including dropped findings. One section per finding id, in scope order, then pass-one
-   order, then pass-two additions, then top-up findings:
+   including dropped findings. The script writes the finding sections; the orchestrator
+   never copies a finding by hand.
+   1. Write `ledger/inventory.txt` with printf, one space-separated record per line, paths
+      relative to the run directory (the grammar is in `ledger.sh`'s header):
 
-   ```
-   ## <finding id>
-   - origin: pass1 | pass2 | topup
-   - author: <agent type>, model <requested model>, file <path>
-   ### Original
-   <the finding's full text, verbatim>
-   ### Pass-two verdicts
-   - <verdict> by cca:adversary (model <requested model>) in <pass2 path>: <reason>; evidence: <as cited>
-   ### State after pass two
-   <severity>, <label>, <survives | downgraded | reworded | dropped | no verdict: late addition | no verdict: scope failed | no verdict: not run, budget expired>
-   ```
+      ```
+      pass1 <scope> <path or -> <requested model or -> complete|failed
+      pass2 <scope> <path or -> <requested model or -> complete|failed|not-run
+      topup <scope> <path or -> <requested model or -> complete|failed
+      ```
 
-   After the finding sections, add per scope its attacked Verified OK items with
-   results and its coverage gaps, then a section "Map corrections applied" (each
-   `.r2.md` file and its lines) and a section "Map corrections not applied" (each
-   rejected or one-round correction with its reason). Each of these parts sits under
-   its own `## ` heading that is not a finding id, so that the last finding section,
-   which runs to the next `## ` line, never takes it in:
-   `## Verified OK challenged: <scope>`, `## Coverage gaps: <scope>`,
-   `## Map corrections applied`, and `## Map corrections not applied`.
+      `pass1` names the current `pass1/<scope>.md`, never a `.pre-topup.md`; `pass2` has
+      one record per complete pass-one scope (a failed pass-one scope has no pass-two
+      record); `topup` one per `pass2/<scope>-topup.md` attempted. A `failed` record
+      whose file does not exist uses `-` for the path (and for the model when none was
+      requested). Every `.md` file under `pass1/` and `pass2/` except `*.pre-topup.md`
+      gets exactly one record, in scope order.
+   2. Run `mkdir -p <run dir>/tmp`, then `sh
+      ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh build5 <run dir> >
+      <run dir>/tmp/ledger5.md`. Never redirect it into `ledger/5.md`: a failed build
+      (exit 1, no output) must leave no `ledger/5.md`, since stage 8 prefers the ledger
+      files when they exist. It writes, in inventory scope order, then pass-one order, then pass-two additions,
+      then top-up findings, one section per finding id:
+
+      ```
+      ## <finding id>
+      - origin: pass1 | pass2 | topup
+      - author: <agent type>, model <requested model>, file <path>
+      ### Original
+      <the finding's full text, verbatim>
+      ### Pass-two verdicts
+      - <verdict> by cca:adversary (model <requested model>) in <pass2 path>: <reason>; evidence: <as cited>
+        (`- none` when the finding has no verdict)
+      ### State after pass two
+      <severity>, <label>, <survives | downgraded | reworded | dropped | no verdict: late addition | no verdict: scope failed | no verdict: not run, budget expired>
+      ```
+
+      After the finding sections it writes per scope its attacked Verified OK items with
+      results and its coverage gaps, then, when a record is `failed`, `## Failed outputs`
+      listing those files (`- <path>`, or `- <kind> <scope>: no file` for a record with
+      `-` as its path). Each of these parts sits under its own `## ` heading that is
+      not a finding id, so that the last finding section, which runs to the next `## `
+      line, never takes it in: `## Verified OK challenged: <scope>`, `## Coverage gaps:
+      <scope>`, `## Failed outputs`.
+   3. Append the two map-correction sections yourself to `tmp/ledger5.md`, after the
+      script's output, always both and in this order: `## Map corrections applied` (each `.r2.md` file and its
+      lines) and `## Map corrections not applied` (each rejected or one-round correction
+      with its reason). An empty one has the body `none`. They are judged, so the script
+      does not write them, and `check --through 5` compares the text before the first
+      `## Map corrections applied` line with the script's output.
+   4. Move it into place with `mv -f <run dir>/tmp/ledger5.md <run dir>/ledger/5.md`,
+      then run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh check <run dir>
+      --through 5`. A nonzero exit from `build5` (sub-step 2) or from the check prints
+      `ledger: ` lines. Fix the inventory when it is the cause (a missing or extra
+      record, a wrong status or path) and rerun sub-steps 2 to 4 once; a second nonzero
+      exit, or a problem in a pass-one or pass-two file rather than the inventory, fails
+      stage 5 (the run will end `partial`). When `build5` never succeeded, nothing was
+      moved and `ledger/5.md` does not exist; record the ledger build as failed in the
+      stage 5 entry (`"ledger_build": "failed"`). Remove `<run dir>/tmp/ledger5.md` when
+      done.
 
 7. **Stage completion.** Stage 5 is `complete` when every pass-one report got a complete
-   pass two, every top-up succeeded, and `ledger/5.md` is written; otherwise `failed`,
-   and the run will end `partial`. When the budget expired, still write `ledger/5.md`
-   from what is on disk, so stage 8 can use it.
+   pass two, every top-up succeeded, and `ledger/5.md` is written and passes
+   `check --through 5`; otherwise `failed`, and the run will end `partial`. When the
+   budget expired, still write the inventory and `ledger/5.md` from what is on disk
+   (step 6, through the same temp file and move), so stage 8 can use it.
 
 8. **Read-only check.** Run the check in `${CLAUDE_PLUGIN_ROOT}/skills/cca/SKILL.md` and write
    `baseline/5-check.md`.
 
 9. **Write the stage 5 entry last,** once the check has passed, per the preamble:
-   status, inputs, outputs (every `pass2/` file, each `.r2.md`, and `ledger/5.md`),
+   status, inputs, outputs (every `pass2/` file, each `.r2.md`, `ledger/inventory.txt` with its hash, and
+   `ledger/5.md`),
    agents, swaps, failed scopes, map corrections not applied, each decision or scope
    entry recorded as `not challenged`, and each `_test` fault applied.

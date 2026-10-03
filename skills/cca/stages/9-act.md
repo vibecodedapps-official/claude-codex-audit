@@ -13,6 +13,11 @@ Inputs: the run's entry in `${CLAUDE_PLUGIN_DATA}/runs.json`, `report.md`,
 `converged.md`, `manifest.json`, `audit-brief.md`, `stages.json` (the audited bundle
 shas), and `act/log.md` when it exists.
 
+Append this invocation's block to `<run dir>/invocations.md` (SKILL.md, Invocation
+block), then go on. After a compaction, read the item ids and `--per-item` from the last
+block there; a run from 0.4.0 or earlier has no such file, and the block in your context
+is the only copy.
+
 Output: `act/log.md`, appended to, never rewritten. Every action, check result, and
 commit sha is logged there (step 7).
 

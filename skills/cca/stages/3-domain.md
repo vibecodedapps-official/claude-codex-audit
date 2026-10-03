@@ -24,8 +24,8 @@ auditors: auditors cite the source at its pinned sha, never the map.
    each the group id from `groups.md` whose files it concerns, and the claim numbers it
    covers. Tickets with no questions for that source are listed with `none`.
 4. **Launch.** Queue one `cca:mapper` per code base (SKILL.md, Queue and Agent launch
-   rules; maps launch after pass one and digests). With `_test` `hold` naming stage 3,
-   queue them but launch none until the named stage's initial agents have ended. The
+   rules; maps launch after digests and before pass one). With `_test` `hold` naming
+   stage 3, queue them but launch none until the named stage's initial agents have ended. The
    prompt gives the absolute paths of `audit-brief.md`, `common.md`, the question file,
    and the output file `domain/<source>-map.md`, the source's read path and sha from
    the brief, and the read paths and shas of the other code bases, and says: answer

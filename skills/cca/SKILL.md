@@ -51,11 +51,11 @@ stage sections below say.
 The `allowed-tools` list above pre-approves read commands only. Export, snapshot,
 state-file, and probe commands (such as the export script, `rm -rf` and `mkdir` in the run
 directory, `stat`, `find`, `sha256sum`, `jq`, `awk`, `mv -f`, `wc -c`, `codex --version`,
-and the `sh` runs of the five scripts in `${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`:
-`readonly.sh`, `handoff.sh`, `work-items.sh`, `working-tree.sh`, and `live.sh`) follow the
-session's permission mode; tell the user once, before stage 1, that they may prompt. `git
-fetch` (with its `git ls-remote --tags` check), every act write, and live-data access are
-not pre-approved, and you also ask for them in words first.
+and the `sh` runs of the scripts in `${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/`:
+`readonly.sh`, `handoff.sh`, `work-items.sh`, `working-tree.sh`, `live.sh`, and
+`ledger.sh`) follow the session's permission mode; tell the user once, before stage 1,
+that they may prompt. `git fetch` (with its `git ls-remote --tags` check) and every act
+write are not pre-approved, and you also ask for them in words first.
 
 `${CLAUDE_PLUGIN_DATA}` below is cca's data directory, and `${CLAUDE_PLUGIN_ROOT}` is
 the plugin's own directory, where the stage files and templates live. Use each path
@@ -90,8 +90,13 @@ flags:
   live: none | <file>
 ```
 
-Keep this block verbatim; you re-read it after a compaction. `audit` goes to Stage 1.
-`resume` goes to Resume. `act` goes to Stage 9.
+Once the run directory is known (stage 1 creates it; resume and act find it), append
+the block to `<run dir>/invocations.md` as the line
+`--- invocation <n>, <UTC time>, <command> ---` followed by the block verbatim. `<n>`
+counts the blocks in the file from 1. Never rewrite or reorder the file. After a
+compaction, re-read the last block there. A run from 0.4.0 or earlier has no
+`invocations.md`; the block in your context is then the only copy. `audit` goes to Stage
+1. `resume` goes to Resume. `act` goes to Stage 9.
 
 ## Preamble
 
@@ -115,16 +120,17 @@ mean, in addition:
 3. You call Codex only through the Skill tool, `codex-lite:ask`, with
    `--model <full id>` and `--timeout <seconds>`, plus `--resume <thread id>` for the
    one allowed follow-up. You never run the `codex` CLI except `codex --version`.
-4. You ask the user before any live-data access (hard rule 5), and record each answer
-   in `stages.json` `approvals` with kind `live`. Live approvals also come from a file:
-   a result in a `--live` file names the person who approved the access and when, and
-   resume records that approval from the file (`live.md`, "Reconciling") without asking
-   again. You never run a live query yourself.
+4. You never ask for live-data access during a run and never run a live query
+   yourself (hard rule 5). A check a question needs becomes a report item. Live approvals
+   come only from a `--live` file: a result in it names the person who approved the access
+   and when, and resume records that approval in `stages.json` `approvals` with kind
+   `live` (`live.md`, "Reconciling").
 
 ### Compaction recovery
 
 After a compaction, or whenever you cannot account for your state, stop and re-read,
-before any other action: the invocation block, `audit-brief.md`, `common.md`, and
+before any other action: the last invocation block in `invocations.md` (the block in
+your context for a run from 0.4.0 or earlier), `audit-brief.md`, `common.md`, and
 `stages.json` in the run directory, and the stage file for the current stage. In the
 same session, a stage marked `running` waits for its agents' notifications and
 relaunches nothing. Under `/cca:resume`, `running` counts as incomplete and is rerun.
@@ -229,11 +235,13 @@ there is one), the verdict, and the terminal state.
 ### Queue
 
 Keep one queue of agent jobs across all stages and never have more than `max-agents`
-agents running (default 8). Launch order when several stages have work: pass one
-first, then digests, then maps; after that, jobs in the order their stage became
-ready. A relaunch after a failure goes to the front of the queue. Each completion
-notification drives the next launch. Work beyond the cap waits; scope is never merged
-or dropped to fit the cap.
+agents running (default 8). Launch order when several stages have work: digests
+first, then maps, then pass one; after that, jobs in the order their stage became
+ready. Digests and maps go first so that more of them finish before a group's barrier,
+which cuts the top-ups; it cannot remove them, and auditors may start a little later. A
+relaunch after a failure goes to the front of the queue. Each completion notification
+drives the next launch. Work beyond the cap waits; scope is never merged or dropped to
+fit the cap.
 
 ### Soft budget
 
@@ -312,31 +320,9 @@ too; the report says so.
 
 ### Fault injection (`_test`)
 
-When the manifest has a `_test` key, record it in `audit-brief.md` and in the report's
-Coverage, and apply each field it has:
-
-- `fail`: a list of `{ role, scope, times }`. `role` is digester, mapper, auditor,
-  adversary, merger, or fallback (the stage 6 fallback agent); `scope` is a group,
-  source, chunk id, or fallback batch (`second-opinion-<k>`), or `any`. The scope
-  `second-opinion` also matches every batch scope `second-opinion-<k>`, as a prefix.
-  Treat the first `times` completions of that role at that scope as failures, counting
-  across relaunches and swaps, then apply the failure table. A merger failure injected
-  this way still goes to the orchestrator merge.
-- `drop_ack`: `{ input, times }`. In stage 6, treat the acknowledgment of the named
-  run-directory input as missing in the first `times` answers.
-- `hold`: `{ stage, until }`. Queue the named stage's agents but launch none until
-  every initial agent of stage `until` has ended (for stage 4, the pass-one agents,
-  before any barrier top-up).
-- `expire_budget_after_stage`: treat the budget as expired the moment that stage's
-  entry is written, whether or not `budget` was given.
-- `plant_map_error`: a source name. When that source's mapper completes, before you
-  accept its file, change one quoted answer's conclusion in `domain/<source>-map.md`
-  to its opposite, keeping the quote, and record the line in the stage 3 entry as
-  `test_planted`.
-- `ledger_split_bytes`: replaces both 450,000-byte thresholds in stage 7, the
-  split-mode choice (step 5) and the per-group slice part split (step 7.2).
-- `inline_cap_bytes`: replaces the 450,000-byte cap on the stage 6 follow-up, the only
-  request that carries inline text.
+When the manifest has a `_test` key, read `${CLAUDE_PLUGIN_ROOT}/skills/cca/fault-injection.md`
+and apply it, and record the key in `audit-brief.md` and in the report's Coverage. With
+no `_test` key, do not read that file.
 
 ### State files
 
@@ -412,7 +398,8 @@ with `mv -f`. Never edit either in place.
    record `output_hashes` (each digest or map path and its hash, read by the stage 4
    barrier) and `failed_scopes`; stage 2 also records `split_files` (each text file
    split into byte-range chunks); stage 3 records `test_planted` when `_test` planted
-   a map error; stage 6 records
+   a map error; stage 5 records `ledger_build` (`failed` when `ledger.sh build5`
+   never succeeded, which sends stage 8 to the pass files; absent otherwise); stage 6 records
    `codex_model` and `codex_timeout`, the values passed, `sentinels`,
    `missing_positions` (the mandatory finding ids the Codex request or follow-up asked
    for and left without a position, plus the ids of any fallback batch that failed
@@ -461,7 +448,7 @@ auditors and specialists and runs the reconciliation barrier and its top-ups.
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/5-pass-two.md` when the first group clears its barrier. It
 launches one adversary per pass-one report, applies map corrections and their top-ups,
-and writes `ledger/5.md`.
+writes `ledger/inventory.txt`, and builds `ledger/5.md` with `ledger.sh`.
 
 ## Stage 6: second opinion
 
@@ -480,8 +467,8 @@ the ladder.
 ## Stage 7: converge
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/cca/stages/7-converge.md` when stage 6 is complete or failed. It runs the
-late adversary, applies the review gate, runs the merger, and checks the merge
-against the ledger.
+late adversary, builds `gate.md` with `ledger.sh` (the review gate), runs the merger,
+and checks the merge against the ledger.
 
 ## Stage 8: report
 

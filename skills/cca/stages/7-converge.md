@@ -39,9 +39,10 @@ by size has `<group>-<k>` parts), and `converged.md`.
      `true, reproduced`, which the adversary reproduces or overturns like any claim the
      report marks true (`common.md`, "Pass-two verdicts").
 
-   For each id it gives a verdict (`survives`, `downgraded`, `reworded`, or `dropped`) with
-   evidence, reading the stage 5 verdicts in `ledger/5.md`. Anything it raises itself
-   takes `origin: late` and an id `L<n>`, numbered after the highest carried `L<n>`
+   For each id it gives one verdict block, `### verdict on <id>: <verdict>` (`survives`,
+   `downgraded`, `reworded`, or `dropped`), with `- severity:`, `- label:`, `- evidence:`,
+   and `- reason:` lines, reading the stage 5 verdicts in `ledger/5.md`. Anything it
+   raises itself is written as `### L<n>: <title>` with `origin: late` and an id `L<n>`, numbered after the highest carried `L<n>`
    (`live/carried/L<n>.md`; a carried id is reserved), and stays provisional: there is no
    further round. It ends with `runs:` and `status: complete`.
 
@@ -72,33 +73,55 @@ by size has `<group>-<k>` parts), and `converged.md`.
 
 4. **Review gate.** A finding counts when a reviewer other than its author has
    challenged it, and both a Claude adversary and the second opinion have seen it, in
-   any role. Compute the gate for every ledger id from the ledger files:
+   any role. Write `gate.md` with `mkdir -p <run dir>/tmp`, then `sh
+   ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh gate <run dir> --tier <tier>
+   --stage6 complete|failed --late complete|failed|not-run > <run dir>/tmp/gate.md`, with
+   the stage 6 status and the late adversary's outcome (`not-run` when none ran). Only on
+   exit 0, run `mv -f <run dir>/tmp/gate.md <run dir>/gate.md`. A nonzero exit moves
+   nothing, so no `gate.md` exists, and fails stage 7 (stage 8 then gates from the
+   ledger without reusing `gate.md`, its fallback path 2). Remove `tmp/gate.md` when done. The
+   script writes one line per ledger id, per `### X<n>:` and `### L<n>:` addition, and
+   per carried id, `<id>: counts | provisional; <reason>`. The rules it applies:
 
    | Origin | Counts when | Otherwise |
    |---|---|---|
-   | `pass1` (with barrier top-up findings) | it has a stage 5 verdict and stage 6 saw it | provisional |
-   | `pass2` | stage 6 saw it and the late adversary gave a verdict | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
-   | `topup` | stage 6 saw it and the late adversary gave a verdict | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
+   | `pass1` (with barrier top-up findings) | it has a stage 5 verdict from a complete pass two, stage 6 is `complete`, and, at severity medium or above (state after pass two), stage 6 gave it a position | provisional |
+   | `pass2`, `topup` | stage 6 is `complete`, the late adversary gave a verdict, and, at medium or above, stage 6 gave it a position | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
    | `codex` | the late adversary gave a verdict | provisional (always at low, unless the finding is in `live/findings.md` and its live review completed) |
    | `late` | never, except a carried `L<n>` under the live rule below | provisional |
 
-   "Stage 6 saw it" means stage 6 is `complete` and the finding was in the request.
-   A complete stage 6 requested every mandatory id (its step 4.3), so no finding
-   stays provisional for having gone unrequested. When stage 6 failed, no finding
-   passes the gate on its account. A finding whose stage 5 scope failed has no
-   stage 5 verdict. A `dropped` verdict still counts as a challenge; the disposition
-   decides what happens to it.
+   Medium rule: a finding at medium or above needs a stage 6 position; at low or note,
+   stage 6 having `complete` and requested it (the acknowledgment) is enough, and the
+   reason says so. A late verdict replaces the stage 5 verdict for `pass2` and `topup`
+   rows. When stage 6 failed, no finding passes the gate on its account. A finding whose
+   stage 5 scope failed has no stage 5 verdict. A `dropped` verdict still counts as a
+   challenge; the disposition decides what happens to it.
 
-   The live rule is added to every origin's row. A finding in `live/findings.md` counts
-   only when its live review completed: stage 6 completed with a position on it, and the
-   late adversary gave it a verdict. Otherwise it is `provisional`, with the reason
-   `live result not yet reviewed`. A carried `X<n>` follows the `codex` row plus the live
-   rule; a carried `L<n>` counts under the live rule alone, since both a second opinion
-   and a fresh Claude adversary other than its author then challenged it. At low, a
-   live-reviewed `P`, `T`, or carried `X` finding uses the reviews it actually got.
+   Live rule, added to every row: a finding in `live/findings.md` counts only when stage
+   6 completed with a position on it and the late adversary gave it a verdict, and it
+   still needs the rest of its own row; otherwise it is `provisional`, with the reason
+   `live result not yet reviewed`, checked first. A carried `X<n>` follows the `codex`
+   row plus the live rule; a carried `L<n>` counts under the live rule alone, since both a
+   second opinion and a fresh Claude adversary other than its author then challenged it
+   (`counts; live review completed`). A carried id that `live/findings.md` does not list
+   is not in the universe. At low, a live-reviewed `P`, `T`, or carried `X` finding uses
+   the reviews it actually got.
 
-   Write `gate.md`: one line per ledger id and per carried id,
-   `<id>: counts | provisional; <reason>`.
+   The reasons are exactly these strings, in precedence order for a provisional id (live,
+   stage 6 failed, low tier, no verdict, medium without position):
+   - `counts; stage 5 verdict, stage 6 position`
+   - `counts; stage 5 verdict, stage 6 acknowledged (low or note)`
+   - `counts; late verdict, stage 6 position`
+   - `counts; late verdict, stage 6 acknowledged (low or note)`
+   - `counts; late verdict` (a `codex` finding)
+   - `counts; live review completed`
+   - `provisional; live result not yet reviewed`
+   - `provisional; stage 6 failed`
+   - `provisional; no stage 5 verdict`
+   - `provisional; medium or above without a stage 6 position`
+   - `provisional; late addition at low tier`
+   - `provisional; no late verdict`
+   - `provisional; late finding`
 
 5. **Choose normal or split mode.** Add the byte sizes of `ledger/5.md`, `ledger/6.md`,
    and `ledger/7.md`, `live/findings.md`, and every `live/carried/<id>.md` (`wc -c`;
@@ -117,9 +140,9 @@ by size has `<group>-<k>` parts), and `converged.md`.
 
    ```
    ## C<n>: <title>
-   - absorbs: <every ledger id this item takes in>
+   - absorbs: <id>, <id>, ... (every ledger id this item takes in)
    - sources: <each id with its origin, author, and model>
-   - gate: counts | provisional
+   - gate: counts | provisional (the word alone, nothing after it)
    - disposition: agreed | contested | dismissed
    - severity: <the agreed severity, for agreed>
    - positions: <for contested, each reviewer's severity, label, verdict, and evidence pointer (ledger file and section)>
@@ -128,11 +151,16 @@ by size has `<group>-<k>` parts), and `converged.md`.
    - recommended change: <repo, path, change>
    ```
 
+   Each item has exactly one `- absorbs:` line, ids separated by a comma and a space on
+   one line, and exactly one `- gate:` line; `check` reads both by those forms.
+
    Dispositions: `agreed`, the reviewers who saw it accept it at one severity;
    `contested`, they disagree on existence or severity, and every position is kept with
    its evidence, with no side picked; `dismissed`, dropped and not restored, kept with the
    reason. An item's gate is `counts` when any id it absorbs counts in `gate.md`. A
-   finding in `live/findings.md` whose live review has not completed (its `gate.md` reason
+   counted item's severity, label, and disposition come only from absorbed ids that
+   count; a provisional duplicate never raises them (the same shape as the pending-live
+   rule below). A finding in `live/findings.md` whose live review has not completed (its `gate.md` reason
    is `live result not yet reviewed`) must not set a counted item's severity, label, or
    disposition through a reviewed duplicate. Every position on it from this rerun's stages
    6 and 7 (each was given in light of the result) and its derivation are `pending
@@ -165,7 +193,7 @@ by size has `<group>-<k>` parts), and `converged.md`.
       sections, the id's `gate.md` line. The two kinds of file are cut differently.
       In `ledger/5.md`, a section is exactly `## <id>` and runs to the next `## ` line;
       `### ` lines never start or stop one, because a section embeds the finding's own
-      `### <group>-F<n>: <title>` heading under `### Original`. In `ledger/6.md` and
+      `### <scope>-F<n>: <title>` heading under `### Original`. In `ledger/6.md` and
       `ledger/7.md`, a section starts at a line that is exactly `## <id>` or begins
       `### <id>: ` (an addition in the `common.md` schema, such as `X<n>` or `L<n>`)
       and runs to the next `## ` line or `### <word>: ` line, where `<word>` has no
@@ -221,27 +249,32 @@ by size has `<group>-<k>` parts), and `converged.md`.
       `common.md`'s output contract defines it). Each item holds: the item, sources,
       each position's severity and label, disposition, gate, absorbed ledger ids, and
       a ledger section pointer. No `C<n>` ids yet. Each file ends with
-      `status: complete`.
+      `status: complete`. The `absorbs` and `gate` lines keep the form of step 6.
    4. Launch the final merger with the paths of `audit-brief.md`, `common.md`, every
       `converged/<group>.md` (every part of a split group), the ledger files, and
       `gate.md`, and the output path `converged.md`. It assigns `C<n>` ids, merges
       items that are the same defect across groups or across the parts of one group,
       and opens a ledger section only to settle a suspected cross-group or cross-part
-      duplicate, recording it under `opened:` as in step 7.3.
+      duplicate, recording it under `opened:` as in step 7.3. `converged.md` keeps the item form
+      of step 6, one `- absorbs:` and one `- gate:` line per `## C<n>: ` item.
 
-8. **The orchestrator checks the merge against the ledger:**
-   - every finding id in `ledger/5.md`, `ledger/6.md`, and `ledger/7.md`, and every
-     carried id (`live/carried/<id>.md`), appears in the `absorbs` list of exactly one
-     item;
+8. **The orchestrator checks the merge against the ledger,** after the merge, when
+   `converged.md` exists. Run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh check
+   <run dir> --through 7 --tier <tier> --stage6 complete|failed --late
+   complete|failed|not-run`. It checks that every finding id
+   in the ledger files, every `### X<n>:` and `### L<n>:` addition, and every carried id
+   sits in the `absorbs` list of exactly one item with no unknown id, that each item's
+   `gate` is `counts` exactly when an absorbed id counts, and that `gate.md` equals the
+   `gate` output. Then check by hand:
    - no item's severity differs from its source finding's severity without a cited
      verdict (a pass-two `downgraded`, a second-opinion recalibration, or a late
      verdict) that sets it, and a severity or label change is accepted only from a
      position that is not `pending review`: an item whose severity or label follows a
-     pending one fails the check;
-   - each item's gate matches `gate.md`;
+     pending one fails the check; and a counted item's severity, label, and disposition
+     follow only absorbed ids that count, never a provisional duplicate;
    - every `contested` item keeps each position with its evidence.
 
-   A check that fails counts as a merger failure.
+   A check that fails, by the script or by hand, counts as a merger failure.
 
 9. **Merger failure.** A merger failed when it returned an error, its file lacks
    `status: complete`, or the check in step 8 fails. A `_test.fail` entry with
@@ -252,7 +285,7 @@ by size has `<group>-<k>` parts), and `converged.md`.
    the check) fails stage 7, and stage 8 writes the report from the ledger.
 
 10. **Stage completion.** Stage 7 is `complete` when `ledger/7.md`, `gate.md`, and
-    `converged.md` are written and pass the check, and the late adversary (at medium and
+    `converged.md` are written and pass the check (step 8, which needs `converged.md`), and the late adversary (at medium and
     high, and at low when `live/` lists ids) succeeded; otherwise `failed`, and the run
     will end `partial`. A failed late adversary scope fails the stage but does not discard
     a `converged.md` that passed the check: stage 8 uses it.

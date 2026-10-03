@@ -33,7 +33,7 @@ body=$3
 claims=$4
 
 if ! command -v jq >/dev/null 2>&1; then
-	echo "work-items: jq not found"
+	echo "work-items: jq not found" >&2
 	exit 2
 fi
 

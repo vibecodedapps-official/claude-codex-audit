@@ -52,24 +52,8 @@ Counts table: for each severity (blocker, high, medium, low, note), the number o
 by gate (`counts`, `provisional`) and by disposition (`agreed`, `contested`,
 `dismissed`), plus the contested count.
 
-Rules, applied in order, to items whose gate is `counts` only:
-
-1. Each item has one effective severity:
-   - `agreed`: the severity the reviewers accept.
-   - `contested` with equal severities across positions: that severity.
-   - `contested` with different severities: the higher severity only when the higher
-     position's label is `verified fact`; otherwise the lower. With more than two
-     positions, the highest position's label decides.
-   - `contested` where one position is `dropped`: the item counts only when the
-     keeping position's label is `verified fact`, at its severity; otherwise it does
-     not count.
-   - `dismissed`: does not count.
-2. Any counted `agreed` blocker or high item, or any contested item whose effective
-   severity is blocker or high, means `not ready`.
-3. Otherwise, any counted medium item means at best `merge after fixes`.
-4. Otherwise, `ready to merge`.
-5. In a `partial` run, the verdict is `audit incomplete`, whatever rules 2 to 4 give;
-   state the counts so far.
+The rules that count items and decide the verdict are in `stages/8-report.md`, steps 4
+and 5, which are their single home; apply them there and write only their result here.
 
 The verdict line reads:
 `verdict: <verdict> | counted: <n> blocker, <n> high, <n> medium, <n> low, <n> note | provisional: <n> | contested: <n> | dismissed: <n>`

@@ -96,7 +96,9 @@
 # The only writes outside the temporary directory are the objects `add -A`, `write-tree`,
 # and `commit-tree` put in the repository's object store. The commit has no ref.
 #
-# Exit status (`check` prints nothing on stdout and exits 0 where `build` would build):
+# Exit status (`check` prints nothing on stdout. It runs the refusals only, not build's git
+# steps, so it exits 0 where `build` would pass the refusals, even when a later step such
+# as `add -A` under core.safecrlf=true makes `build` exit 2):
 #   2  the arguments are wrong, <repo> is not a git work tree, or a git step failed (one
 #      line on stderr; nothing is printed on stdout)
 #   1  a refusal
