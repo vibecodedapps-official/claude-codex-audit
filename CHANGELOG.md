@@ -21,6 +21,44 @@
   these rules. Both found every planted case in pass one. With the rules, the run-once
   finding carries a live check, and its label follows the live check rule.
 
+## 0.5.1 - 2026-10-03
+
+Hardens the ledger checks of 0.5.0: ids and follow-up asks no longer pass through the
+model's hands, and `ledger.sh` reads outputs more strictly. No full multi-agent audit has
+run yet.
+
+### Added
+
+- `ledger.sh late-ids <run dir> --tier <tier> --stage6 complete|failed`: the late
+  adversary's id list (every pass-two and top-up addition, every `X` addition, every
+  restore request at medium and high, and every live id at every tier) is built by the
+  script into `tmp/late-ids.txt`, and the prompt passes the file path. `check --through 7`
+  reports any id of that list without a verdict in
+  `ledger/7.md`.
+
+### Changed
+
+- The stage 6 follow-up is a file, `codex/followup.md`, that `codex-lite:ask` is told to
+  read by path, so no id is typed into a tool argument. The byte cap applies to the file.
+- Stage 6 builds batch files with a portable awk, and the request carries a placeholder
+  line per slot (`for these ids: IDS-BATCH-<k>`) that shell replaces in place, not an
+  append at the end of the file. The follow-up slots use the same mechanism.
+- A finding block now ends at `runs:`, `runs: none`, `consumed:`, `consumed: none`,
+  `opened:`, `opened: none`, or `status: complete` when the line is exactly that; a body
+  line that merely starts with one of those words no longer cuts a finding.
+- A pass or top-up file counts as complete only when it ends with `status: complete`,
+  checked from the file against the inventory.
+- A heading with a mis-cased id is an error, and a position line may start with a list
+  number.
+- Both map-correction headings are required in `ledger/5.md`.
+- The review gate text in stage 7 and `merger.md` states the current rule: a reviewer
+  other than the author challenged it, and the second opinion gave a position on it when
+  it is medium or above, or acknowledged it when low or note.
+- `pass2/<scope>.md` replaces `pass2/<group>.md` in `codex-request.md` and stage 5, and
+  stage 6 lists `ledger/mandatory.txt`, `codex/batch-<k>.txt`, and `codex/followup.md`
+  among its outputs.
+- A run started under 0.5.0 or earlier reruns from stage 1 on resume.
+
 ## 0.5.0 - 2026-10-03
 
 Adds `ledger.sh` and its checks, a medium-severity rule for the second opinion, one path

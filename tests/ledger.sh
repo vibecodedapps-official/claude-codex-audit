@@ -493,12 +493,16 @@ runf "build5, CRLF input" 0 "$tmp/want5.txt" build5 "$tmp/crlf"
 # ---------------------------------------------------------------------------
 # build5 errors: stderr lines, exit 1, no stdout.
 cp -R "$B" "$tmp/e1"
-printf '### app-F1: Again\n- severity: low\n- label: convention\n' >> "$tmp/e1/pass1/app.md"
+printf '### app-F1: Again\n- severity: low\n- label: convention
+status: complete
+' >> "$tmp/e1/pass1/app.md"
 run "duplicate id" 1 "" build5 "$tmp/e1"
 errmsg "duplicate id" "ledger: pass1/app.md:49: duplicate finding id app-F1"
 
 cp -R "$B" "$tmp/e2"
-printf '### verdict on app-F7: survives\n- severity: unchanged\n- label: unchanged\n- evidence: e\n' >> "$tmp/e2/pass2/app.md"
+printf '### verdict on app-F7: survives\n- severity: unchanged\n- label: unchanged\n- evidence: e
+status: complete
+' >> "$tmp/e2/pass2/app.md"
 run "verdict for unknown id" 1 "" build5 "$tmp/e2"
 errmsg "verdict for unknown id" "ledger: pass2/app.md:46: verdict on app-F7 has no finding"
 
@@ -523,7 +527,9 @@ run "finding without a verdict in a complete pass two" 1 "" build5 "$tmp/e6"
 errmsg "finding without a verdict" "ledger: pass2/app.md: no verdict for app-F4"
 
 cp -R "$B" "$tmp/e7"
-printf '### verdict on app-F2: survives\n- severity: unchanged\n- label: unchanged\n- evidence: again\n' >> "$tmp/e7/pass2/app.md"
+printf '### verdict on app-F2: survives\n- severity: unchanged\n- label: unchanged\n- evidence: again
+status: complete
+' >> "$tmp/e7/pass2/app.md"
 run "duplicate verdict" 1 "" build5 "$tmp/e7"
 errmsg "duplicate verdict" "ledger: pass2/app.md:46: duplicate verdict for app-F2"
 
@@ -535,7 +541,8 @@ errmsg "verdict without evidence" "ledger: pass2/app.md:9: verdict on app-F2: ne
 cp -R "$B" "$tmp/e9"
 printf '\n```\nunclosed\n' >> "$tmp/e9/pass1/cfg.md"
 run "unclosed fence" 1 "" build5 "$tmp/e9"
-errmsg "unclosed fence" "ledger: pass1/cfg.md: the file ends inside a code fence"
+errmsg "unclosed fence" "ledger: pass1/cfg.md: the file ends inside a code fence
+ledger: pass1/cfg.md: the inventory says complete, but the file does not end with status: complete"
 
 # ---------------------------------------------------------------------------
 # mandatory: blocker, high, medium after pass two, downgraded or dropped, and live ids.
@@ -796,6 +803,7 @@ run "check 7, verdict missing from the adversary file" 1 "ledger: ledger/7.md:11
 cp -R "$B" "$tmp/h3"
 cp "$tmp/h2x/ledger/7.md" "$tmp/h3/ledger/7.md"
 want="ledger: ledger/7.md: no verdict section for X1, which late/adversary.md gives
+ledger: ledger/7.md: no late verdict for X1, which late-ids lists
 ledger: gate.md:9: 'X1: counts; late verdict', expected 'X1: provisional; no late verdict'
 ledger: converged.md:21: C5 gate is counts, but no absorbed id counts"
 run "check 7, verdict missing from ledger/7.md" 1 "$want" check "$tmp/h3" --through 7 --tier medium --stage6 complete --late complete
@@ -982,17 +990,23 @@ run "check 6, stage 6 failed, no ledger/6.md" 0 "" check "$tmp/r13" --through 6 
 
 # Headings that look like findings or verdicts but are not exact are errors.
 cp -R "$B" "$tmp/q1"
-printf '### app-P2:Missing space\n- severity: low\n- label: convention\n' >> "$tmp/q1/pass2/app.md"
+printf '### app-P2:Missing space\n- severity: low\n- label: convention
+status: complete
+' >> "$tmp/q1/pass2/app.md"
 run "pass-two addition with no space after the colon" 1 "" build5 "$tmp/q1"
 errmsg "no space after the colon" "ledger: pass2/app.md:46: malformed finding heading"
 
 cp -R "$B" "$tmp/q2"
-printf '### app-F5:\n- severity: low\n- label: convention\n' >> "$tmp/q2/pass1/app.md"
+printf '### app-F5:\n- severity: low\n- label: convention
+status: complete
+' >> "$tmp/q2/pass1/app.md"
 run "finding heading with an empty title" 1 "" build5 "$tmp/q2"
 errmsg "empty title" "ledger: pass1/app.md:49: malformed finding heading"
 
 cp -R "$B" "$tmp/q3"
-printf '### verdict on app-F2:survives\n- severity: unchanged\n- label: unchanged\n- evidence: e\n' >> "$tmp/q3/pass2/app.md"
+printf '### verdict on app-F2:survives\n- severity: unchanged\n- label: unchanged\n- evidence: e
+status: complete
+' >> "$tmp/q3/pass2/app.md"
 run "verdict heading with no space after the colon" 1 "" build5 "$tmp/q3"
 errmsg "verdict heading with no space" "ledger: pass2/app.md:46: malformed verdict heading"
 
@@ -1186,9 +1200,131 @@ run "missing, open fence inside the follow-up" 0 "web-F1" missing "$tmp/y2"
 cp -R "$B" "$tmp/y3"
 { grep -v '^web-F1: confirmed blocker$' "$B/codex/response.md"; printf '```\nopen\n--- batch 2 ---\nweb-F1: confirmed blocker\n'; } > "$tmp/y3/codex/response.md"
 run "missing, batch boundary after an open fence" 0 "" missing "$tmp/y3"
+
+# ---------------------------------------------------------------------------
+# 0.5.1: completion from the file, mis-cased ids, block ends, list numbers, map
+# headings, late-ids.
+cp -R "$B" "$tmp/z1"
+grep -v '^status: complete$' "$B/pass1/web.md" > "$tmp/z1/pass1/web.md"
+run "build5, complete record whose file lacks status: complete" 1 "" build5 "$tmp/z1"
+errmsg "complete record without status" "ledger: pass1/web.md: the inventory says complete, but the file does not end with status: complete"
+run "check 5, complete record whose file lacks status: complete" 1 "ledger: pass1/web.md: the inventory says complete, but the file does not end with status: complete" check "$tmp/z1" --through 5
+cp -R "$B" "$tmp/z2"
+printf '\n\n' >> "$tmp/z2/pass1/web.md"
+runf "build5, trailing blank lines after status: complete" 0 "$tmp/want5.txt" build5 "$tmp/z2"
+
+cp -R "$B" "$tmp/z3"
+printf '### app-f9: Lower case id\n- severity: low\n- label: convention\nstatus: complete\n' >> "$tmp/z3/pass1/app.md"
+run "mis-cased finding id in a pass file" 1 "" build5 "$tmp/z3"
+errmsg "mis-cased finding id" "ledger: pass1/app.md:49: malformed finding heading"
+cp -R "$B" "$tmp/z4"
+mk6 "$tmp/z4" "app-F1 app-F3 app-F4 app-P1 web-F1" "app-F2 app-T1 cfg-F1" "x1"
+run "gate, lower case X addition in ledger/6.md" 1 "" gate "$tmp/z4" --tier medium --stage6 complete --late complete
+errmsg "lower case X addition" "ledger: ledger/6.md:32: malformed addition heading"
+cp -R "$B" "$tmp/z5"
+mk7 "$tmp/z5" "app-P1 app-T1 X1" "l1"
+run "gate, lower case L addition in ledger/7.md" 1 "" gate "$tmp/z5" --tier medium --stage6 complete --late complete
+errmsg "lower case L addition" "ledger: ledger/7.md:16: malformed addition heading"
+cp -R "$B" "$tmp/z6"
+printf '### x2: Another\nlow.\n' >> "$tmp/z6/codex/response.md"
+run "check 6, lower case X heading in the response" 1 "ledger: codex/response.md:12: heading names an X addition but does not read #+ X<n>:" check "$tmp/z6" --through 6 --stage6 complete
+cp -R "$B" "$tmp/z7"
+printf '### l2: Another late\n- severity: low\n' >> "$tmp/z7/late/adversary.md"
+run "check 7, lower case L heading in the late file" 1 "ledger: late/adversary.md:30: malformed finding heading" check "$tmp/z7" --through 7 --tier medium --stage6 complete --late complete
+
+# Only the exact lines end a block; "status: ..." and "runs: ..." inside a block are text.
+BE=$tmp/be
+mkdir -p "$BE/pass1" "$BE/ledger"
+printf 'pass1 s pass1/s.md m-a complete\npass2 s - - not-run\n' > "$BE/ledger/inventory.txt"
+printf '### s-F1: One\n- severity: high\n- label: verified fact\n- evidence: e\nstatus: pending review of the claim\nruns: 3 commands logged\n- demonstrated: more\nrequired status: ok\nconsumed: none\nstatus: complete\n' > "$BE/pass1/s.md"
+cat > "$tmp/wantbe.txt" <<'EOF'
+## s-F1
+- origin: pass1
+- author: cca:auditor, model m-a, file pass1/s.md
+### Original
+### s-F1: One
+- severity: high
+- label: verified fact
+- evidence: e
+status: pending review of the claim
+runs: 3 commands logged
+- demonstrated: more
+required status: ok
+### Pass-two verdicts
+- none
+### State after pass two
+high, verified fact, no verdict: not run, budget expired
+
+EOF
+runf "build5, block text that starts like an end line" 0 "$tmp/wantbe.txt" build5 "$BE"
+
+# A leading list number does not hide a position.
+cp -R "$B" "$tmp/z8"
+sed 's/^web-F1: confirmed blocker$/1. web-F1: confirmed blocker/; s/^\*\*app-F4\*\*: reword accepted$/2) **app-F4**: reword accepted/' "$B/codex/response.md" > "$tmp/z8/codex/response.md"
+run "missing, numbered answers" 0 "" missing "$tmp/z8"
+run "check 6, numbered answers" 0 "" check "$tmp/z8" --through 6 --stage6 complete
+
+# check 5 needs both map headings, once each, in order.
+cp -R "$B" "$tmp/z9"
+cp "$tmp/want5.txt" "$tmp/z9/ledger/5.md"
+want="ledger: ledger/5.md: no '## Map corrections applied' heading
+ledger: ledger/5.md: no '## Map corrections not applied' heading"
+run "check 5, no map headings" 1 "$want" check "$tmp/z9" --through 5
+cp "$tmp/want5.txt" "$tmp/z9/ledger/5.md"
+printf '## Map corrections applied\n- none\n' >> "$tmp/z9/ledger/5.md"
+run "check 5, no not-applied heading" 1 "ledger: ledger/5.md: no '## Map corrections not applied' heading" check "$tmp/z9" --through 5
+cp "$tmp/want5.txt" "$tmp/z9/ledger/5.md"
+printf '## Map corrections applied\n- none\n\n## Map corrections applied\n- none\n\n## Map corrections not applied\n- none\n' >> "$tmp/z9/ledger/5.md"
+run "check 5, heading twice" 1 "ledger: ledger/5.md: '## Map corrections applied' appears 2 times" check "$tmp/z9" --through 5
+cp "$tmp/want5.txt" "$tmp/z9/ledger/5.md"
+printf '## Map corrections not applied\n- none\n\n## Map corrections applied\n- none\n' >> "$tmp/z9/ledger/5.md"
+run "check 5, headings out of order" 1 "ledger: ledger/5.md: '## Map corrections not applied' comes before '## Map corrections applied'${nl}ledger: ledger/5.md differs from the build5 output at line 136" check "$tmp/z9" --through 5
+
+# late-ids.
+run "late-ids, medium" 0 "X1${nl}app-P1${nl}app-T1" late-ids "$B" --tier medium --stage6 complete
+run "late-ids, high" 0 "X1${nl}app-P1${nl}app-T1" late-ids "$B" --tier high --stage6 complete
+run "late-ids, low" 0 "" late-ids "$B" --tier low --stage6 complete
+cp -R "$B" "$tmp/z10"
+sed '13s/.*/- position: restore requested for app-F3/' "$B/ledger/6.md" > "$tmp/z10/ledger/6.md"
+run "late-ids, restore requested" 0 "X1${nl}app-F3${nl}app-P1${nl}app-T1" late-ids "$tmp/z10" --tier medium --stage6 complete
+run "late-ids, restore requested at low" 0 "" late-ids "$tmp/z10" --tier low --stage6 complete
+mkdir -p "$tmp/z10/live"
+printf '## app-F2\n' > "$tmp/z10/live/findings.md"
+run "late-ids, live id at low" 0 "app-F2" late-ids "$tmp/z10" --tier low --stage6 complete
+run "late-ids, live id at medium" 0 "X1${nl}app-F2${nl}app-F3${nl}app-P1${nl}app-T1" late-ids "$tmp/z10" --tier medium --stage6 complete
+run "late-ids without --tier" 2 "" late-ids "$B"
+run "late-ids without --stage6" 2 "" late-ids "$B" --tier low
+run "late-ids with --late" 2 "" late-ids "$B" --tier low --stage6 complete --late complete
+
+cp -R "$B" "$tmp/z11"
+mk7 "$tmp/z11" "app-P1 X1" "L1"
+want="ledger: ledger/7.md: no late verdict for app-T1, which late-ids lists
+ledger: gate.md:6: 'app-T1: counts; late verdict, stage 6 acknowledged (low or note)', expected 'app-T1: provisional; no late verdict'"
+run "check 7, late-ids id without a late verdict" 1 "$want" check "$tmp/z11" --through 7 --tier medium --stage6 complete --late complete
+
+# Review round 1 of 0.5.1.
+cp -R "$B" "$tmp/aa1"
+rm "$tmp/aa1/ledger/6.md"
+run "late-ids, stage 6 complete, no ledger/6.md" 2 "" late-ids "$tmp/aa1" --tier medium --stage6 complete
+errmsg "late-ids, no ledger/6.md" "ledger: cannot read $tmp/aa1/ledger/6.md"
+run "late-ids, stage 6 failed, no ledger/6.md" 0 "app-P1${nl}app-T1" late-ids "$tmp/aa1" --tier medium --stage6 failed
+run "late-ids, no ledger/5.md" 2 "" late-ids "$tmp/empty" --tier low --stage6 failed
+errmsg "late-ids, no ledger/5.md (failed)" "ledger: cannot read $tmp/empty/ledger/5.md"
+run "late-ids, stage 6 failed ignores restore requests" 0 "X1${nl}app-F2${nl}app-P1${nl}app-T1" late-ids "$tmp/z10" --tier medium --stage6 failed
+
+cp -R "$B" "$tmp/aa2"
+{ grep -v '^status: complete$' "$B/pass1/web.md"; printf 'status: complete \t\n'; } > "$tmp/aa2/pass1/web.md"
+runf "build5, trailing blanks on the final status line" 0 "$tmp/want5.txt" build5 "$tmp/aa2"
+
+# A heading that only resembles an id is not an error.
+cp -R "$B" "$tmp/aa3"
+printf '### api-v2: notes\nfree text\nstatus: complete\n' >> "$tmp/aa3/pass1/cfg.md"
+runf "build5, heading that resembles an id" 0 "$tmp/want5.txt" build5 "$tmp/aa3"
+
 # ---------------------------------------------------------------------------
 # Usage errors and unreadable input: exit 2, nothing on stdout.
 usage_msg="usage: ledger.sh build5|mandatory|seen|missing <run dir>
+       ledger.sh late-ids <run dir> --tier low|medium|high --stage6 complete|failed
        ledger.sh gate <run dir> --tier low|medium|high --stage6 complete|failed --late complete|failed|not-run
        ledger.sh check <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]"
 run "no arguments" 2 ""

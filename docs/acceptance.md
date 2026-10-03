@@ -99,7 +99,7 @@ and on Ubuntu with dash, with identical commit ids on both.
 | M4-h | The `convention` contested finding is `contested` and counted at its lower severity | not run | needs a live multi-agent audit run |
 | M4-i | `_test` expires the budget when stage 3 completes: no stage from 4 on launches new agents, stage 8 runs, and the run ends `partial` | not run | needs a live multi-agent audit run |
 | M4-j | The file touched by three tickets is in `cross-cutting` and noted in each former group; a manifest `groups` key of two entries yields exactly those two plus `unticketed` | not run | needs a live multi-agent audit run |
-| M4-k | `_test` plants a wrong line in the legacy map: `domain/legacy-source-map.r2.md` has a corrections header, a top-up writes `pass2/<group>-topup.md` with `origin: topup`, the `pass1/` file is unchanged, and the finding is `provisional` until the late adversary clears it | not run | needs a live multi-agent audit run |
+| M4-k | `_test` plants a wrong line in the legacy map: `domain/legacy-source-map.r2.md` has a corrections header, a top-up writes `pass2/<scope>-topup.md` with `origin: topup`, the `pass1/` file is unchanged, and the finding is `provisional` until the late adversary clears it | not run | needs a live multi-agent audit run |
 | M4-l | `_test` sets the ledger split threshold to 1,000 bytes: `converged/` has one file per group, or one per part `<group>-<k>` for a group whose slice exceeds the threshold, `ledger/slices/` holds the matching slices, and `converged.md` maps every ledger id | not run | needs a live multi-agent audit run |
 | M4-m | The `verified fact` contested finding is counted at its higher severity | not run | needs a live multi-agent audit run |
 

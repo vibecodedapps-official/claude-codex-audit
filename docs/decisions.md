@@ -862,6 +862,21 @@ change stays inside the plugin.
   no behavior gain), live.sh's size, the line formats of the ledgers, forge adapters, and
   a first full multi-agent run are follow-ups.
 
+## 0.5.1 decisions (2026-10-03)
+
+- **The late adversary's ids come from a script.** Stage 7 used to list the ids to
+  challenge in the prompt by hand, from three rules in prose, so a dropped id meant a
+  finding with no late verdict and a provisional gate nobody saw. `ledger.sh late-ids`
+  builds the list, the prompt passes the file, and `check --through 7` reports any id of
+  the list without a verdict. The orchestrator still judges nothing there; the rules are
+  the ones the stage text already stated.
+- **The follow-up is a file.** The Codex follow-up carried its id list in the tool
+  argument, typed by the model, and its inline inputs in the same argument. It is now
+  `codex/followup.md`, filled by shell from `tmp/missing.txt` and the batch files, and the
+  call only says to read it. The cost is one more file in the run directory; the gain is
+  that no id passes through a typed argument and the byte cap applies to a file that can
+  be measured and kept.
+
 ## Auditor reach: tests, base producers, and run-once scripts (2026-10-03)
 
 A hand-run audit sweep of a real bundle on 2026-10-02 confirmed 20 defects. Issues #17

@@ -373,10 +373,15 @@ status: complete
 Parsing rules, which `scripts/ledger.sh` enforces on every output it reads. A finding block
 starts at a line `### <id>: <title>` and a verdict block at
 `### verdict on <id>: <verdict>`. A block ends at the next line that starts `## ` or
-`### `, at a line that starts `runs:`, `consumed:`, or `opened:` (so `runs: none` ends
-it), or at a line that starts `status: `. A fence line is one whose first non-blank
+`### `, or at a line that is exactly `runs:`, `runs: none`, `consumed:`,
+`consumed: none`, `opened:`, `opened: none`, or `status: complete`; any other line that
+starts with one of those words is body text. A complete file ends with `status: complete`
+(the script checks it against the inventory). A fence line is one whose first non-blank
 characters are three backticks; lines between two fence lines never start or end a block,
-and a file that ends inside a fence is an error. An id is `<scope>-F<n>`, `<scope>-P<n>`, `<scope>-T<n>`, `X<n>`, or `L<n>`.
+and a file that ends inside a fence is an error. An id is `<scope>-F<n>`,
+`<scope>-P<n>`, `<scope>-T<n>`, `X<n>`, or `L<n>`, and is case-sensitive: a mis-cased id
+heading is an error. A position line in a second-opinion answer may start with a list
+number (`1. <id>: ...`).
 A finding block has exactly one `- severity:` line and one `- label:` line, each with an
 allowed value. A verdict block has exactly one verdict word and one `- severity:`,
 `- label:`, and nonempty `- evidence:` line. A duplicate id, two verdicts for one id, a

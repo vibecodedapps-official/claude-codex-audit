@@ -20,8 +20,10 @@ exists only on a run resumed with a live finding result. A `_test.drop_ack` nami
 `live/findings.md` applies like any other input.
 
 Outputs: `codex/request.md`, `codex/inputs/*`, `codex/response.md`, `ledger/6.md`,
-and, when the fallback answers several batches, `codex/request-<k>.md` and
-`codex/response-<k>.md` for each batch `<k>` it answers, numbered from 2 (step 9).
+`ledger/mandatory.txt`, `codex/batch-<k>.txt` for each batch `<k>` of the mandatory set
+(step 4.3), `codex/followup.md` when a follow-up is sent (step 8), and, when the
+fallback answers several batches, `codex/request-<k>.md` and `codex/response-<k>.md`
+for each batch `<k>` it answers, numbered from 2 (step 9).
 
 ## Steps
 
@@ -64,9 +66,9 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
       names each carried one with its carried file. When `live/carried/` holds an `X<n>`,
       ask 4 numbers the additions after the highest carried `X<n>`: the carried ids are
       reserved, so an addition never reuses one. Asks 1 and 2 each end with the template's
-      id slot: when step 4.3 splits the mandatory set, `for these ids: <the batch's ids>`
-      (the first batch here, from `codex/batch-1.txt` by shell, step 4.3); otherwise
-      `for every such finding`. It names each input copy by its absolute path, and each
+      id slot: when step 4.3 splits the mandatory set, the line
+      `for these ids: IDS-BATCH-1` (the first batch here; step 4.3 replaces the
+      placeholder by shell); otherwise `for every such finding`. It names each input copy by its absolute path, and each
       audited source by its absolute read path and sha from the brief.
    3. **Mandatory id set and batches.** Never take the id list into the conversation.
       Run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh mandatory <run dir> >
@@ -81,11 +83,18 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
       no mandatory id may be left unrequested in a run that completes. A nonzero exit
       fails stage 6 (the run will end `partial`). Count it with `wc -l`. The 3,000-word
       answer cap cannot hold more than 60 ids, so when the set has more, split it in id
-      order by shell (`split -l 60`, or awk) into batch files `codex/batch-<k>.txt` of at
-      most 60 ids, numbered from 1; each batch is the id list in the slot of asks 1 and
-      2. Fill each request's `for these ids:` slot by shell from its batch file, for
-      example `paste -sd, <batch file> | sed 's/,/, /g' >> <request file>`, never by
-      typing ids.
+      order by shell into batch files `codex/batch-<k>.txt` of at most 60 ids, numbered
+      from 1, in the run directory, for example `awk 'NR % 60 == 1 { k++ } { print >
+      ("codex/batch-" k ".txt") }' ledger/mandatory.txt`; each batch is the id list in the
+      slot of asks 1 and 2. A request holds a placeholder line `for these ids:
+      IDS-BATCH-<k>` per slot, which shell replaces in place with the batch's ids, never
+      by typing ids and never by appending at the end of the file, for example with
+      `ids=$(paste -sd, codex/batch-1.txt | sed 's/,/, /g')`, then `awk -v p=IDS-BATCH-1
+      -v ids="$ids" '{ i = index($0, p); if (i) $0 = substr($0, 1, i - 1) ids
+      substr($0, i + length(p)); print }' codex/request.md > tmp/request.new && mv -f
+      tmp/request.new codex/request.md`. The offset comes from the placeholder itself
+      (`length(p)`), so any `<k>` works. Request files for batch `<k>` from 2 use
+      `-v p=IDS-BATCH-<k>` and the same replacement.
       - Codex: `codex/request.md` carries the first batch and the one follow-up (step
         8) carries at most 60 positions in total: the first batch's ids still without a
         position come first, then the second batch's ids in order until 60 is reached.
@@ -163,30 +172,32 @@ and, when the fallback answers several batches, `codex/request-<k>.md` and
      due: continue to step 9.
    - Anything else (an input unacknowledged, a mandatory id without a position, or a
      second batch due): access or coverage is not confirmed. Send the one follow-up
-     allowed, the Skill tool, `codex-lite:ask`, with `--model <model> --timeout
-     <timeout> --resume <thread id>`. As the question it carries, together: the
-     unacknowledged inputs in inline form (full content under their path and sentinel
-     headers) with a request to acknowledge them and revise any answer that depended on
-     them; and asks 1 and 2 for at most 60 ids in total, ending each ask with
-     `for these ids: <id list>`: the first batch's ids still without a position, then
-     the second batch's ids in order as far as 60 allows, the list built by shell from
-     `tmp/missing.txt` and the batch files and appended to the follow-up file in the
-     same `for these ids:` form (step 4.3; `batched` is then
-     true). Second-batch ids that do not fit are not asked here; step 4.3 sends them to
-     the fallback: launch those fallback batches now, before this follow-up call
-     (step 11, numbered as step 9 says), so they run while Codex answers and a budget
-     that expires during the call still lets them finish. Measure the follow-up in bytes
-     (`wc -c`). The cap is 450,000 bytes, or `_test.inline_cap_bytes` when set. Over the
-     cap, the follow-up is not sent and stage 6 fails as below; no diff is dropped. With
-     no thread id, send it as a fresh call that carries only the follow-up's asks (the
-     unacknowledged inputs inline, the missing positions, the second batch) plus
-     `common.md`, `audit-brief.md`, and `ledger/5.md`, each named by its absolute path
-     under `codex/inputs/`, not the whole request again. Handle its status as in step 7,
+     allowed, built as a file, so that no id is typed into a tool argument. Write
+     `codex/followup.md` with: the unacknowledged inputs in inline form (full content
+     under their path and sentinel headers) with a request to acknowledge them and
+     revise any answer that depended on them; and asks 1 and 2 for at most 60 ids in
+     total, each ending with a placeholder line `for these ids: IDS-FOLLOWUP`, which
+     shell replaces in place (the awk of step 4.3 with `-v p=IDS-FOLLOWUP`) with the ids
+     built by shell
+     from `tmp/missing.txt` and the batch files: the first batch's ids still without a
+     position, then the second batch's ids in order as far as 60 allows (`batched` is
+     then true). Second-batch ids that do not fit are not asked here; step 4.3 sends
+     them to the fallback: launch those fallback batches now, before this follow-up
+     call (step 11, numbered as step 9 says), so they run while Codex answers and a
+     budget that expires during the call still lets them finish. Measure
+     `codex/followup.md` in bytes (`wc -c`). The cap is 450,000 bytes, or
+     `_test.inline_cap_bytes` when set. Over the cap, the follow-up is not sent and
+     stage 6 fails as below; no diff is dropped. Then call the Skill tool,
+     `codex-lite:ask`, with `--model <model> --timeout <timeout> --resume <thread id>
+     Read "<absolute path of codex/followup.md>" and answer as it asks.` With no thread
+     id, send it as a fresh call that reads the same file, which then also names
+     `common.md`, `audit-brief.md`, and `ledger/5.md` by their absolute paths under
+     `codex/inputs/`, not the whole request again. Handle its status as in step 7,
      except that a swap is replaced by stage 6 failing, since the first answer already
      exists.
    - Still unacknowledged after the follow-up: stage 6 fails. Keep the answer, list the
      unacknowledged inputs in `ledger/6.md` and the stage entry, naming as one possible
-     cause that the inline text was altered in transit through the Skill argument, or
+     cause that the inline text in `codex/followup.md` was misread, or
      that Codex could not open a path, and mark in `ledger/6.md` that no finding passes
      the review gate on stage 6's account. The run will end `partial`.
 

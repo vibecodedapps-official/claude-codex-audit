@@ -39,8 +39,9 @@ files "for duplicate checks only"), in split mode as the final merger the
    raised it) and the ledger ids it absorbs, on one line `- absorbs: <id>, <id>, ...`
    (a comma and a space), once per item.
 4. Give each item its gate. It `counts` when a reviewer other than its author has
-   challenged it and both a Claude adversary and the second opinion have seen it, in any
-   role. Anything else, including what the late adversary raised itself, is `provisional`.
+   challenged it, and the second opinion gave a position on it when it is medium or
+   above, or acknowledged it when it is low or note. Anything else, including what the
+   late adversary raised itself, is `provisional`.
    Take each id's gate from `gate.md`. Write it as exactly one line `- gate: counts` or
    `- gate: provisional` per item, nothing after the word; `counts` exactly when an
    absorbed id counts.

@@ -575,8 +575,9 @@ report. Stage 6 always runs.
 
 cca never runs the `codex` CLI itself, except `codex --version` to check it is there.
 The request names every input by absolute path, and Codex acknowledges each input with
-its sentinel. Only an input it could not open goes inline, in the one follow-up, under a
-450,000-byte cap. Over the cap, the follow-up is not sent and stage 6 fails.
+its sentinel. Only an input it could not open goes inline, in the one follow-up (a file,
+`codex/followup.md`), under a 450,000-byte cap. Over the cap, the follow-up is not sent
+and stage 6 fails.
 
 Codex reads a file outside every repo, such as a run directory in the plugin's data
 directory, by absolute path. That read was verified on Windows with codex-lite's elevated
