@@ -8,8 +8,8 @@ Inputs: `audit-brief.md`, `common.md`, every complete `pass1/<scope>.md`, and th
 `domain/*-map.md` files.
 
 Outputs: `pass2/<scope>.md` per pass-one report, `domain/<source>-map.r2.md` per
-corrected map, `pass2/<group>-topup.md` per map-correction top-up, `ledger/inventory.txt`,
-and `ledger/5.md`.
+corrected map, `pass2/<scope>-topup.md` per map-correction top-up,
+`ledger/inventory.txt`, and `ledger/5.md`.
 
 ## Steps
 

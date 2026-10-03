@@ -78,18 +78,18 @@ the Verified OK list the tier lets you attack.
    prompt names them, `live/findings.md`, `live/claims.md`, and the files under
    `live/carried/`. Read each result copy `live/results-<k>/<line>.txt` your prompt names
    in full: a result kept as a file is the result itself.
-2. Challenge every late addition (`- origin: pass2`, `- origin: topup`, and
-   `- origin: codex`) and every finding the second opinion asked to restore, together with
-   its stage 5 verdicts, as in steps 3 and 4. Also challenge every finding
-   `live/findings.md` lists: a live result is a run the approver made, so read its
-   derivation against the finding's own `live check` outcomes and the result, and check
-   that exactly one stated outcome matches and that the result ran at the place and with
-   the query the check names. A carried finding (`X<n>` or `L<n>`) is read from its
-   `live/carried/<id>.md`, since the ledger may no longer hold it. When your prompt is a
-   low-tier run, these are the only ids you challenge. You never run a live check
-   yourself (boundary 4). Write one `### verdict on <id>: <word>` block per id, with
-   `- severity: <old> -> <new>` (or `unchanged`), `- label:`, a nonempty `- evidence:`,
-   and `- reason:` lines.
+2. Read your ids from the file your prompt names (`tmp/late-ids.txt`, one id per line),
+   and challenge every one of them: the late additions (`- origin: pass2`,
+   `- origin: topup`, and `- origin: codex`), the findings the second opinion asked to
+   restore, and the live ids, together with their stage 5 verdicts, as in steps 3 and 4.
+   For a finding `live/findings.md` lists, a live result is a run the approver made, so
+   read its derivation against the finding's own `live check` outcomes and the result,
+   and check that exactly one stated outcome matches and that the result ran at the
+   place and with the query the check names. A carried finding (`X<n>` or `L<n>`) is read
+   from its `live/carried/<id>.md`, since the ledger may no longer hold it. Challenge no
+   id that is not in the file. You never run a live check yourself (boundary 4). Write
+   one `### verdict on <id>: <word>` block per id, with `- severity: <old> -> <new>` (or
+   `unchanged`), `- label:`, a nonempty `- evidence:`, and `- reason:` lines.
 3. Write `## Claims challenged` after the verdicts, as step 9 of pass two says: a line
    for every claim `live/claims.md` derives `true, reproduced`, upheld or overturned with
    your evidence. A live env claim is reproduced only by a result from the environment it
