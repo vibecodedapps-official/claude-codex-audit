@@ -481,14 +481,12 @@ For each bundle, record:
   `git -C <repo> diff --name-status -M <base>...<head> -- ':(glob)<pattern>' ...`, one
   pathspec per pattern, three dots as in step 4 (a `head: working-tree` bundle uses its
   built head sha the same way). The `-M` makes a rename show as `R` whatever the user's
-  `diff.renames` setting is. For each listed file, run
-  `git -C <repo> cat-file -e <merge-base>:<path>`: exit 0 means it exists at the
-  merge-base, and any non-zero exit means it is new. A rename (`R` with a score) is
-  listed by its new path, and it counts as existing when its old path exists at the
-  merge-base. A deleted file (`D`) exists at the merge-base, so it is listed with status
-  `D` and `exists at merge-base`. The pathspec hides an old path that matches no
+  `diff.renames` setting is. In a three-dot diff the old side is the merge-base, so the
+  status letter alone says whether a file exists there. `M`, `D`, and `R` with any score
+  exist at the merge-base, and a rename is listed by its new path. `A` is new, and so is
+  the new path of a `C` (copy) entry. The pathspec hides an old path that matches no
   pattern, so a file moved in from outside the patterns shows as `A` and is listed as
-  new. Both commands only read. A `run_once` key that matches no changed file gives the
+  new. The command only reads. A `run_once` key that matches no changed file gives the
   list `none`. A bundle without the key has no list.
 
 For every reference and source of truth with a `path`, record its pinned sha:

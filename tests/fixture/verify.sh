@@ -14,6 +14,13 @@
 # Exit 0 when every check passes; otherwise print one line per mismatch and exit 1.
 set -u
 
+# Run every git call without the user's global or system config, as build.sh does.
+GIT_CONFIG_NOSYSTEM=1
+GIT_CONFIG_GLOBAL=/dev/null
+export GIT_CONFIG_NOSYSTEM GIT_CONFIG_GLOBAL
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL \
+	GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+
 m=${1:-}
 if [ -z "$m" ] || [ ! -f "$m" ]; then
 	echo "verify: no manifest at '$m'"
@@ -190,10 +197,11 @@ if [ "$name" = patterns ]; then
 	cmp -s "$tmp/p20.once" "$tmp/p20/data/users.csv" || fail "P20: a rerun of 002 changed data/users.csv"
 	tree feature "$tmp/p20new"
 	out=$(cd "$tmp/p20new" && sh migrate.sh 2>&1)
-	same "P20: migrate.sh output on a fresh install at the head" "applied 001_create_users.sh|applied 002_add_last_login.sh" 		"$(printf '%s
-' "$out" | tr '
-' '|' | sed 's/|$//')"
-	same "P20: header on a fresh install at the head" "id,name,status,email,last_login" 		"$(head -n 1 "$tmp/p20new/data/users.csv" 2>/dev/null)"
+	same "P20: migrate.sh output on a fresh install at the head" \
+		"applied 001_create_users.sh|applied 002_add_last_login.sh" \
+		"$(printf '%s\n' "$out" | tr '\n' '|' | sed 's/|$//')"
+	same "P20: header on a fresh install at the head" "id,name,status,email,last_login" \
+		"$(head -n 1 "$tmp/p20new/data/users.csv" 2>/dev/null)"
 	cp "$tmp/p20new/data/users.csv" "$tmp/p20new.once"
 	(cd "$tmp/p20new" && sh migrations/001_create_users.sh && sh migrations/002_add_last_login.sh)
 	cmp -s "$tmp/p20new.once" "$tmp/p20new/data/users.csv" || fail "P20: a rerun of 001 and 002 changed data/users.csv on a fresh install"
