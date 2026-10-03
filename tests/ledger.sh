@@ -1229,8 +1229,8 @@ cp -R "$B" "$tmp/z6"
 printf '### x2: Another\nlow.\n' >> "$tmp/z6/codex/response.md"
 run "check 6, lower case X heading in the response" 1 "ledger: codex/response.md:12: heading names an X addition but does not read #+ X<n>:" check "$tmp/z6" --through 6 --stage6 complete
 cp -R "$B" "$tmp/z7"
-printf '### l2: Another late\n- severity: low\n' >> "$tmp/z7/late/adversary.md"
-run "check 7, lower case L heading in the late file" 1 "ledger: late/adversary.md:30: malformed finding heading" check "$tmp/z7" --through 7 --tier medium --stage6 complete --late complete
+{ head -n 27 "$B/late/adversary.md"; printf '### l2: Another late\n- severity: low\n'; tail -n 2 "$B/late/adversary.md"; } > "$tmp/z7/late/adversary.md"
+run "check 7, lower case L heading in the late file" 1 "ledger: late/adversary.md:28: malformed finding heading" check "$tmp/z7" --through 7 --tier medium --stage6 complete --late complete
 
 # Only the exact lines end a block; "status: ..." and "runs: ..." inside a block are text.
 BE=$tmp/be
@@ -1322,9 +1322,124 @@ printf '### api-v2: notes\nfree text\nstatus: complete\n' >> "$tmp/aa3/pass1/cfg
 runf "build5, heading that resembles an id" 0 "$tmp/want5.txt" build5 "$tmp/aa3"
 
 # ---------------------------------------------------------------------------
+# 0.5.2.
+# Item 7: X and L ids never belong in a pass file, so a lower-case x<n> subheading is
+# text there (it ends the finding block, like any H3); a mis-cased -f|p|t<n> id is not.
+cp -R "$B" "$tmp/ab1"
+printf '### x86: notes\nfree text\nstatus: complete\n' >> "$tmp/ab1/pass1/cfg.md"
+runf "build5, x<n> subheading in a pass file" 0 "$tmp/want5.txt" build5 "$tmp/ab1"
+run "check 5, x<n> subheading in a pass file" 0 "" check "$tmp/ab1" --through 5
+
+# Item 5: a restore request is matched in any letter case, and a restore position that
+# does not start with the phrase is a problem of check.
+cp -R "$B" "$tmp/ab2"
+sed '13s/.*/- position: Restore requested for app-F3/' "$B/ledger/6.md" > "$tmp/ab2/ledger/6.md"
+run "late-ids, Restore requested in capitals" 0 "X1${nl}app-F3${nl}app-P1${nl}app-T1" late-ids "$tmp/ab2" --tier medium --stage6 complete
+run "check 6, Restore requested in capitals" 0 "" check "$tmp/ab2" --through 6 --stage6 complete
+cp -R "$B" "$tmp/ab3"
+sed '13s/.*/- position: restore: please/' "$B/ledger/6.md" > "$tmp/ab3/ledger/6.md"
+run "check 6, restore position without the phrase" 1 "ledger: ledger/6.md:12: app-F3: a restore position must start with \"restore requested\"" check "$tmp/ab3" --through 6 --stage6 complete
+run "check 6, restore position, stage 6 failed" 1 "ledger: ledger/6.md:12: app-F3: a restore position must start with \"restore requested\"" check "$tmp/ab3" --through 6 --stage6 failed
+cp -R "$B" "$tmp/ab4"
+sed '13s/.*/- position: restores the original wording/' "$B/ledger/6.md" > "$tmp/ab4/ledger/6.md"
+run "check 6, position that merely begins with restore" 0 "" check "$tmp/ab4" --through 6 --stage6 complete
+
+# Item 6: with stage 6 failed, a malformed addition heading or an X block that holds an
+# unclosed fence is left out of late-ids and gate, and check still reports it; with
+# stage 6 complete both stay errors of every op.
+cp -R "$B" "$tmp/ab5"
+mk6 "$tmp/ab5" "app-F1 app-F3 app-F4 app-P1 web-F1" "app-F2 app-T1 cfg-F1" "X1 X3"
+printf '### X3: Another\nlow.\n' >> "$tmp/ab5/codex/response.md"
+cp -R "$tmp/ab5" "$tmp/ab6"
+printf '### x2: Bad\n- severity: low\n' >> "$tmp/ab5/ledger/6.md"
+printf '### X4: Open\n- severity: low\n- label: convention\n- evidence: see\n```\nnever closed\n' >> "$tmp/ab6/ledger/6.md"
+want="X1${nl}X3${nl}app-P1${nl}app-T1"
+run "late-ids, stage 6 failed, malformed addition heading" 0 "$want" late-ids "$tmp/ab5" --tier medium --stage6 failed
+run "late-ids, stage 6 failed, X block holds an unclosed fence" 0 "$want" late-ids "$tmp/ab6" --tier medium --stage6 failed
+want="app-F1: provisional; stage 6 failed
+app-F2: provisional; stage 6 failed
+app-F4: provisional; stage 6 failed
+app-F3: provisional; stage 6 failed
+app-P1: provisional; stage 6 failed
+app-T1: provisional; stage 6 failed
+web-F1: provisional; stage 6 failed
+cfg-F1: provisional; stage 6 failed
+X1: counts; late verdict
+X3: provisional; no late verdict
+L1: provisional; late finding"
+run "gate, stage 6 failed, malformed addition heading" 0 "$want" gate "$tmp/ab5" --tier medium --stage6 failed --late complete
+run "gate, stage 6 failed, X block holds an unclosed fence" 0 "$want" gate "$tmp/ab6" --tier medium --stage6 failed --late complete
+run "check 6, stage 6 failed, malformed addition heading" 1 "ledger: ledger/6.md:53: malformed addition heading" check "$tmp/ab5" --through 6 --stage6 failed
+run "check 6, stage 6 failed, X block holds an unclosed fence" 1 "ledger: ledger/6.md: the file ends inside a code fence" check "$tmp/ab6" --through 6 --stage6 failed
+run "late-ids, stage 6 complete, malformed addition heading" 1 "" late-ids "$tmp/ab5" --tier medium --stage6 complete
+errmsg "late-ids, stage 6 complete, malformed addition heading" "ledger: ledger/6.md:53: malformed addition heading"
+run "gate, stage 6 complete, unclosed fence" 1 "" gate "$tmp/ab6" --tier medium --stage6 complete --late complete
+errmsg "gate, stage 6 complete, unclosed fence" "ledger: ledger/6.md: the file ends inside a code fence"
+
+# Item 4: --late complete needs a late file that ends with status: complete.
+cp -R "$B" "$tmp/ab7"
+sed '$d' "$B/late/adversary.md" > "$tmp/ab7/late/adversary.md"
+run "check 7, late file without status: complete" 1 "ledger: late/adversary.md: --late complete, but the file does not end with status: complete" check "$tmp/ab7" --through 7 --tier medium --stage6 complete --late complete
+run "gate, late file without status: complete" 0 "$gate_base" gate "$tmp/ab7" --tier medium --stage6 complete --late complete
+cp -R "$B" "$tmp/ab8"
+printf '\n \t\n' >> "$tmp/ab8/late/adversary.md"
+run "check 7, blank lines after the late file's status line" 0 "" check "$tmp/ab8" --through 7 --tier medium --stage6 complete --late complete
+
+# Item 2: late-check reads late/adversary.md as check 7 does and also needs a verdict
+# block for every id late-ids lists.
+run "late-check, base" 0 "" late-check "$B" --tier medium --stage6 complete
+run "late-check, stage 6 failed" 0 "" late-check "$B" --tier medium --stage6 failed
+# A partial ledger/6.md after a failed stage 6 is not the late adversary's to fix:
+# late-check reports only the late file.
+cp -R "$tmp/ab5" "$tmp/lc0"
+mk7 "$tmp/lc0" "app-P1 app-T1 X1 X3" ""
+run "late-check, stage 6 failed, malformed addition heading" 0 "" late-check "$tmp/lc0" --tier medium --stage6 failed
+cp -R "$tmp/ab6" "$tmp/lc0b"
+mk7 "$tmp/lc0b" "app-P1 app-T1 X1 X3" ""
+run "late-check, stage 6 failed, X block holds an unclosed fence" 0 "" late-check "$tmp/lc0b" --tier medium --stage6 failed
+run "late-check, no status: complete" 1 "ledger: late/adversary.md: the file does not end with status: complete" late-check "$tmp/ab7" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc1"
+printf '```\nopen\n' >> "$tmp/lc1/late/adversary.md"
+run "late-check, file ends inside a fence" 1 "ledger: late/adversary.md: the file ends inside a code fence${nl}ledger: late/adversary.md: the file does not end with status: complete" late-check "$tmp/lc1" --tier medium --stage6 complete
+run "late-check, malformed heading" 1 "ledger: late/adversary.md:28: malformed finding heading" late-check "$tmp/z7" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc2"
+rm "$tmp/lc2/late/adversary.md"
+run "late-check, no late file" 1 "ledger: late/adversary.md: cannot read the file" late-check "$tmp/lc2" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc3"
+mk7 "$tmp/lc3" "app-P1 X1" "L1"
+run "late-check, no verdict for a late-ids id" 1 "ledger: late/adversary.md: no verdict for app-T1, which late-ids lists" late-check "$tmp/lc3" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc4"
+mk7 "$tmp/lc4" "app-P1 app-T1 X1 app-F1" "L1"
+run "late-check, verdict for an id late-ids does not list" 1 "ledger: late/adversary.md:21: verdict on app-F1, which late-ids does not list" late-check "$tmp/lc4" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc5"
+mk7 "$tmp/lc5" "app-P1 app-T1 X1 app-P1" "L1"
+run "late-check, duplicate verdict" 1 "ledger: late/adversary.md:21: duplicate verdict for app-P1" late-check "$tmp/lc5" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc6"
+sed '6s/.*/- evidence:/' "$B/late/adversary.md" > "$tmp/lc6/late/adversary.md"
+run "late-check, verdict without evidence" 1 "ledger: late/adversary.md:3: verdict on app-P1: needs exactly one nonempty - evidence: line" late-check "$tmp/lc6" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc7"
+sed '24s/.*/- label: bogus/' "$B/late/adversary.md" > "$tmp/lc7/late/adversary.md"
+run "late-check, late finding with a bad label" 1 "ledger: late/adversary.md:21: L1: label 'bogus' is not verified fact, unverified assumption, or convention" late-check "$tmp/lc7" --tier medium --stage6 complete
+cp -R "$B" "$tmp/lc8"
+mkdir -p "$tmp/lc8/live/carried"
+printf '## L1\n' > "$tmp/lc8/live/findings.md"
+printf '### L1: Carried\n' > "$tmp/lc8/live/carried/L1.md"
+run "late-check, late finding reuses a carried id" 1 "ledger: late/adversary.md: no verdict for L1, which late-ids lists${nl}ledger: late/adversary.md: addition L1 reuses a carried id" late-check "$tmp/lc8" --tier medium --stage6 complete
+want="ledger: late/adversary.md:3: verdict on app-P1, which late-ids does not list
+ledger: late/adversary.md:9: verdict on app-T1, which late-ids does not list
+ledger: late/adversary.md:15: verdict on X1, which late-ids does not list"
+run "late-check, low tier lists only live ids" 1 "$want" late-check "$B" --tier low --stage6 complete
+run "late-check without --tier" 2 "" late-check "$B" --stage6 complete
+run "late-check without --stage6" 2 "" late-check "$B" --tier low
+run "late-check with --late" 2 "" late-check "$B" --tier low --stage6 complete --late complete
+run "late-check, no ledger/5.md" 2 "" late-check "$tmp/empty" --tier low --stage6 failed
+errmsg "late-check, no ledger/5.md" "ledger: cannot read $tmp/empty/ledger/5.md"
+
+# ---------------------------------------------------------------------------
 # Usage errors and unreadable input: exit 2, nothing on stdout.
 usage_msg="usage: ledger.sh build5|mandatory|seen|missing <run dir>
        ledger.sh late-ids <run dir> --tier low|medium|high --stage6 complete|failed
+       ledger.sh late-check <run dir> --tier low|medium|high --stage6 complete|failed
        ledger.sh gate <run dir> --tier low|medium|high --stage6 complete|failed --late complete|failed|not-run
        ledger.sh check <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]"
 run "no arguments" 2 ""
