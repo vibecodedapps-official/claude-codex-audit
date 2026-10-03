@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-10-03
 
 Adds `ledger.sh` and its checks, a medium-severity rule for the second opinion, one path
 for live checks, and `invocations.md`. No full multi-agent audit has run yet; the
@@ -32,6 +32,7 @@ agent-driven cases in `docs/acceptance.md` are still `not run`.
 
 ### Changed
 
+- A run started under 0.4.0 or earlier and resumed under 0.5.0 reruns from stage 1.
 - A stage 6 position is mandatory for every finding at medium severity or above, not
   only blocker and high. A low or note finding may still count on the second opinion's
   acknowledgment, and the gate reason says which. A medium finding no longer counts with
