@@ -888,7 +888,9 @@ for the 0.5.1 ledger work.
   Stage 1 lists the changed files that match, with whether each exists at the
   merge-base, so the auditor does not recompute it. An edit that changes what an
   existing script does is an `unverified assumption` with a live check, since only the
-  target environment's journal shows whether the script ran. The other two checks need a
+  target environment's journal shows whether the script ran. Only a modified script
+  counts. A runner that journals by name runs a renamed script again, so a rename is
+  not skipped. The other two checks need a
   design first. A name collision with another open pull request needs a new forge query.
   Rerun safety depends on the runner and the script's guards, not on each statement. The
   `solo` fixture's guarded `002_add_status.sh` shows a per-statement rule would flag

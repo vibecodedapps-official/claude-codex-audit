@@ -124,15 +124,17 @@ with `git show`, `git log`, and `git grep` only. A specialist scope does not run
    produces.
 2. Run-once scripts. The brief's run-once list names, for each bundle, the changed files
    that match the manifest's run-once patterns, each with its change status and whether it
-   exists at the merge-base. For a file in your scope that exists at the merge-base and
-   whose change alters what the script does (not a comment-only edit, not a deletion), file
+   exists at the merge-base. For a file in your scope with status `M` that exists at the
+   merge-base and whose change alters what the script does (not a comment-only edit), file
    a finding: a run-once script that may already be applied was edited, and runners that
    journal by name skip it, so the edit never runs where it was applied. Label it
    `unverified assumption`, so severity is at most `medium`. Fill `live check` with a
    concrete query: whether the script's name is in the journal (the table or file where
    the runner records applied scripts) of each target environment, and what each result
    changes. Journaled: the edit never runs there, so the change must be a new script. Not
-   journaled anywhere: no defect. An added file is not flagged by this rule.
+   journaled anywhere: no defect. A rename (`R`), a deletion (`D`), and an added file are
+   not flagged by this rule. A renamed script may run again under its new name; this
+   rule does not judge rerun safety.
 
 ## Top-up mode
 
