@@ -1,7 +1,7 @@
 # Fixture expected outcomes
 
-`sh tests/fixture/build.sh <name>` builds `solo`, `solo-dirty`, `full`, or `tokens` in a
-new temp directory and prints the absolute path of its manifest, nothing else. Below, `$F`
+`sh tests/fixture/build.sh <name>` builds `solo`, `solo-dirty`, `full`, `tokens`, or
+`patterns` in a new temp directory and prints the absolute path of its manifest, nothing else. Below, `$F`
 is that directory (the manifest's directory). Every value here is a literal. A value
 changes only with a recorded reason: change `build.sh` and this file in the same commit,
 and say why in the commit body.
@@ -12,9 +12,10 @@ skipped test, the solo-dirty symlink, branch, and `filter-ran`, the `MUST` rule,
 legacy ids, the CRLF bytes, the three tickets on `src/output.sh`, and, for `solo` and
 `solo-dirty`, that the five handoff files and `manifest-working-tree.json` exist, the
 handoff's hash and each verdicts file's heading hash below, and that `handoff.sh claims`
-gives the claim count per kind below; and, for `tokens`, its commit ids and messages,
-files, exports, and the `ticket_token` lines of its manifests) and prints one line per
-mismatch. CI runs it after each build. Its expected values are copies of the literals
+gives the claim count per kind below; for `tokens`, its commit ids and messages, files,
+exports, and the `ticket_token` lines of its manifests; and, for `patterns`, its commit
+ids, files, exports, and `run_once` line, plus four behavior checks run in temp copies)
+and prints one line per mismatch. CI runs it after each build. Its expected values are copies of the literals
 here, so a change to one changes the other.
 
 The builder fixes the git identity (`fixture <fixture@example.invalid>`), the commit
@@ -484,4 +485,147 @@ $A rev-parse main                          # 253d888eaa67c7c99b5f3d33a808835db8b
 $A log --reverse --format='%H %s' main..feature
 $A diff --name-only main...feature         # ci/status.txt config/app.conf data/migration.txt src/input.sh src/report.sh
 grep -c ticket_token $F/manifest.json      # 0
+```
+
+## patterns
+
+One repo, `app`, and three exported tickets, with a planted case for each of four
+patterns and a decoy for each. It shares nothing with `solo`: its commit ids are its own.
+The manifest carries the bundle key `run_once`; it has no claims file. No comment, name,
+commit message, or ticket text says that anything is wrong. Whether an audit finds a case
+is not decided here: `docs/acceptance.md` records it per audit run, as observed, not
+assumed.
+
+### Layout
+
+| Path | What it is |
+|---|---|
+| `$F/manifest.json` | One bundle: `./app`, branch `feature`, base `main`, tickets `file:./exports/PAT-1.md` to `PAT-3.md`, `"run_once": ["migrations/*.sh"]`; no `claims` |
+| `$F/exports/PAT-1.md` to `PAT-3.md` | Ticket exports with ids `PAT-1`, `PAT-2`, `PAT-3`, in the format of `APP-1`; no `acceptance_criteria` |
+| `$F/app` | The app repo, checked out on `feature`, not rebased onto `main`, no tracked changes |
+
+### Commits
+
+| Commit | Id | Branch | Files |
+|---|---|---|---|
+| `initial user records tool` | `72ca6912e7a55ef653f72a0667089e4d5b7c2a69` | merge-base | `.gitignore`, `data/users.csv`, `migrate.sh`, `migrations/001_create_users.sh`, `run-tests.sh`, `src/log.sh`, `src/reactivate.sh`, `src/users.sh`, `tests/test_users.sh` |
+| `PAT-1: reject non-numeric ids in deactivate` | `e110cb26a794a40b733341d9ca397425c9b55bc1` | feature | `src/users.sh`, `tests/test_users.sh` |
+| `PAT-2: add the warning count command` | `0c71299be23374e60d05f77fc1a0c292a945e9e6` | feature | `src/warnings.sh`, `tests/test_log.sh` |
+| `PAT-3: add the email and last_login columns` | `7bdaa0e61667de685db3a70f204a3918fb53413f` | feature head | `migrations/001_create_users.sh`, `migrations/002_add_last_login.sh`, `tests/test_users.sh` |
+| `log: lowercase the warning prefix` | `d84a2ec3bcdc1282bf12524ae08e24bf7928a7c8` | main head, the base's later commit | `src/log.sh` |
+
+- Merge-base: `72ca6912e7a55ef653f72a0667089e4d5b7c2a69`.
+- Commits on the base since the merge-base: `d84a2ec3bcdc1282bf12524ae08e24bf7928a7c8`
+  (`log: lowercase the warning prefix`). It changes `src/log.sh` only, which no feature
+  commit touches, so `main` merges into `feature` without a conflict.
+- Changed files (three-dot): `migrations/001_create_users.sh`,
+  `migrations/002_add_last_login.sh`, `src/users.sh`, `src/warnings.sh`,
+  `tests/test_log.sh`, `tests/test_users.sh`; 6 files changed, 71 insertions(+).
+- The test command is `sh run-tests.sh`. At the head it exits 0 and prints `pass` for
+  every test, 6 in all, and `ok` for both test files; at the merge-base it runs 2 tests.
+- `migrate.sh` writes its journal to `data/applied.txt`, which `.gitignore` lists.
+
+### Expected outcomes
+
+The ticket ids are `PAT-1`, `PAT-2`, `PAT-3`. Each case below gives where the defect is,
+the finding that describes it, and the decoys that must not count. A decoy that counts is
+a trap, and `docs/acceptance.md` records it as one.
+
+**P17: a sibling that lacks the check (`PAT-1`).**
+
+- Location: `src/reactivate.sh` lines 8 to 13, `reactivate_user`. It handles `id=$1`
+  the way `deactivate_user` did before the change, with no check, and the file is not in
+  the diff. The feature adds the check to `deactivate_user` in `src/users.sh` lines 25
+  to 30.
+- Expected finding: `reactivate_user` accepts a non-numeric id (`sh src/reactivate.sh abc`
+  exits 0 and prints nothing), although `deactivate_user` now rejects it with
+  `invalid id`. The ticket names only `deactivate`, so the finding is about the sibling
+  that has the same id handling, not about a ticket requirement.
+- Decoys: `list_users` (`src/users.sh` line 8) takes no id and correctly has no check.
+  `add_user` (lines 13 to 21) already rejects a bad id.
+
+**P18: a test that passes without the change (`PAT-1`).**
+
+- Location: `tests/test_users.sh` lines 25 to 27, `test_deactivate_rejects_bad_id`. It
+  runs `grep -q "invalid id" src/users.sh`. The string exists at the merge-base, in
+  `add_user` (`src/users.sh` line 16), so the test passes with the feature's change to
+  `src/users.sh` reverted, and nothing runs `deactivate` with a bad id.
+- Expected finding: the test would not catch a regression in what the ticket asks, that
+  `deactivate` rejects a non-numeric id. The finding quotes the test and names the
+  regression it misses: `deactivate` accepting `abc`.
+- Decoy: `test_deactivate_keeps_row` (lines 29 to 32) runs `deactivate 2` and asserts that
+  the row is still there with status `inactive`. It covers a different behavior and
+  passes at the merge-base too, but it does not claim to test the rejection, so it does
+  not count as a weak test of `PAT-1`.
+
+**P19: a base change to what a fix matches on (`PAT-2`).**
+
+- Location: `src/warnings.sh` line 7, `grep -c '^WARN:' "$1"`. The producer is `log_warn`
+  in `src/log.sh` line 6, `printf 'WARN: %s\n' "$*"`, at the merge-base and at the head.
+  Commit `d84a2ec3bcdc1282bf12524ae08e24bf7928a7c8` on `main` changes it to
+  `printf 'warning: %s\n' "$*"`. The feature does not change `src/log.sh`.
+- Expected finding: after the merge, `log_warn` writes lines that start `warning: `, and
+  `count_warnings` counts 0 for them. The command that `PAT-2` asks for reports no
+  warnings. The finding names the base commit.
+- Also expected, a second case of the P18 pattern: `tests/test_log.sh` lines 8 to 10
+  write their own `WARN:` lines instead of calling `log_warn`, so the test pins the
+  producer's text without running it and passes after the merge. A finding that says so
+  is correct, not a decoy that counts.
+- Decoy: the count at the head, 2 for two `log_warn` lines, is right.
+
+**P20: an edit to a run-once script that may already be applied (`PAT-3`).**
+
+- Location: `migrations/001_create_users.sh` lines 11 to 15, the block that appends
+  `,email` to the header and an empty field to each row. The file exists at the
+  merge-base and matches `run_once` (`migrations/*.sh`). The block works on a fresh
+  install: `sh migrate.sh` over the tracked seed gives `email` and `last_login`.
+- Expected finding: an install where `001_create_users.sh` is in the journal
+  (`data/applied.txt`) never runs the edited file again, because `migrate.sh` skips a
+  name it has recorded, so that install gets `last_login` and no `email` column. That
+  001 is not yet applied in every target environment is an `unverified assumption`, with
+  a `live check`: whether `001_create_users.sh` is in the journal of each target.
+  Severity no higher than `medium`.
+- Decoy: `migrations/002_add_last_login.sh` is a new file, and a rerun is a no-op because
+  of its guard on lines 7 to 9. It must not count, as a defect or as an edited run-once
+  file. The guard in the edited 001 (line 11) makes a rerun of 001 a no-op too; that is
+  not the finding.
+
+### Behavior checks
+
+`verify.sh` runs these in temp copies made with `git archive` or a temp clone, so the
+fixture repo never changes. Each failed check prints one line that starts with the case.
+
+- P17: at the head, `sh src/users.sh deactivate abc` exits non-zero with `invalid id`;
+  `sh src/reactivate.sh abc` exits 0 with no output and leaves `data/users.csv` as it was.
+- P18: with `src/users.sh` from the merge-base and the head's `tests/test_users.sh`,
+  `sh tests/test_users.sh` exits 0, prints `pass test_deactivate_rejects_bad_id` and
+  `pass test_deactivate_keeps_row`, and `sh src/users.sh deactivate abc` exits 0 with no
+  output.
+- P19: at the head, two `log_warn` lines give a count of 2. In a clone of `feature` after
+  `git merge origin/main` (no conflict), two `log_warn` lines are `warning: ` lines and
+  the count is 0.
+- P20: install at the merge-base (run `migrate.sh` over the tracked seed, so the journal
+  holds `001_create_users.sh`), copy `data/` into the head tree, run the head's
+  `migrate.sh`. It prints only `applied 002_add_last_login.sh`, the header is
+  `id,name,status,last_login` with no `email`, a second run prints nothing, and a direct
+  rerun of 002 leaves the file as it was. A fresh install at the head (empty journal)
+  prints `applied 001_create_users.sh` and `applied 002_add_last_login.sh`, the header is
+  `id,name,status,email,last_login`, and a direct rerun of 001 and 002 leaves the file as
+  it was.
+
+### Verify
+
+```sh
+A="git -C $F/app"
+$A merge-base main feature                  # 72ca6912e7a55ef653f72a0667089e4d5b7c2a69
+$A log --format='%H %s' 72ca691..main       # d84a2ec... log: lowercase the warning prefix
+$A diff --name-only 72ca691 main            # src/log.sh
+$A diff --name-only main...feature          # migrations/001_create_users.sh migrations/002_add_last_login.sh src/users.sh src/warnings.sh tests/test_log.sh tests/test_users.sh
+$A diff --shortstat main...feature          # 6 files changed, 71 insertions(+)
+$A rev-parse --abbrev-ref HEAD              # feature
+$A status --porcelain                       # no output
+grep -n 'invalid id' $F/app/src/users.sh    # 16 and 27
+grep -n 'WARN:' $F/app/src/log.sh $F/app/src/warnings.sh   # log.sh:6, warnings.sh:5 and 7
+grep -c claims $F/manifest.json             # 0
+sh tests/fixture/verify.sh $F/manifest.json patterns        # verify patterns: ok
 ```

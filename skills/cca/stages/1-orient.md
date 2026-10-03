@@ -85,6 +85,10 @@ step 1c, right after the baseline, for the same reason.
      same rule gives the same host.
    - `ticket_token`: an optional bundle key. A string becomes a one-element list. The
      saved manifest keeps the list; step 8.1 reads it for the bundle's exported tickets.
+   - `run_once`: an optional bundle key, with no default. A string becomes a one-element
+     list. The saved manifest keeps the list. Each entry is a repo-relative glob pattern
+     for run-once artifacts, such as database migrations. Step 3 lists the bundle's
+     changed files that match, and the brief carries the list. A.4 validates it.
    - `head`: an optional bundle key, kept in the saved manifest. Its only value is
      `working-tree`, which makes the bundle's head a commit built from the repo's working
      tree (step 1c). It is a manifest key only, with no flag. A.4 validates it.
@@ -116,8 +120,11 @@ step 1c, right after the baseline, for the same reason.
    base is rejected: stop with `bundle <name>: no base`. A bundle whose `ticket_token`
    is not a string or a non-empty array of strings, or has an entry that does not hold
    `{n}` exactly once and at least one other character, is rejected: stop with
-   `bundle <name>: ticket_token must hold {n} once`. A bundle whose `head` is anything but
-   `working-tree` is rejected: stop with `bundle <name>: head must be working-tree`. A
+   `bundle <name>: ticket_token must hold {n} once`. A bundle whose `run_once` is not a
+   non-empty string or a non-empty array of non-empty strings is rejected: stop with
+   `bundle <name>: run_once must be a pattern or a list of patterns`. A bundle whose
+   `head` is anything but `working-tree` is rejected: stop with
+   `bundle <name>: head must be working-tree`. A
    `working-tree` bundle needs a `branch`, or a PR whose `headRefName` names it, and that
    branch must be checked out: `git -C <repo> rev-parse --abbrev-ref HEAD` (which prints
    `HEAD` for a detached head) equals it. Otherwise stop before stage 1:
@@ -467,7 +474,20 @@ For each bundle, record:
 - commits on the base since the merge-base: `git -C <repo> log --oneline <head>..<base>`;
 - files changed on both sides since the merge-base: the intersection of
   `git -C <repo> diff --name-only <base>...<head>` and
-  `git -C <repo> diff --name-only <head>...<base>`.
+  `git -C <repo> diff --name-only <head>...<base>`;
+- the run-once list, for a bundle with `run_once` only. Patterns are repo-relative and
+  follow git's glob pathspec rules (`*` does not cross `/`, `**` does). With the
+  merge-base, base, and head shas known, list the changed files that match:
+  `git -C <repo> diff --name-status -M <base>...<head> -- ':(glob)<pattern>' ...`, one
+  pathspec per pattern, three dots as in step 4 (a `head: working-tree` bundle uses its
+  built head sha the same way). The `-M` makes a rename show as `R` whatever the user's
+  `diff.renames` setting is. In a three-dot diff the old side is the merge-base, so the
+  status letter alone says whether a file exists there. `M`, `D`, and `R` with any score
+  exist at the merge-base, and a rename is listed by its new path. `A` is new, and so is
+  the new path of a `C` (copy) entry. The pathspec hides an old path that matches no
+  pattern, so a file moved in from outside the patterns shows as `A` and is listed as
+  new. The command only reads. A `run_once` key that matches no changed file gives the
+  list `none`. A bundle without the key has no list.
 
 For every reference and source of truth with a `path`, record its pinned sha:
 `git -C <path> rev-parse <ref>^{commit}`.
@@ -692,12 +712,15 @@ claim has a scope that stage 4 schedules; reassign any that does not by rule 3.
 3. **`audit-brief.md`**, with these sections: Scope (bundles, repos, PRs, tickets);
    Tier and reason; Bundles (head, base, merge-base, base commits since the merge-base,
    files changed on both sides, stack, the `ticket_token` patterns when the bundle has
-   them; the head sha is recorded as `headRefOid` for a GitHub PR, and the pinned base sha
-   is the local sha of `<remote>/<baseRefName>`; for a GitHub PR also `baseRefOid`,
-   labeled "base as GitHub last evaluated it", for information only; resume compares the
-   head and the pinned base; a `head: working-tree` bundle also gets its `parent` sha, its
-   `tree` sha, that the head is a built commit with no ref, the files "untracked at audit
-   time" one per line (part of the head, but possibly left out of the user's own commit),
+   them, the run-once list of step 3 when the bundle has `run_once`: the patterns, then
+   one line per file with its status letter, its path, and `exists at merge-base` or
+   `new`, or `none`; the head sha is recorded as `headRefOid` for a GitHub PR, and the
+   pinned base sha is the local sha of `<remote>/<baseRefName>`; for a GitHub PR also
+   `baseRefOid`, labeled "base as GitHub last evaluated it", for information only;
+   resume compares the head and the pinned base; a `head: working-tree` bundle also
+   gets its `parent` sha, its `tree` sha, that the head is a built commit with no ref,
+   the files "untracked at audit time" one per line (part of the head, but possibly left
+   out of the user's own commit),
    the paths "flagged at audit time, held at the index version" one per line, from
    step 1c's `flagged` lines (the head holds the index version, not the local file),
    the groups note of step 8, and for a GitHub PR the `headRefOid` and, when it differs

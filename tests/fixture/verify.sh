@@ -4,14 +4,22 @@
 #
 # Usage: m=$(sh tests/fixture/build.sh solo) && sh tests/fixture/verify.sh "$m" solo
 #
-# name is solo, solo-dirty, full, or tokens. Without it, the name comes from the fixture
-# directory: manifest-groups.json means full; otherwise an app checkout on
-# scratch-branch means solo-dirty; otherwise solo.
+# name is solo, solo-dirty, full, tokens, or patterns. Without it, the name comes from the
+# fixture directory: manifest-groups.json means full; otherwise an app checkout on
+# scratch-branch means solo-dirty; otherwise solo. tokens and patterns are never detected:
+# pass the name.
 #
 # Expected values are literals copied from expected.md; change them only together with
 # expected.md and build.sh, with the reason in the commit body.
 # Exit 0 when every check passes; otherwise print one line per mismatch and exit 1.
 set -u
+
+# Run every git call without the user's global or system config, as build.sh does.
+GIT_CONFIG_NOSYSTEM=1
+GIT_CONFIG_GLOBAL=/dev/null
+export GIT_CONFIG_NOSYSTEM GIT_CONFIG_GLOBAL
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL \
+	GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 
 m=${1:-}
 if [ -z "$m" ] || [ ! -f "$m" ]; then
@@ -32,7 +40,7 @@ if [ -z "$name" ]; then
 	fi
 fi
 case $name in
-solo | solo-dirty | full | tokens) ;;
+solo | solo-dirty | full | tokens | patterns) ;;
 *)
 	echo "verify: unknown fixture '$name'"
 	exit 2
@@ -81,6 +89,123 @@ if [ "$name" = tokens ]; then
 		"$(sed -n 's/^ *"ticket_token"/"ticket_token"/p' "$F/manifest-token.json" 2>/dev/null)"
 	same "manifest-bad-token.json ticket_token" '"ticket_token": "#n",' \
 		"$(sed -n 's/^ *"ticket_token"/"ticket_token"/p' "$F/manifest-bad-token.json" 2>/dev/null)"
+	finish
+	exit 0
+fi
+
+# patterns: the commits, their files, the exports, the manifest, and the behavior of the
+# four planted cases, each run in a temp copy so the fixture repo never changes.
+if [ "$name" = patterns ]; then
+	mb=72ca6912e7a55ef653f72a0667089e4d5b7c2a69
+	same "app merge-base" $mb "$(git -C "$A" merge-base main feature 2>/dev/null)"
+	same "app feature head" 7bdaa0e61667de685db3a70f204a3918fb53413f "$(rev "$A" feature)"
+	same "app main head" d84a2ec3bcdc1282bf12524ae08e24bf7928a7c8 "$(rev "$A" main)"
+	same "app commits on feature" "e110cb26a794a40b733341d9ca397425c9b55bc1 PAT-1: reject non-numeric ids in deactivate|0c71299be23374e60d05f77fc1a0c292a945e9e6 PAT-2: add the warning count command|7bdaa0e61667de685db3a70f204a3918fb53413f PAT-3: add the email and last_login columns" \
+		"$(git -C "$A" log --reverse --format='%H %s' "$mb..feature" 2>/dev/null | tr '\n' '|' | sed 's/|$//')"
+	same "app commits on main since the merge-base" "d84a2ec3bcdc1282bf12524ae08e24bf7928a7c8 log: lowercase the warning prefix" \
+		"$(git -C "$A" log --format='%H %s' "$mb..main" 2>/dev/null)"
+	same "app files changed on main since the merge-base" "src/log.sh" \
+		"$(git -C "$A" diff --name-only "$mb" main 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+	same "app files changed" "migrations/001_create_users.sh migrations/002_add_last_login.sh src/users.sh src/warnings.sh tests/test_log.sh tests/test_users.sh" \
+		"$(git -C "$A" diff --name-only main...feature 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+	same "app diff stat" "6 files changed, 71 insertions(+)" \
+		"$(git -C "$A" diff --shortstat main...feature 2>/dev/null | sed 's/^ //')"
+	same "app checkout branch" feature "$(git -C "$A" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+	for id in PAT-1 PAT-2 PAT-3; do
+		same "export $id id" "id: $id" "$(grep '^id:' "$F/exports/$id.md" 2>/dev/null)"
+	done
+	same "manifest.json run_once" '"run_once": ["migrations/*.sh"],' \
+		"$(sed -n 's/^ *"run_once"/"run_once"/p' "$F/manifest.json" 2>/dev/null)"
+	same "manifest.json claims lines" 0 "$(grep -c claims "$F/manifest.json" 2>/dev/null)"
+
+	# Behavior, in temp copies. tree <rev> <dir> exports a revision of the app repo.
+	tmp=$(mktemp -d)
+	trap 'rm -rf "$tmp"' EXIT
+	tree() {
+		mkdir -p "$2" &&
+			git -c core.autocrlf=false -C "$A" archive "$1" 2>/dev/null | tar -x -C "$2"
+	}
+	gm() {
+		git -c user.name=fixture -c user.email=fixture@example.invalid \
+			-c commit.gpgsign=false -c core.autocrlf=false "$@"
+	}
+
+	# P17: at the head, deactivate rejects a non-numeric id and reactivate accepts one.
+	tree feature "$tmp/p17"
+	out=$(cd "$tmp/p17" && sh src/users.sh deactivate abc 2>&1)
+	rc=$?
+	[ "$rc" -ne 0 ] && [ "$out" = "invalid id" ] ||
+		fail "P17: deactivate at the head does not reject a non-numeric id (exit $rc, output '$out')"
+	out=$(cd "$tmp/p17" && sh src/reactivate.sh abc 2>&1)
+	rc=$?
+	[ "$rc" -eq 0 ] && [ -z "$out" ] ||
+		fail "P17: reactivate at the head rejects a non-numeric id (exit $rc, output '$out')"
+	same "P17: data/users.csv after reactivate with a non-numeric id" \
+		"id,name,status|1,Ada,active|2,Grace,active|3,Linus,active" \
+		"$(tr '\n' '|' < "$tmp/p17/data/users.csv" | sed 's/|$//')"
+
+	# P18: with the feature's src/users.sh change reverted (the merge-base file, the head
+	# tests), the weak test passes and the decoy passes, while deactivate no longer
+	# rejects a bad id. At the head the suite passes and deactivate rejects it.
+	tree feature "$tmp/p18"
+	(cd "$tmp/p18" && sh run-tests.sh >/dev/null 2>&1) ||
+		fail "P18: the test suite fails at the head"
+	git -C "$A" show "$mb:src/users.sh" > "$tmp/p18/src/users.sh" 2>/dev/null
+	out=$(cd "$tmp/p18" && sh tests/test_users.sh 2>&1)
+	rc=$?
+	[ "$rc" -eq 0 ] || fail "P18: tests/test_users.sh fails with the src/users.sh change reverted (exit $rc)"
+	printf '%s\n' "$out" | grep -qx 'pass test_deactivate_rejects_bad_id' ||
+		fail "P18: test_deactivate_rejects_bad_id does not pass with the src/users.sh change reverted"
+	printf '%s\n' "$out" | grep -qx 'pass test_deactivate_keeps_row' ||
+		fail "P18: test_deactivate_keeps_row does not pass with the src/users.sh change reverted"
+	out=$(cd "$tmp/p18" && sh src/users.sh deactivate abc 2>&1)
+	rc=$?
+	[ "$rc" -eq 0 ] && [ -z "$out" ] ||
+		fail "P18: deactivate with a non-numeric id is rejected with the src/users.sh change reverted (exit $rc, output '$out')"
+
+	# P19: at the head count_warnings counts the two lines log_warn writes; after a clean
+	# merge of main into a clone of feature, log_warn writes a different prefix and the
+	# count is 0.
+	tree feature "$tmp/p19"
+	(cd "$tmp/p19" && . ./src/log.sh && log_warn disk low && log_warn slow reply) > "$tmp/p19.log"
+	same "P19: count_warnings at the head" 2 "$(cd "$tmp/p19" && sh src/warnings.sh count "$tmp/p19.log" 2>&1)"
+	if gm clone -q -b feature "$A" "$tmp/p19m" 2>/dev/null &&
+		gm -C "$tmp/p19m" merge -q --no-edit origin/main >/dev/null 2>&1; then
+		(cd "$tmp/p19m" && . ./src/log.sh && log_warn disk low && log_warn slow reply) > "$tmp/p19m.log"
+		same "P19: warning lines after the merge" 2 "$(grep -c '^warning: ' "$tmp/p19m.log")"
+		same "P19: count_warnings after the merge" 0 "$(cd "$tmp/p19m" && sh src/warnings.sh count "$tmp/p19m.log" 2>&1)"
+	else
+		fail "P19: main does not merge cleanly into feature"
+	fi
+
+	# P20: an install migrated at the merge-base (journal written) gets only last_login
+	# when the head's migrate.sh runs, and a rerun is a no-op. A fresh install at the head
+	# gets both columns.
+	tree "$mb" "$tmp/p20old"
+	(cd "$tmp/p20old" && sh migrate.sh >/dev/null 2>&1)
+	same "P20: journal at the merge-base" 001_create_users.sh "$(cat "$tmp/p20old/data/applied.txt" 2>/dev/null)"
+	tree feature "$tmp/p20"
+	cp "$tmp/p20old/data/users.csv" "$tmp/p20old/data/applied.txt" "$tmp/p20/data/"
+	out=$(cd "$tmp/p20" && sh migrate.sh 2>&1)
+	same "P20: migrate.sh output on the migrated install" "applied 002_add_last_login.sh" "$out"
+	same "P20: header on the migrated install" "id,name,status,last_login" "$(head -n 1 "$tmp/p20/data/users.csv")"
+	grep -q email "$tmp/p20/data/users.csv" && fail "P20: the migrated install has an email column"
+	cp "$tmp/p20/data/users.csv" "$tmp/p20.once"
+	out=$(cd "$tmp/p20" && sh migrate.sh 2>&1)
+	same "P20: migrate.sh output on a rerun" "" "$out"
+	(cd "$tmp/p20" && sh migrations/002_add_last_login.sh)
+	cmp -s "$tmp/p20.once" "$tmp/p20/data/users.csv" || fail "P20: a rerun of 002 changed data/users.csv"
+	tree feature "$tmp/p20new"
+	out=$(cd "$tmp/p20new" && sh migrate.sh 2>&1)
+	same "P20: migrate.sh output on a fresh install at the head" \
+		"applied 001_create_users.sh|applied 002_add_last_login.sh" \
+		"$(printf '%s\n' "$out" | tr '\n' '|' | sed 's/|$//')"
+	same "P20: header on a fresh install at the head" "id,name,status,email,last_login" \
+		"$(head -n 1 "$tmp/p20new/data/users.csv" 2>/dev/null)"
+	cp "$tmp/p20new/data/users.csv" "$tmp/p20new.once"
+	(cd "$tmp/p20new" && sh migrations/001_create_users.sh && sh migrations/002_add_last_login.sh)
+	cmp -s "$tmp/p20new.once" "$tmp/p20new/data/users.csv" || fail "P20: a rerun of 001 and 002 changed data/users.csv on a fresh install"
+
 	finish
 	exit 0
 fi

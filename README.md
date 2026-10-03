@@ -208,6 +208,11 @@ are relative to the manifest's directory.
   ticket's `id`, in place of the bare `id`, so a bare-number id matches `#4567` but not
   `build 4567 passed`. The boundary rule applies outside the whole token, so `#{n}` does
   not match `AB#4567`; list `AB#{n}` too for that. GitHub tickets keep their own rule.
+  A bundle may add `run_once`, a glob pattern or a list of them, repo-relative and using
+  git's glob pathspec rules (`*` does not cross `/`, `**` does), such as
+  `["migrations/*.sql", "db/scripts/**/*.sql"]`. Stage 1 lists the bundle's changed files
+  that match, with whether each exists at the merge-base, for the auditors. There is no
+  default.
   A bundle may add `"head": "working-tree"` (a manifest key only; its one value) to audit
   uncommitted work. The bundle's branch must be checked out, and stage 1 builds a commit
   from the working tree, with the modified files and the untracked files that are not
@@ -675,9 +680,9 @@ Its checks are:
 
 - `sh tests/lint.sh`: checks the static parts (command and agent frontmatter, no agent
   with Edit or NotebookEdit, every stage file the skill names exists).
-- `sh tests/fixture/build.sh <solo|solo-dirty|full|tokens>`: builds a throwaway fixture in
-  a temp directory and prints its manifest path. Expected outcomes are listed in
-  `tests/fixture/expected.md`.
+- `sh tests/fixture/build.sh <solo|solo-dirty|full|tokens|patterns>`: builds a
+  throwaway fixture in a temp directory and prints its manifest path. Expected outcomes
+  are listed in `tests/fixture/expected.md`.
 - `sh tests/fixture/verify.sh <manifest path> [name]`: checks a built fixture against
   the key literals in `tests/fixture/expected.md` and prints one line per mismatch. CI
   runs it after each build.
@@ -697,7 +702,7 @@ Its checks are:
   output and exit status with literals.
 
 CI runs a `checks` job (lint, then a fixture build and verify for `solo`, `solo-dirty`,
-`full`, and `tokens`) and a `scripts` job that runs the readonly, handoff, work-items,
+`full`, `tokens`, and `patterns`) and a `scripts` job that runs the readonly, handoff, work-items,
 working-tree, live, memory, and ledger tests on Linux, macOS, and Windows (under Git
 Bash). On Linux the default `awk` is gawk, and a second step runs the awk-using tests
 (handoff, readonly, live, memory, working-tree, and ledger) with mawk first on `PATH` as

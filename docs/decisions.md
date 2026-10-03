@@ -877,6 +877,45 @@ change stays inside the plugin.
   that no id passes through a typed argument and the byte cap applies to a file that can
   be measured and kept.
 
+## Auditor reach: tests, base producers, and run-once scripts (2026-10-03)
+
+A hand-run audit sweep of a real bundle on 2026-10-02 confirmed 20 defects. Issues #17
+to #21 grouped the ones cca would have missed. This change takes #18, #19, and part of
+#20. #17 changes the pass-one and pass-two contracts and the ledger script, so it waits
+for the 0.5.1 ledger work.
+
+- **Weak tests are read, not run (#18).** The tests checklist flags a test that asserts
+  the code's own constant, pins text without running the code that makes it, or accepts
+  a wrong outcome. A flag is a lead. It becomes a finding only when the auditor names the
+  regression the test would miss. A text pin or several allowed outcomes can be correct,
+  so the flag alone proves nothing. Running each test with the change reverted would
+  prove it, but it breaks two rules: no test runs in an export, and agents write only
+  their output. That check is #22.
+- **Base producers are read at the base sha (#19).** For each literal or shape the change
+  matches on, the auditor reads its producer at the head and at the base sha. The issue
+  proposed listing base commits since the fix's author date. Author dates survive a
+  rebase and a cherry-pick, so the commit range from the merge-base to the base is the
+  lead instead, and the base read is the evidence. A finding needs the producer to
+  survive integration unchanged by the head. A disagreement alone is not enough, since
+  the change may handle both forms. Only group and `combined` scopes run it, so
+  specialists do not repeat it.
+- **Run-once scripts, narrow part (#20).** A bundle may list `run_once` glob patterns.
+  Stage 1 lists the changed files that match, with whether each exists at the
+  merge-base, so the auditor does not recompute it. An edit that changes what an
+  existing script does is an `unverified assumption` with a live check, since only the
+  target environment's journal shows whether the script ran. Only a modified script
+  counts. A runner that journals by name runs a renamed script again, so a rename is
+  not skipped. The other two checks need a
+  design first. A name collision with another open pull request needs a new forge query.
+  Rerun safety depends on the runner and the script's guards, not on each statement. The
+  `solo` fixture's guarded `002_add_status.sh` shows a per-statement rule would flag
+  correct scripts. Both are #23.
+- **A fixture with planted cases (#21).** The `patterns` fixture plants one case each
+  for #17 to #20, with decoys. `verify.sh` shows each defect is real by running the
+  fixture's own scripts in temp copies. Detection is recorded per audit run in
+  `docs/acceptance.md`, before and after this change, as observed results. One run each
+  is one sample, not a rate. The reviewer's 20 cases are not in the repo yet.
+
 ## 0.5.2 decisions (2026-10-03)
 
 - **The late adversary's file is checked by script before the merge.** `check --through

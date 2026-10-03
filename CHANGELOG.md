@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- The tests checklist flags an added or changed test that asserts the code's own
+  constant, pins text without running the code, or accepts a wrong outcome. A flag
+  becomes a finding only when the auditor names the regression the test would miss
+  (#18).
+- Group and `combined` auditors read the producer of each literal or shape a change
+  matches on at the head and at the base sha. They report a producer that the base
+  changed and the head does not match (#19).
+- An optional `run_once` bundle key of glob patterns. Stage 1 lists the changed files
+  that match, with whether each exists at the merge-base. An auditor reports an edit to
+  an existing run-once script as an unverified finding with a live check on the
+  environment's journal (part of #20).
+- The `patterns` fixture, with one planted case each for #17 to #20 and checks that show
+  each defect is real.
+- `docs/acceptance.md` records two full multi-agent audit runs on it, before and after
+  these rules. Both found every planted case in pass one. With the rules, the run-once
+  finding carries a live check, and its label follows the live check rule.
+
 ## 0.5.2 - 2026-10-03
 
 Fixes from a review of 0.5.1. A run started under 0.5.1 or earlier reruns from stage 1
