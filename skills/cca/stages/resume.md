@@ -196,6 +196,9 @@ never loses a finished one. With `--live`, it first imports approved live check 
    - the first stage, in the order 1 to 8, whose entry is missing, or whose status is
      anything other than `complete` or `not_applicable` (such as `running`, `failed`,
      or `superseded`), or that is `complete` but lists an output that does not exist;
+   - stage 5, when its entry is `complete` but its outputs do not include
+     `ledger/inventory.txt` (a run from 0.4.0 or earlier): it is not reusable and the run
+     reruns from stage 5, since `ledger.sh` needs the inventory;
    - the first stage whose input hashes changed;
    - stage 1, when any tree `audit-brief.md` maps as `direct` fails a direct-read
      condition now: `git -C <repo> rev-parse HEAD` is not the pinned sha,

@@ -255,17 +255,18 @@ by size has `<group>-<k>` parts), and `converged.md`.
       `gate.md`, and the output path `converged.md`. It assigns `C<n>` ids, merges
       items that are the same defect across groups or across the parts of one group,
       and opens a ledger section only to settle a suspected cross-group or cross-part
-      duplicate, recording it under `opened:` as in step 7.3. `converged.md` keeps the item form
-      of step 6, one `- absorbs:` and one `- gate:` line per `## C<n>: ` item.
+      duplicate, recording it under `opened:` as in step 7.3. `converged.md` keeps the item
+      form of step 6, one `- absorbs:` and one `- gate:` line per `## C<n>: ` item.
 
 8. **The orchestrator checks the merge against the ledger,** after the merge, when
    `converged.md` exists. Run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh check
    <run dir> --through 7 --tier <tier> --stage6 complete|failed --late
-   complete|failed|not-run`. It checks that every finding id
-   in the ledger files, every `### X<n>:` and `### L<n>:` addition, and every carried id
-   sits in the `absorbs` list of exactly one item with no unknown id, that each item's
-   `gate` is `counts` exactly when an absorbed id counts, and that `gate.md` equals the
-   `gate` output. Then check by hand:
+   complete|failed|not-run > <run dir>/tmp/check7.txt`; read only `wc -l` of that file and
+   its first 50 lines (`head -n 50`), never the whole output. It checks that every
+   finding id in the ledger files, every `### X<n>:` and `### L<n>:` addition, and every
+   carried id sits in the `absorbs` list of exactly one item with no unknown id, that
+   each item's `gate` is `counts` exactly when an absorbed id counts, and that `gate.md`
+   equals the `gate` output. Then check by hand:
    - no item's severity differs from its source finding's severity without a cited
      verdict (a pass-two `downgraded`, a second-opinion recalibration, or a late
      verdict) that sets it, and a severity or label change is accepted only from a

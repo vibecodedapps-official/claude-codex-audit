@@ -1039,9 +1039,142 @@ cp -R "$B" "$tmp/v3"
 mk6 "$tmp/v3" "app-F1 app-F2 app-F3 app-F4 app-P1 web-F1" "app-T1 cfg-F1" "X1"
 printf '```\nunclosed\napp-F2: agree\n' >> "$tmp/v3/codex/response.md"
 run "check 6, response ends inside a fence" 1 "ledger: ledger/6.md:12: no line starting 'app-F2:' in the codex response files" check "$tmp/v3" --through 6 --stage6 complete
+
+# Round 6: findings in failed outputs are kept, malformed blocks there are counted.
+FD=$tmp/fd
+mkdir -p "$FD/pass1" "$FD/pass2" "$FD/ledger"
+printf 'pass1 s pass1/s.md m-a complete\npass1 t pass1/t.md m-a failed\npass2 s pass2/s.md m-b failed\n' > "$FD/ledger/inventory.txt"
+printf '### s-F1: One\n- severity: high\n- label: verified fact\n- evidence: e\nruns: none\nstatus: complete\n' > "$FD/pass1/s.md"
+printf '### t-F1: Two\n- severity: low\n- label: convention\n- evidence: e\n\n### t-F2: Bad\n- label: convention\n- evidence: e\n' > "$FD/pass1/t.md"
+printf '### verdict on s-F1: survives\n- severity: unchanged\n- label: unchanged\n- evidence: e\n- reason: r\n\n### s-P1: Added\n- severity: medium\n- label: verified fact\n- evidence: e\n\n### s-P2:Bad\n- severity: low\n- label: convention\n' > "$FD/pass2/s.md"
+cat > "$tmp/wantfd.txt" <<'EOF'
+## s-F1
+- origin: pass1
+- author: cca:auditor, model m-a, file pass1/s.md
+### Original
+### s-F1: One
+- severity: high
+- label: verified fact
+- evidence: e
+### Pass-two verdicts
+- none
+### State after pass two
+high, verified fact, no verdict: scope failed
+
+## s-P1
+- origin: pass2
+- author: cca:adversary, model m-b, file pass2/s.md
+### Original
+### s-P1: Added
+- severity: medium
+- label: verified fact
+- evidence: e
+### Pass-two verdicts
+- none
+### State after pass two
+medium, verified fact, no verdict: output failed
+
+## t-F1
+- origin: pass1
+- author: cca:auditor, model m-a, file pass1/t.md
+### Original
+### t-F1: Two
+- severity: low
+- label: convention
+- evidence: e
+### Pass-two verdicts
+- none
+### State after pass two
+low, convention, no verdict: output failed
+
+## Failed outputs
+- pass1/t.md (1 blocks not parsed)
+- pass2/s.md (1 blocks not parsed)
+
+EOF
+runf "build5, findings from failed files" 0 "$tmp/wantfd.txt" build5 "$FD"
+cp "$tmp/wantfd.txt" "$FD/ledger/5.md"
+printf '## Map corrections applied\n- none\n\n## Map corrections not applied\n- none\n' >> "$FD/ledger/5.md"
+run "check 5, findings from failed files" 0 "" check "$FD" --through 5
+run "mandatory, findings from failed files" 0 "s-F1${nl}s-P1" mandatory "$FD"
+run "gate, finding from a failed file" 0 "s-F1: provisional; stage 6 failed
+s-P1: provisional; stage 6 failed
+t-F1: provisional; stage 6 failed" gate "$FD" --tier medium --stage6 failed --late failed
+
+# The base run with its pass-two app file marked failed.
+cp -R "$B" "$tmp/w1"
+sed 's/^pass2 app pass2\/app.md m-b complete$/pass2 app pass2\/app.md m-b failed/' "$B/ledger/inventory.txt" > "$tmp/w1/ledger/inventory.txt"
+sh "$ls" build5 "$tmp/w1" > "$tmp/w1.out" 2> "$tmp/err"
+st=$?
+[ "$st" = 0 ] || fail "build5, pass two failed: expected exit 0, got $st"
+[ "$(grep -c 'no verdict: scope failed$' "$tmp/w1.out")" = 5 ] || fail "build5, pass two failed: expected 5 scope failed states"
+[ "$(grep -c 'no verdict: output failed$' "$tmp/w1.out")" = 1 ] || fail "build5, pass two failed: expected 1 output failed state"
+[ "$(grep -n '^medium, verified fact, no verdict: output failed$' "$tmp/w1.out" | cut -d: -f2-)" = "medium, verified fact, no verdict: output failed" ] || fail "build5, pass two failed: app-P1 state"
+[ "$(grep -c '^## Verified OK challenged' "$tmp/w1.out")" = 0 ] || fail "build5, pass two failed: no challenged section expected"
+
+# A duplicate merged item id.
+cp -R "$B" "$tmp/w2"
+sed 's/^## C2: Flag and retry text$/## C1: Flag and retry text/' "$B/converged.md" > "$tmp/w2/converged.md"
+run "check 7, duplicate item id" 1 "ledger: converged.md:9: duplicate item id C1" check "$tmp/w2" --through 7 --tier medium --stage6 complete --late complete
+
+# A failed file that ends inside a fence: the block that holds it is skipped and counted.
+FE=$tmp/fe
+mkdir -p "$FE/pass1" "$FE/pass2" "$FE/ledger"
+printf 'pass1 s pass1/s.md m-a complete\npass2 s pass2/s.md m-b failed\n' > "$FE/ledger/inventory.txt"
+printf '### s-F1: One\n- severity: high\n- label: verified fact\n- evidence: e\nruns: none\nstatus: complete\n' > "$FE/pass1/s.md"
+printf '### s-P1: Good\n- severity: low\n- label: convention\n- evidence: e\n\n### s-P2: Open\n- severity: low\n- label: convention\n- evidence: see\n```\nnever closed\n' > "$FE/pass2/s.md"
+cat > "$tmp/wantfe.txt" <<'EOF'
+## s-F1
+- origin: pass1
+- author: cca:auditor, model m-a, file pass1/s.md
+### Original
+### s-F1: One
+- severity: high
+- label: verified fact
+- evidence: e
+### Pass-two verdicts
+- none
+### State after pass two
+high, verified fact, no verdict: scope failed
+
+## s-P1
+- origin: pass2
+- author: cca:adversary, model m-b, file pass2/s.md
+### Original
+### s-P1: Good
+- severity: low
+- label: convention
+- evidence: e
+### Pass-two verdicts
+- none
+### State after pass two
+low, convention, no verdict: output failed
+
+## Failed outputs
+- pass2/s.md (1 blocks not parsed)
+
+EOF
+runf "build5, failed file ends inside a fence" 0 "$tmp/wantfe.txt" build5 "$FE"
+cp "$tmp/wantfe.txt" "$FE/ledger/5.md"
+printf '## Map corrections applied\n- none\n\n## Map corrections not applied\n- none\n' >> "$FE/ledger/5.md"
+run "check 5, failed file ends inside a fence" 0 "" check "$FE" --through 5
+
+# missing: mandatory ids with no provenance line in the response files.
+run "missing, base" 0 "" missing "$B"
+cp -R "$B" "$tmp/x1"
+grep -v '^web-F1: confirmed blocker$' "$B/codex/response.md" > "$tmp/x1/codex/response.md"
+run "missing, one answer removed" 0 "web-F1" missing "$tmp/x1"
+cp -R "$B" "$tmp/x2"
+grep -v '^web-F1: confirmed blocker$' "$B/codex/response.md" > "$tmp/x2/codex/response.md"
+printf '```\nweb-F1: quoted\n```\n' >> "$tmp/x2/codex/response.md"
+run "missing, position only inside a fence" 0 "web-F1" missing "$tmp/x2"
+cp -R "$B" "$tmp/x3"
+rm "$tmp/x3/codex/response.md"
+run "missing, no response file" 0 "app-F1${nl}app-F3${nl}app-F4${nl}app-P1${nl}web-F1" missing "$tmp/x3"
+run "missing, malformed ledger/5.md" 1 "" missing "$tmp/r5"
 # ---------------------------------------------------------------------------
 # Usage errors and unreadable input: exit 2, nothing on stdout.
-usage_msg="usage: ledger.sh build5|mandatory|seen <run dir>
+usage_msg="usage: ledger.sh build5|mandatory|seen|missing <run dir>
        ledger.sh gate <run dir> --tier low|medium|high --stage6 complete|failed --late complete|failed|not-run
        ledger.sh check <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]"
 run "no arguments" 2 ""

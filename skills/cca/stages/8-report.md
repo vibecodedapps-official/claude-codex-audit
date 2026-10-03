@@ -45,8 +45,9 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
    2. Else, when `ledger/5.md` exists and the stage 5 entry does not record
       `"ledger_build": "failed"`, the ledger files that exist: one item per ledger
       finding, with its state after the last verdict it has in `ledger/5.md` and
-      `ledger/6.md` (`ledger/7.md` verdicts are not applied: path 2 runs only when no
-      merge passed stage 7's checks, so they are unchecked). Path 2 never reuses
+      `ledger/6.md` (a `no verdict: ...` state, `output failed` included, earns no
+      credit; `ledger/7.md` verdicts are not applied: path 2 runs only when no merge
+      passed stage 7's checks, so they are unchecked). Path 2 never reuses
       `gate.md`, which may have been written before stage 7's checks failed. Compute each
       gate with `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh gate <run dir>
       --tier <tier> --stage6 <stage 6 status> --late failed`, per the rules in

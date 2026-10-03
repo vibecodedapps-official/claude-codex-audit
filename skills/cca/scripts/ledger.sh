@@ -5,6 +5,7 @@
 #   sh ledger.sh build5    <run dir>
 #   sh ledger.sh mandatory <run dir>
 #   sh ledger.sh seen      <run dir>
+#   sh ledger.sh missing   <run dir>
 #   sh ledger.sh gate      <run dir> --tier low|medium|high --stage6 complete|failed
 #                                    --late complete|failed|not-run
 #   sh ledger.sh check     <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]
@@ -19,12 +20,18 @@
 #              then the top-up findings. `### Original` is the source block, CR
 #              stripped, trailing blank lines removed. The verdict line and the state
 #              come from the scope's complete pass-two file; a finding with no verdict
-#              gets `no verdict: late addition` (P, T), `no verdict: scope failed`, or
-#              `no verdict: not run, budget expired`. Then, per scope with a complete
+#              gets `no verdict: late addition` (P, T), `no verdict: scope failed`,
+#              `no verdict: not run, budget expired`, or, for a finding read from a
+#              failed file, `no verdict: output failed`. Then, per scope with a complete
 #              pass two, `## Verified OK challenged: <scope>` and
 #              `## Coverage gaps: <scope>`, cut from the pass-two file, and, when a
-#              record is failed, `## Failed outputs` with one `- <path>` line per
-#              failed file (`- <kind> <scope>: no file` when the record has no path).
+#              record is failed, `## Failed outputs` with one line per failed file:
+#              `- <path>`, `- <path> (<n> blocks not parsed)` when n > 0 blocks of the
+#              file were skipped, or `- <kind> <scope>: no file` when the record has no
+#              path. A failed file that exists still gives every well-formed finding
+#              block (a verdict block in it is never credited); a malformed block in it
+#              (or one that holds a fence the file never closes) is skipped and
+#              counted, not an error.
 #              Every section ends with a blank line. The orchestrator appends the two
 #              map-correction sections itself.
 #   mandatory  one id per line, sorted, unique: every ledger/5.md id whose state
@@ -37,6 +44,10 @@
 #              ledger/7.md, then the carried ids. A carried id is a file
 #              live/carried/<id>.md whose id live/findings.md lists; any other file is
 #              not in the universe. Each line is `<id>: <reason>`, with a reason below.
+#   missing    the mandatory ids (as `mandatory`) that have no provenance line in
+#              codex/response.md or a codex/response-<k>.md, one per line, sorted. The
+#              provenance and fence rules are those of `check --through 6`. It reads no
+#              ledger/6.md. No response file at all makes every mandatory id missing.
 #   check      print one `ledger: <problem>` line per problem, nothing when none:
 #              --through 5   reconcile the inventory with the files, then require the
 #                            part of ledger/5.md before its first `## Map corrections
@@ -96,8 +107,9 @@
 #   topup <scope> <path> <requested model> complete|failed
 # Every .md file under pass1/ and pass2/ except *.pre-topup.md has exactly one record,
 # every record's file exists, each scope has one pass1 record, at most one pass2 and one
-# topup record, and every complete pass1 scope has a pass2 record. Findings and verdicts
-# come only from complete files.
+# topup record, and every complete pass1 scope has a pass2 record. Verdicts come only
+# from complete pass-two files; findings come from complete files (malformed blocks are
+# errors) and from failed files (malformed blocks are skipped and counted).
 #
 # Parsing (skills/cca/common.md, output contract). A finding block starts at
 # `### <id>: <title>`, a verdict block at `### verdict on <id>: <verdict>`. A block ends
@@ -132,7 +144,7 @@ LC_ALL=C
 export LC_ALL
 
 usage() {
-	echo "usage: ledger.sh build5|mandatory|seen <run dir>" >&2
+	echo "usage: ledger.sh build5|mandatory|seen|missing <run dir>" >&2
 	echo "       ledger.sh gate <run dir> --tier low|medium|high --stage6 complete|failed --late complete|failed|not-run" >&2
 	echo "       ledger.sh check <run dir> --through 5|6|7 [--tier ..] [--stage6 ..] [--late ..]" >&2
 	exit 2
@@ -148,7 +160,7 @@ op=$1
 run=$2
 shift 2
 case $op in
-build5 | mandatory | seen | gate | check) ;;
+build5 | mandatory | seen | missing | gate | check) ;;
 *) usage ;;
 esac
 
@@ -179,7 +191,7 @@ while [ $# -gt 0 ]; do
 done
 
 case $op in
-build5 | mandatory | seen)
+build5 | mandatory | seen | missing)
 	[ -z "$tier$stage6$late$through" ] || usage
 	;;
 gate)
@@ -202,7 +214,7 @@ need() {
 
 case $op in
 build5) need ledger/inventory.txt ;;
-mandatory) need ledger/5.md ;;
+mandatory | missing) need ledger/5.md ;;
 seen)
 	need ledger/5.md
 	need ledger/6.md
@@ -288,7 +300,8 @@ function cprob(m) {
 }
 
 function pprob(c, m) {
-	if (c) cprob(m)
+	if (c == 2) BADFLAG = 1
+	else if (c) cprob(m)
 	else prob(m)
 }
 
@@ -546,31 +559,41 @@ function load_inv(   n, i, line, f, nf, k, sc, st, key, r, c, p, fl) {
 # ---------------------------------------------------------------------------
 # Pass-one, pass-two, and top-up files.
 
-function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, word, hd, cap, k, want, need_) {
+# sp: a problem in a complete file; in a failed file, a block that is skipped and counted.
+function sp(m) {
+	if (LEN) badn++
+	else prob(m)
+}
+
+function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, word, hd, cap, k, want, need_, unclosed) {
 	path = rp[r]
 	kind = rk[r]
 	sc = rs[r]
 	m = rm[r]
+	LEN = (rst[r] == "failed")
+	badn = 0
 	n = readfile(run "/" path, SA)
 	if (n < 0) {
-		prob(path ": cannot read the file")
+		sp(path ": cannot read the file")
 		return
 	}
-	if (classify(SA, n)) prob(path ": the file ends inside a code fence")
+	unclosed = classify(SA, n)
+	if (unclosed && !LEN) prob(path ": the file ends inside a code fence")
 	i = 1
 	while (i <= n) {
 		if (K[i] == "H3") {
 			e = extent(i, n)
 			head = substr(SA[i], 5)
-			if (index(head, "verdict on ") == 1) {
+			if (LEN && index(head, "verdict on ") == 1) {
+			} else if (index(head, "verdict on ") == 1) {
 				rest = substr(head, 12)
 				p = index(rest, ": ")
-				if (p == 0) prob(path ":" i ": malformed verdict heading")
-				else if (kind != "pass2") prob(path ":" i ": a verdict block belongs in a pass-two file")
+				if (p == 0) sp(path ":" i ": malformed verdict heading")
+				else if (kind != "pass2") sp(path ":" i ": a verdict block belongs in a pass-two file")
 				else {
 					id = substr(rest, 1, p - 1)
 					word = trim(substr(rest, p + 2))
-					if (id in v_word || id in v_bad) prob(path ":" i ": duplicate verdict for " id)
+					if (id in v_word || id in v_bad) sp(path ":" i ": duplicate verdict for " id)
 					else if (parse_verdict(SA, i, e, word, path ":" i ": verdict on " id ": ", 0)) {
 						v_word[id] = word
 						v_sev[id] = V_sev
@@ -588,11 +611,14 @@ function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, wo
 			} else if (fhead(head)) {
 				id = HID
 				want = (kind == "pass1" ? "F" : (kind == "pass2" ? "P" : "T"))
-				if (index(id, sc "-") != 1) prob(path ":" i ": " id " does not start with its scope '" sc "-'")
-				else if (idk(id) != want) prob(path ":" i ": " id " is not a " kind " finding id")
-				else if (id in f_origin) prob(path ":" i ": duplicate finding id " id)
+				if (index(id, sc "-") != 1) sp(path ":" i ": " id " does not start with its scope '" sc "-'")
+				else if (idk(id) != want) sp(path ":" i ": " id " is not a " kind " finding id")
+				else if (id in f_origin) sp(path ":" i ": duplicate finding id " id)
 				else {
-					check_finding(SA, i, e, path ":" i ": " id ": ", 0)
+					BADFLAG = 0
+					check_finding(SA, i, e, path ":" i ": " id ": ", LEN ? 2 : 0)
+					if (LEN && (BADFLAG || (unclosed && e == n))) { badn++; i = e + 1; continue }
+					f_failed[id] = LEN
 					f_origin[id] = kind
 					f_scope[id] = sc
 					f_path[id] = path
@@ -606,11 +632,11 @@ function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, wo
 					else if (kind == "pass2") Lp[sc] = Lp[sc] " " id
 					else Lt[sc] = Lt[sc] " " id
 				}
-			} else if (malformed(head)) prob(path ":" i ": malformed finding heading")
+			} else if (malformed(head)) sp(path ":" i ": malformed finding heading")
 			i = e + 1
 			continue
 		}
-		if (K[i] == "H2" && kind == "pass2") {
+		if (K[i] == "H2" && kind == "pass2" && !LEN) {
 			hd = trim(SA[i])
 			cap = 0
 			if (hd == "## Verified OK challenged") cap = 1
@@ -618,7 +644,7 @@ function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, wo
 			if (cap) {
 				e = extent(i, n)
 				e2 = lastnb(SA, i, e)
-				if ((cap == 1 && (sc in vokN)) || (cap == 2 && (sc in gapN))) prob(path ":" i ": duplicate '" hd "' section")
+				if ((cap == 1 && (sc in vokN)) || (cap == 2 && (sc in gapN))) sp(path ":" i ": duplicate '" hd "' section")
 				else if (cap == 1) {
 					vokN[sc] = e2 - i
 					for (k = i + 1; k <= e2; k++) vokL[sc, k - i] = SA[k]
@@ -630,6 +656,7 @@ function parse_source(r,   path, kind, sc, m, n, i, e, e2, head, p, rest, id, wo
 		}
 		i++
 	}
+	rbad[r] = badn
 }
 
 function load_sources(   r, pass, kinds, i, id, sc, path, ids, nid, k) {
@@ -638,7 +665,7 @@ function load_sources(   r, pass, kinds, i, id, sc, path, ids, nid, k) {
 	kinds[3] = "topup"
 	for (pass = 1; pass <= 3; pass++)
 		for (r = 1; r <= nrec; r++)
-			if (rk[r] == kinds[pass] && rst[r] == "complete" && rp[r] != "-" && fexists(run "/" rp[r])) parse_source(r)
+			if (rk[r] == kinds[pass] && rst[r] != "not-run" && rp[r] != "-" && fexists(run "/" rp[r])) parse_source(r)
 	for (i = 1; i <= nv; i++) {
 		id = v_ord[i]
 		if (!(id in f_origin)) prob(v_path[id] ":" v_line[id] ": verdict on " id " has no finding")
@@ -651,7 +678,7 @@ function load_sources(   r, pass, kinds, i, id, sc, path, ids, nid, k) {
 		path = rp[r]
 		nid = split(L1[sc], ids, " ")
 		for (k = 1; k <= nid; k++)
-			if (!(ids[k] in v_word) && !(ids[k] in v_bad)) prob(path ": no verdict for " ids[k])
+			if (!f_failed[ids[k]] && !(ids[k] in v_word) && !(ids[k] in v_bad)) prob(path ": no verdict for " ids[k])
 		if (!(sc in vokN)) prob(path ": no '## Verified OK challenged' section")
 		if (!(sc in gapN)) prob(path ": no '## Coverage gaps' section")
 	}
@@ -675,7 +702,10 @@ function emit_finding(id,   sc, kind, ag, sv, lb, state, st, k) {
 	emit("### Pass-two verdicts")
 	sv = f_sev[id]
 	lb = f_lab[id]
-	if (id in v_word) {
+	if (f_failed[id]) {
+		emit("- none")
+		state = "no verdict: output failed"
+	} else if (id in v_word) {
 		emit("- " v_word[id] " by cca:adversary (model " v_model[id] ") in " v_path[id] ": " v_reason[id] "; evidence: " v_ev[id])
 		if (v_sev[id] != "") sv = v_sev[id]
 		if (v_lab[id] != "") lb = v_lab[id]
@@ -725,6 +755,7 @@ function build_out(   s, sc, k, any, r) {
 		for (r = 1; r <= nrec; r++) {
 			if (rst[r] != "failed") continue
 			if (rp[r] == "-") emit("- " rk[r] " " rs[r] ": no file")
+			else if (rbad[r] > 0) emit("- " rp[r] " (" rbad[r] " blocks not parsed)")
 			else emit("- " rp[r])
 		}
 		emit("")
@@ -1253,6 +1284,8 @@ function check7(   w7, i, id, n, k, p, items, nit, c, j, hd, e, abs, na, cnt, an
 		if (p == 0) continue
 		hd = substr(hd, 1, p - 1)
 		if (hd !~ /^C[0-9]+$/) continue
+		if (hd in citem) cprob("converged.md:" i ": duplicate item id " hd)
+		citem[hd] = 1
 		e = extent(i, n)
 		nit++
 		na = 0
@@ -1331,6 +1364,12 @@ BEGIN {
 		for (i_ = 1; i_ <= livn; i_++) emit(liveord[i_])
 		finish()
 	}
+	if (op == "missing") {
+		load_resp()
+		for (i_ = 1; i_ <= l5n; i_++) if (ismand(l5ord[i_]) && !(l5ord[i_] in prov)) emit(l5ord[i_])
+		for (i_ = 1; i_ <= livn; i_++) if (!(liveord[i_] in prov)) emit(liveord[i_])
+		finish()
+	}
 	if (op == "seen") {
 		load_l6()
 		for (i_ = 1; i_ <= l5n; i_++)
@@ -1380,7 +1419,7 @@ if [ -s "$tmp/prob" ]; then
 fi
 
 case $op in
-mandatory) sort -u "$tmp/out" ;;
+mandatory | missing) sort -u "$tmp/out" ;;
 build5 | seen | gate) cat "$tmp/out" ;;
 esac
 exit 0

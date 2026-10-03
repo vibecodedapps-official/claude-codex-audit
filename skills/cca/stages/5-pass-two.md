@@ -104,7 +104,8 @@ and `ledger/5.md`.
 
 6. **Write `ledger/5.md` once**, after every adversary and every top-up has finished or
    failed. It holds every finding ever raised in stages 4 and 5; nothing is left out,
-   including dropped findings. The script writes the finding sections; the orchestrator
+   including dropped findings, except blocks of a failed file that cannot be parsed,
+   which its `## Failed outputs` line counts. The script writes the finding sections; the orchestrator
    never copies a finding by hand.
    1. Write `ledger/inventory.txt` with printf, one space-separated record per line, paths
       relative to the run directory (the grammar is in `ledger.sh`'s header):
@@ -138,13 +139,15 @@ and `ledger/5.md`.
       - <verdict> by cca:adversary (model <requested model>) in <pass2 path>: <reason>; evidence: <as cited>
         (`- none` when the finding has no verdict)
       ### State after pass two
-      <severity>, <label>, <survives | downgraded | reworded | dropped | no verdict: late addition | no verdict: scope failed | no verdict: not run, budget expired>
+      <severity>, <label>, <survives | downgraded | reworded | dropped | no verdict: late addition | no verdict: scope failed | no verdict: not run, budget expired | no verdict: output failed>
       ```
 
       After the finding sections it writes per scope its attacked Verified OK items with
       results and its coverage gaps, then, when a record is `failed`, `## Failed outputs`
-      listing those files (`- <path>`, or `- <kind> <scope>: no file` for a record with
-      `-` as its path). Each of these parts sits under its own `## ` heading that is
+      listing those files (`- <path>`, `- <path> (<n> blocks not parsed)`, or `- <kind>
+      <scope>: no file` for a record with `-` as its path). Every well-formed finding of a
+      failed file is kept in the finding sections with the state `no verdict: output
+      failed` and no verdict credit; a block that cannot be parsed is only counted. Each of these parts sits under its own `## ` heading that is
       not a finding id, so that the last finding section, which runs to the next `## `
       line, never takes it in: `## Verified OK challenged: <scope>`, `## Coverage gaps:
       <scope>`, `## Failed outputs`.
@@ -156,8 +159,9 @@ and `ledger/5.md`.
       `## Map corrections applied` line with the script's output.
    4. Move it into place with `mv -f <run dir>/tmp/ledger5.md <run dir>/ledger/5.md`,
       then run `sh ${CLAUDE_PLUGIN_ROOT}/skills/cca/scripts/ledger.sh check <run dir>
-      --through 5`. A nonzero exit from `build5` (sub-step 2) or from the check prints
-      `ledger: ` lines. Fix the inventory when it is the cause (a missing or extra
+      --through 5 > <run dir>/tmp/check5.txt`, and read only `wc -l` of that file and its
+      first 50 lines (`head -n 50`), never the whole output. A nonzero exit from `build5`
+      (sub-step 2) or from the check means problem lines starting `ledger: `. Fix the inventory when it is the cause (a missing or extra
       record, a wrong status or path) and rerun sub-steps 2 to 4 once; a second nonzero
       exit, or a problem in a pass-one or pass-two file rather than the inventory, fails
       stage 5 (the run will end `partial`). When `build5` never succeeded, nothing was

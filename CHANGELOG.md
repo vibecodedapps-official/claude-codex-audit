@@ -54,6 +54,20 @@ agent-driven cases in `docs/acceptance.md` are still `not run`.
   script succeeds, so a failed build leaves no file for stage 8 to trust. Stage 8's
   ledger fallback never reuses `gate.md` and gives late verdicts no credit, since stage
   7's checks did not pass; P, T, and X findings are provisional in that report.
+- Stage 6 never reads the mandatory id list: it goes to `ledger/mandatory.txt`, is
+  counted with `wc -l`, split into `codex/batch-<k>.txt` files by shell, and written into
+  each request's `for these ids:` slot by shell. The follow-up's missing ids come from
+  `ledger.sh missing`, which reads the saved answer by the same rules as `check`. Every `ledger.sh check` writes to a file and is read as a line count plus
+  its first 50 lines, in stages 5 to 7.
+- A finding in a failed pass or top-up file is kept in `ledger/5.md` with the state `no
+  verdict: output failed`. The failed review gives it no credit: a pass-one finding stays
+  provisional, and a pass-two or top-up addition counts only through the late adversary
+  and a second-opinion position, like any late addition. A block that cannot be parsed
+  is counted on that file's `## Failed outputs` line.
+- `check --through 7` rejects a `C<n>` heading that appears twice in `converged.md`.
+- `/cca:resume` reruns from stage 5 when a complete stage 5 entry has no
+  `ledger/inventory.txt` in its outputs (a run from 0.4.0 or earlier), since `ledger.sh`
+  needs it.
 - `report.md` points to `stages/8-report.md`, steps 4 and 5, for the verdict rules.
 - `working-tree.sh`'s header says `check` covers the refusals only, not failures of
   `build`'s git steps.

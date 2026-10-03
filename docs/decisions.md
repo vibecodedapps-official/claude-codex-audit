@@ -846,6 +846,18 @@ change stays inside the plugin.
 - **`exported_by` stays required.** Stage 1 copies it into every provenance block, so
   dropping the requirement would leave blocks with a hole, and a missing key is cheap to
   fix.
+- **Findings of a failed output are kept, provisional.** A failed pass or top-up file
+  used to drop out of `ledger/5.md`, so a finding it held vanished. The script now keeps
+  every well-formed finding with the state `no verdict: output failed` and no verdict
+  credit from the failed review, so it is visible. A pass-one finding then stays
+  provisional; a pass-two or top-up addition can count only through the late adversary
+  and a second-opinion position, like any late addition, since excluding a reviewed
+  finding would only make the verdict more lenient. A block it cannot parse is counted on the
+  file's `## Failed outputs` line, which is the one place nothing is listed.
+- **Resume rule instead of a version bump.** A complete stage 5 entry without
+  `ledger/inventory.txt` among its outputs is not reusable, so a run from 0.4.0 or earlier
+  reruns from stage 5. Bumping `plugin_version` is a release decision, and it would rerun
+  every old run from stage 1, which rereads the forge for no reason.
 - **Not changed.** Stage 1's label order (editorial, a large diff in a 732-line file for
   no behavior gain), live.sh's size, the line formats of the ledgers, forge adapters, and
   a first full multi-agent run are follow-ups.
