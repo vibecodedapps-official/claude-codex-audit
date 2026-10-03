@@ -348,3 +348,36 @@ real install reach was not verified.
 `tests/fixture/expected.md` first listed `tests/test_log.sh` as a decoy. Both runs
 reported it, and it is the #18 pattern (it pins the producer's text without running
 it), so the file now lists it as a second P18 case.
+
+## Outward trace run (2026-10-03)
+
+The same command and settings as the two runs above, on a fresh `patterns` build, with
+the plugin copied from the `work/issue-17` working tree (on `ab1bcef`, which holds 0.5.1
+and this change). Run `2026-10-03-1030-app-feature`, started 14:29Z, ended `reported`,
+verdict `not ready`, 14 items (2 high, 4 medium, 4 low, 4 note). The session reported a
+cost of $13.62. Agent tokens in `usage.md` summed to 664,135 over 12 agents, against
+599,539 (12 agents) and 598,711 (11) in the two runs above, about 11% more.
+
+- Every group scope wrote `## Outward trace`: `app-pat-1` 4 entries, `app-pat-2` 3,
+  `app-pat-3` 5; no `not traced:` line, no `incomplete` entry, no cut list. The
+  `tests-hygiene` specialist wrote none.
+- P17: `app-pat-1-OT1`, the entry for `deactivate_user`, lists `reactivate_user` as a
+  sibling that lacks the check, with `result: finding app-pat-1-F2`; C2, low, counts.
+  Found in pass one, as in both earlier runs.
+- Pass two challenged all 12 entries (each report had 5 or fewer, the medium limit): 9
+  upheld, and `app-pat-3-OT1`, `OT2`, and `OT5` broken, giving `app-pat-3-P1`, that the
+  migrations rewrite the tracked `data/users.csv` the tests copy (C11, low). Both
+  earlier runs also raised that defect in pass two, without a trace.
+- The report's Coverage carried the trace summary. `ledger.sh` built and checked
+  `ledger/5.md` with the new sections in the pass files.
+- P18, P19, and P20 were found in pass one as before: C1 medium, C3 high, C7 medium
+  `unverified assumption` with a live check. C10 (low) again calls the two migrations'
+  guards inconsistent, as the baseline's C12 did.
+
+Two departures, neither from the trace: the merger's `converged.md` failed
+`ledger.sh check --through 7` (items under `### C<n>:` headings, missing `tickets` and
+recommended change lines), so the orchestrator merged and recorded a swap; the failed
+file is kept as `converged.merger-failed.md`. The merger reads only the ledger files,
+which hold no trace content. And, as in both earlier runs, agents logged read-only
+commands outside hard rule 2's list (`cat` of run-directory files, `ls -R`,
+`git ls-tree`, `git rev-parse`).
