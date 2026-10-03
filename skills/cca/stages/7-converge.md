@@ -155,7 +155,8 @@ by size has `<group>-<k>` parts), and `converged.md`.
    gate from it), `live/findings.md` and each `live/carried/<id>.md` when they exist, the
    path of any complete earlier `converged.md` for the same ledger files, and the output
    path `converged.md`. The merger reads the ledger files and never edits them. It writes
-   one item per distinct defect:
+   one item per distinct defect, in this shape, which `agents/merger.md` repeats word for
+   word, since the merger never reads this file (`tests/lint.sh` keeps the two the same):
 
    ```
    ## C<n>: <title>

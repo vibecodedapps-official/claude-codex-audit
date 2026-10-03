@@ -972,6 +972,20 @@ pass-two adversary challenges it.
   account. Failing `late-ids` and `gate` on it then failed stage 7 for no gain. With
   stage 6 complete the file was already checked, so its problems stay errors.
 
+## Merger item shape (#27, 2026-10-03)
+
+- **The shape goes in the merger's own file.** The merger's prompt holds only paths, and
+  its agent file never gave the item heading or the `- tickets:` and `- recommended
+  change:` lines; those were only in stage 7, which the merger does not read. Two runs'
+  mergers guessed `## C<n>:` and one guessed `### C<n>:`. Putting the shape in
+  `agents/merger.md` reaches the merger on every launch without growing the prompt. The
+  orchestrator keeps its copy in stage 7 for its own fallback merge, and a lint check
+  keeps the two the same.
+- **The default model stays.** The failure was a missing instruction, not a reading
+  error: the same model wrote the shape correctly on the two other runs, and the
+  grouping and positions of the failed file were usable. A stronger model would have
+  guessed too. Revisit if a merger fails the check again with the shape in its file.
+
 ## Deferred past 0.3
 
 - ccl emitting a handoff, and a ccl hint suggesting `/cca:audit` (F7 and H6). Both are ccl

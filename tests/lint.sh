@@ -51,6 +51,11 @@
 #   allowed-tools pattern. Not checked: a span that runs across lines, and lines inside
 #   ``` fenced code blocks. A self-test runs the check on fixed sample lines first and
 #   fails when its result differs from the expected one; an awk failure also fails.
+# - The converged item shape, the ``` fenced block whose first line is
+#   `## C<n>: <title>`, appears in agents/merger.md and in
+#   skills/cca/stages/7-converge.md, and the two blocks are the same after leading
+#   blanks and CRs are removed. The merger reads only its own file and its prompt, so
+#   the shape the stage 7 check needs must be in merger.md.
 #
 # Exit 0 when every check passes. Otherwise print one line per failure and exit 1.
 
@@ -343,6 +348,28 @@ for f in $(listed '^(agents|skills|commands)/'); do
 		fail "$f: gh host check (api) did not run"
 	hits "$f" "gh api names no host; add --hostname <host>" < "$tmp/grep"
 done
+
+# The converged item shape is the same in the merger's file and in stage 7.
+item_block() {
+	tr -d '\r' < "$1" | awk '
+		{ sub(/^[ \t]+/, "") }
+		/^```/ { if (inb) exit; f = 1; next }
+		f && !inb && $0 == "## C<n>: <title>" { inb = 1 }
+		inb { print }
+		{ f = 0 }
+	'
+}
+for f in agents/merger.md skills/cca/stages/7-converge.md; do
+	if [ -f "$f" ]; then
+		item_block "$f" > "$tmp/item-$(basename "$f")"
+		[ -s "$tmp/item-$(basename "$f")" ] ||
+			fail "$f: no fenced converged item block starting with '## C<n>: <title>'"
+	fi
+done
+if [ -s "$tmp/item-merger.md" ] && [ -s "$tmp/item-7-converge.md" ]; then
+	cmp -s "$tmp/item-merger.md" "$tmp/item-7-converge.md" ||
+		fail "agents/merger.md: the converged item block differs from skills/cca/stages/7-converge.md"
+fi
 
 if [ "$fails" -gt 0 ]; then
 	exit 1

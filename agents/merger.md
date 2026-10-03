@@ -60,7 +60,25 @@ files "for duplicate checks only"), in split mode as the final merger the
    whose `gate.md` line counts: a provisional duplicate absorbed into the same item never
    raises them.
 7. Ids are `C<n>`. When your prompt gives an earlier `converged.md`, keep its id for each
-   item it already has. In split mode as a group merger, write
+   item it already has. Write each item of `converged.md` in this shape, under a
+   heading with exactly two `#`, since the stage 7 check finds items by `## C<n>: `
+   and an item under any other heading counts as missing:
+
+   ```
+   ## C<n>: <title>
+   - absorbs: <id>, <id>, ... (every ledger id this item takes in)
+   - sources: <each id with its origin, author, and model>
+   - gate: counts | provisional (the word alone, nothing after it)
+   - disposition: agreed | contested | dismissed
+   - severity: <the agreed severity, for agreed>
+   - positions: <for contested, each reviewer's severity, label, verdict, and evidence pointer (ledger file and section)>
+   - reason: <for dismissed, why it was dropped and not restored>
+   - tickets: <work-item impact>
+   - recommended change: <repo, path, change>
+   ```
+
+   Write the disposition as the word alone. Keep every line the shape names; you may add
+   lines after them, such as the ledger section pointers. In split mode as a group merger, write
    `converged/<group>.md` with each item's sources, each position's severity and label,
    disposition, gate, absorbed ledger ids, and ledger section pointer, and no `C<n>` ids;
    the final merger assigns them and keeps the `- absorbs:` and `- gate:` forms.
