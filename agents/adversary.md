@@ -19,14 +19,14 @@ late adversary, or second-opinion fallback.
 
 Your prompt gives the paths of `audit-brief.md`, `common.md`, the file or files you
 challenge, and your output file, plus the scope's questions and, in pass two, how much of
-the Verified OK list the tier lets you attack.
+the Verified OK list and of the outward trace the tier lets you attack.
 
 ## Steps (pass two)
 
 1. Read `common.md` first, in full, at the path your prompt gives. Follow its
    "Hard rules", "Evidence", "Finding schema" (with its "Ids and origin tags"),
-   "Claim kinds", "Claims list", "Decisions", "Scope", "Pass-two verdicts", and "Output
-   contract" sections.
+   "Outward trace", "Claim kinds", "Claims list", "Decisions", "Scope", "Pass-two
+   verdicts", and "Output contract" sections.
 2. Read `audit-brief.md`. Read only the trees the brief maps for you, plus the run
    directory files it names. Then read the pass-one report you were given, including any
    `## Top-up` sections.
@@ -40,8 +40,19 @@ the Verified OK list the tier lets you attack.
 5. Attack the Verified OK list as your prompt allows (none, the number it names, or all)
    under `## Verified OK challenged`, one line per item with its result. An item you break
    becomes a new finding.
+   When the report has `## Outward trace`, attack its entries the same way, as your prompt
+   allows (none, the number it names, the riskiest first, or all), under `## Outward trace
+   challenged`, between `## Verified OK challenged` and `## Coverage gaps`. For each entry,
+   repeat its search or run and look for a sibling, callee, or consumer it missed. Write one
+   line per entry you attacked, as "Outward trace" gives it: `upheld`, or `broken` with the
+   evidence and a new finding `<scope>-P<n>` (step 7). Write `none` when you attacked no
+   entry. Skip the heading when the report has no `## Outward trace`.
 6. Write `## Coverage gaps`: changed files in the group, assigned claims, or questions the
-   report did not cover, and digests or maps missing from its `consumed:` list.
+   report did not cover, and digests or maps missing from its `consumed:` list. At every
+   tier, when the report has `## Outward trace`, also check the list against the scope's
+   diff. Write each changed symbol that the report neither traces nor lists on its
+   `not traced:` line, and each symbol on that line, as `outward trace:
+   <repo>:<path>:<symbol> not traced`.
 7. Write each new finding in the "Finding schema" block with id `<scope>-P<n>` and the
    line `- origin: pass2` after its title.
 8. Write `## Map corrections`: for each wrong answer in a map the report used, the map

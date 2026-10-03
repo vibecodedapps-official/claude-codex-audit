@@ -35,6 +35,10 @@ corrected map, `pass2/<scope>-topup.md` per map-correction top-up,
      | medium | up to 5 per report, the ones the adversary judges riskiest |
      | high | all |
 
+   - the outward trace rule for the tier, with the same counts applied to the entries of
+     the report's `## Outward trace`: low none, medium up to 5 (the ones the adversary
+     judges riskiest), high all.
+
    A failed pass-one scope has no report and gets no adversary; its coverage loss is
    already recorded.
 
@@ -46,7 +50,11 @@ corrected map, `pass2/<scope>-topup.md` per map-correction top-up,
      and label;
    - `## Verified OK challenged`, one line per item it attacked with the result; stage
      8 marks those items `challenged` and all others `not challenged`;
-   - `## Coverage gaps`;
+   - `## Outward trace challenged`, when the pass-one report has `## Outward trace`: one
+     line per entry it attacked, or `none`;
+   - `## Coverage gaps`, which for a report with `## Outward trace` also holds a line
+     `outward trace: <repo>:<path>:<symbol> not traced` for each changed symbol the report
+     neither traces nor lists on its `not traced:` line, and for each symbol on that line;
    - late additions: new findings in the `common.md` schema, each with
      `origin: pass2` and an id `<scope>-P<n>`;
    - `## Map corrections`: map file, line, what is wrong, and the source quote at its
@@ -61,8 +69,12 @@ corrected map, `pass2/<scope>-topup.md` per map-correction top-up,
    `## Scope` also needs a line under `## Decisions challenged` and `## Scope challenged`,
    but a missing line or heading there does not fail the scope: record each such entry as
    `not challenged` in the stage 5 entry, and stage 8 shows the pass-one entry with
-   that mark. Challenge lines and the entries they challenge are report items, not
-   findings; they do not go into `ledger/5.md`.
+   that mark. The same holds for the entries of the pass-one `## Outward trace`: an entry
+   with no line under `## Outward trace challenged`, or a missing heading, does not fail
+   the scope; record the entry as `not challenged` in the stage 5 entry. This includes
+   every entry at low tier, and the entries beyond the tier's count. Challenge lines and
+   the entries they challenge are report items, not findings; they do not go into
+   `ledger/5.md`. A new finding from a broken entry is a finding like any other.
 
 4. **Failure.** The adversary failed when it returned an error, its file is missing, its
    last line is not `status: complete`, a finding lacks a verdict, or a `## Claims
@@ -181,5 +193,5 @@ corrected map, `pass2/<scope>-topup.md` per map-correction top-up,
 9. **Write the stage 5 entry last,** once the check has passed, per the preamble:
    status, inputs, outputs (every `pass2/` file, each `.r2.md`, `ledger/inventory.txt` with its hash, and
    `ledger/5.md`),
-   agents, swaps, failed scopes, map corrections not applied, each decision or scope
-   entry recorded as `not challenged`, and each `_test` fault applied.
+   agents, swaps, failed scopes, map corrections not applied, each decision, scope, or
+   outward trace entry recorded as `not challenged`, and each `_test` fault applied.

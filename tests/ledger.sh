@@ -1322,6 +1322,192 @@ printf '### api-v2: notes\nfree text\nstatus: complete\n' >> "$tmp/aa3/pass1/cfg
 runf "build5, heading that resembles an id" 0 "$tmp/want5.txt" build5 "$tmp/aa3"
 
 # ---------------------------------------------------------------------------
+# Outward trace sections (#17): a pass-one `## Outward trace` and a pass-two
+# `## Outward trace challenged` are read by no op. The files below carry them, with a
+# fence that holds finding and section headings, and the ops give what they would give
+# without the sections.
+OT=$tmp/ot
+mkdir -p "$OT/pass1" "$OT/pass2" "$OT/ledger"
+printf 'pass1 app pass1/app.md m-a complete\npass2 app pass2/app.md m-b complete\n' > "$OT/ledger/inventory.txt"
+cat > "$OT/pass1/app.md" <<'EOF'
+# Pass one: app
+
+### app-F1: Run drops the failure branch
+- severity: high
+- question: Q1
+- label: verified fact
+- evidence: app@abc:src/a.sh:4 `run || true`
+- demonstrated: the failure status is discarded
+
+### app-F2: Helper has no caller
+- severity: low
+- question: Q2
+- label: convention
+- evidence: search git grep helper, no result
+- demonstrated: nothing reads it
+
+## Verified OK
+- app-OK1: guard checked
+
+## Outward trace
+- app-OT1: app:src/a.sh:run (app@abc:src/a.sh:4); siblings: app:src/b.sh:helper (app@abc:src/b.sh:12); callees: none; consumers: web:src/w.sh:call (web@abc:src/w.sh:7); result: finding app-F1
+- app-OT2: app:src/a.sh:parse (app@abc:src/a.sh:20); siblings: none; callees: app:src/a.sh:trim (app@abc:src/a.sh:30) fails closed;
+  consumers: none; result: sound, evidence: app@abc:src/a.sh:21 returns on an empty input
+- app-OT3: app:src/c.sh:late (app@abc:src/c.sh:30); siblings: none; callees: none; consumers: none; result: incomplete: the caller lives in a repo the brief does not map
+- not traced: app:src/d.sh:extra (src/d.sh:3), app:src/e.sh:more (src/e.sh:9) (cap reached)
+
+Entry shape, as written in the brief:
+```text
+### app-F9: example
+- severity: high
+## Coverage gaps
+- outward trace: app:src/x.sh:y not traced
+```
+
+## Claims
+- claim 1: true
+
+## Decisions
+none
+runs: none
+consumed: none
+status: complete
+EOF
+cat > "$OT/pass2/app.md" <<'EOF'
+# Pass two: app
+
+### verdict on app-F1: downgraded
+- severity: high -> medium
+- label: unchanged
+- evidence: app@abc:src/a.sh:6 tests the status
+- reason: a later line checks the status
+
+### verdict on app-F2: survives
+- severity: unchanged
+- label: unchanged
+- evidence: git grep helper finds no caller
+- reason: stands
+
+## Verified OK challenged
+- app-OK1: held
+
+## Outward trace challenged
+- app-OT1: upheld; evidence: app@abc:src/a.sh:4 discards the status
+- app-OT2: broken, finding app-P1; evidence: app@abc:src/b.sh:9 lacks the check
+Example of a gap line:
+```text
+### app-P9: example
+## Coverage gaps
+- outward trace: app:src/x.sh:y not traced
+```
+
+### app-P1: Sibling lacks the check
+- severity: medium
+- question: Q1
+- label: verified fact
+- origin: pass2
+- evidence: app@abc:src/b.sh:9
+- demonstrated: the same input reaches it
+
+## Coverage gaps
+- outward trace: app:src/b.sh:helper not traced
+- outward trace: app:src/d.sh:extra (src/d.sh:3) not traced
+runs: none
+consumed: none
+status: complete
+EOF
+cat > "$tmp/wantot.txt" <<'EOF'
+## app-F1
+- origin: pass1
+- author: cca:auditor, model m-a, file pass1/app.md
+### Original
+### app-F1: Run drops the failure branch
+- severity: high
+- question: Q1
+- label: verified fact
+- evidence: app@abc:src/a.sh:4 `run || true`
+- demonstrated: the failure status is discarded
+### Pass-two verdicts
+- downgraded by cca:adversary (model m-b) in pass2/app.md: a later line checks the status; evidence: app@abc:src/a.sh:6 tests the status
+### State after pass two
+medium, verified fact, downgraded
+
+## app-F2
+- origin: pass1
+- author: cca:auditor, model m-a, file pass1/app.md
+### Original
+### app-F2: Helper has no caller
+- severity: low
+- question: Q2
+- label: convention
+- evidence: search git grep helper, no result
+- demonstrated: nothing reads it
+### Pass-two verdicts
+- survives by cca:adversary (model m-b) in pass2/app.md: stands; evidence: git grep helper finds no caller
+### State after pass two
+low, convention, survives
+
+## app-P1
+- origin: pass2
+- author: cca:adversary, model m-b, file pass2/app.md
+### Original
+### app-P1: Sibling lacks the check
+- severity: medium
+- question: Q1
+- label: verified fact
+- origin: pass2
+- evidence: app@abc:src/b.sh:9
+- demonstrated: the same input reaches it
+### Pass-two verdicts
+- none
+### State after pass two
+medium, verified fact, no verdict: late addition
+
+## Verified OK challenged: app
+- app-OK1: held
+
+## Coverage gaps: app
+- outward trace: app:src/b.sh:helper not traced
+- outward trace: app:src/d.sh:extra (src/d.sh:3) not traced
+
+EOF
+runf "build5, outward trace sections" 0 "$tmp/wantot.txt" build5 "$OT"
+cp "$tmp/wantot.txt" "$OT/ledger/5.md"
+printf '## Map corrections applied\n- none\n\n## Map corrections not applied\n- none\n' >> "$OT/ledger/5.md"
+run "check 5, outward trace sections" 0 "" check "$OT" --through 5
+run "mandatory, outward trace sections" 0 "app-F1${nl}app-P1" mandatory "$OT"
+want="app-F1: provisional; stage 6 failed
+app-F2: provisional; stage 6 failed
+app-P1: provisional; stage 6 failed"
+run "gate, outward trace sections" 0 "$want" gate "$OT" --tier medium --stage6 failed --late not-run
+
+# CRLF input gives the same output.
+cp -R "$OT" "$tmp/ot-crlf"
+for f in ledger/inventory.txt ledger/5.md pass1/app.md pass2/app.md; do
+	crlf "$tmp/ot-crlf/$f"
+done
+runf "build5, outward trace sections, CRLF input" 0 "$tmp/wantot.txt" build5 "$tmp/ot-crlf"
+run "check 5, outward trace sections, CRLF input" 0 "" check "$tmp/ot-crlf" --through 5
+
+# The section right after a finding block (no Verified OK between them) reads the same.
+cp -R "$OT" "$tmp/ot-adj"
+awk '$0 == "## Verified OK" { skip = 1 } $0 == "## Outward trace" { skip = 0 } !skip { print }' "$OT/pass1/app.md" > "$tmp/ot-adj/pass1/app.md"
+[ "$(grep -c '^## Verified OK$' "$tmp/ot-adj/pass1/app.md")" = 0 ] || fail "outward trace test setup: Verified OK was not removed"
+runf "build5, outward trace right after a finding block" 0 "$tmp/wantot.txt" build5 "$tmp/ot-adj"
+
+# A fence in either section that is never closed is the usual fence error.
+cp -R "$OT" "$tmp/ot-u1"
+awk '$0 == "```" && !d { d = 1; next } { print }' "$OT/pass1/app.md" > "$tmp/ot-u1/pass1/app.md"
+run "unclosed fence in the outward trace section" 1 "" build5 "$tmp/ot-u1"
+errmsg "unclosed fence in the outward trace section" "ledger: pass1/app.md: the file ends inside a code fence"
+run "check 5, unclosed fence in the outward trace section" 1 "ledger: pass1/app.md: the file ends inside a code fence" check "$tmp/ot-u1" --through 5
+
+cp -R "$OT" "$tmp/ot-u2"
+awk '$0 == "```" && !d { d = 1; next } { print }' "$OT/pass2/app.md" > "$tmp/ot-u2/pass2/app.md"
+run "unclosed fence in the outward trace challenged section" 1 "" build5 "$tmp/ot-u2"
+errmsg "unclosed fence in the outward trace challenged section" "ledger: pass2/app.md: the file ends inside a code fence
+ledger: pass2/app.md: no '## Coverage gaps' section"
+
 # 0.5.2.
 # Item 7: X and L ids never belong in a pass file, so a lower-case x<n> subheading is
 # text there (it ends the finding block, like any H3); a mis-cased -f|p|t<n> id is not.

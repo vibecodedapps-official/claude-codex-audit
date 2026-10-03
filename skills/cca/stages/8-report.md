@@ -11,8 +11,9 @@ finished stage file is kept.
 
 Inputs: `converged.md`, `gate.md`, `ledger/5.md`, `ledger/6.md`, `ledger/7.md`, the
 `pass1/` and `pass2/` files (Claims and Verified OK lists, attacked Verified OK lists, the
-`## Decisions` and `## Scope` sections of pass one, and the `## Claims challenged`,
-`## Decisions challenged`, and `## Scope challenged` sections of pass two),
+`## Decisions`, `## Scope`, and `## Outward trace` sections of pass one, and the
+`## Claims challenged`, `## Decisions challenged`, `## Scope challenged`,
+`## Outward trace challenged`, and `## Coverage gaps` sections of pass two),
 `claims.md`, `audit-brief.md`, `manifest.json`, `stages.json`, `usage.md`,
 `baseline/*-check.md`, and the live files: `late/adversary.md` (it holds the challenge
 lines for the live claims, which are never ledger content), `live/findings.md`,
@@ -197,6 +198,13 @@ Outputs: `report.md`, `claims-verdicts.md`, and `work-items.jsonl`. The format o
        - each `decision` or `scope` claim recorded as `not assessed` (the pass-one
          report has no entry for it), and each entry recorded as `not challenged`
          because pass two wrote no line for it;
+       - the outward trace, read from the `pass1/` and `pass2/` files and the stage 4 and 5
+         entries, so it shows even when pass two failed or never ran: each scope recorded
+         as "outward trace: not assessed"; each `not traced:` symbol of a pass-one
+         `## Outward trace`; each entry with result `incomplete`; each entry cut to
+         `(<k> of <n> checked)`; each `outward trace:` line of a pass-two `## Coverage
+         gaps`; and the number of trace entries `not challenged`. A symbol on both lists
+         shows once. None of these fails a scope or changes the counts;
        - each bundle whose base refresh was declined, from the brief's "base: local
          ref, refresh declined" line;
        - each `head: working-tree` bundle: the loose objects `working-tree.sh build`

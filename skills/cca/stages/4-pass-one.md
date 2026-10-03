@@ -46,6 +46,8 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
      high tier, `tests-hygiene` at medium, `combined` at low;
    - the tickets it concerns and the readable-tree path of each repo, from the brief;
    - the question ids to answer (every question, at every tier);
+   - for a group scope or `combined`, the duty to write the outward trace (`## Outward
+     trace` in `common.md`); a specialist scope does not trace;
    - for every scope that is assigned a `decision` claim, the decision ledger row of the
      table below, copied beside its other checklist rows;
    - for a specialist or `combined` role, its checklist, copied from this table:
@@ -56,7 +58,7 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
    | hygiene | each ticket matches the change; each acceptance criterion met or not, with evidence; follow-ups recorded; each `status` claim's parent and links checked against the forge data; every key the brief lists as "not in export" reported as a finding; the scope check for every `scope` claim (`## Scope` in `common.md`) |
    | tests-hygiene | both rows above |
    | interactions | contracts, schemas, and APIs changed in one bundle and used in another; stack order and the combined state the brief states |
-   | combined | the group review of every changed file, plus the tests and hygiene rows above, in one report |
+   | combined | the group review of every changed file, with its outward trace, plus the tests and hygiene rows above, in one report |
    | decision ledger (every group and specialist scope with a `decision` claim) | the decision ledger for each `decision` claim assigned to the scope (`## Decisions` in `common.md`): three dimensions, class, reversibility, recommendation |
 
    At low tier the report's Coverage section says that one auditor covered the ticket,
@@ -110,7 +112,9 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
       a `## Scope` that names every `scope` claim assigned to it. A miss does not fail
       the scope: the entry was never written, so record the claim as `not assessed`
       in the stage entry. Stage 8 lists it in the coverage disclosure and gives it the
-      verdict `not verified`, with the reason "not assessed".
+      verdict `not verified`, with the reason "not assessed". A group or `combined`
+      report without `## Outward trace` does not fail the scope either: record it as
+      "outward trace: not assessed" in the stage entry, and stage 8 lists it.
 
 8. **Reconciliation barrier.** Once stages 2 and 3 each have status `complete`,
    `failed`, or `not_applicable` in `stages.json`, compute the barrier for each scope
@@ -170,4 +174,5 @@ Outputs: `scope/<scope>.md` and `pass1/<scope>.md` for every pass-one scope.
     (temporary file beside `stages.json`, then rename): status, inputs (including each
     consumed digest and map hash), outputs (every `scope/` and `pass1/` file, and each
     `.pre-topup.md` copy), agents, swaps, failed scopes with reasons, each claim
-    recorded as `not assessed`, and each `_test` fault applied.
+    recorded as `not assessed`, each scope recorded as "outward trace: not assessed",
+    and each `_test` fault applied.
