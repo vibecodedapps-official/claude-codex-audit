@@ -26,6 +26,14 @@
   these rules. Both found every planted case in pass one. With the rules, the run-once
   finding carries a live check, and its label follows the live check rule.
 
+### Fixed
+
+- `agents/merger.md` now gives the converged item shape: the `## C<n>: ` heading and
+  every line, including `- tickets:` and `- recommended change:`. The shape was only in
+  the orchestrator's stage 7 file, which the merger never reads, so the merger guessed
+  it. On one run it wrote `### C<n>:` headings, failed the stage 7 check, and the
+  orchestrator redid the merge (#27). `tests/lint.sh` keeps the two copies the same.
+
 ## 0.5.2 - 2026-10-03
 
 Fixes from a review of 0.5.1. A run started under 0.5.1 or earlier reruns from stage 1
