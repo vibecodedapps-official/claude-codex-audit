@@ -11,7 +11,7 @@
       "name": "cca",
       "source": "./",
       "description": "Audit a finished bundle of pull requests, in one or many repos, before merge: adversarial, evidence-gated review stages that stay read-only and end in a report, plus a gated command that acts on approved items.",
-      "version": "0.5.2",
+      "version": "0.6.0",
       "license": "Apache-2.0",
       "author": {
         "name": "vibecodedapps.net"
