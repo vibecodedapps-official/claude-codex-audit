@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 - 2026-10-03
+
+Widens what an auditor checks: weak tests, producers changed on the base, edits to
+run-once scripts, and an outward trace from each change. The same bundle can get a
+different verdict, and a medium run cost about 11% more in agent tokens on the
+`patterns` fixture. A run started under 0.5.2 or earlier reruns from stage 1 on resume.
 
 ### Added
 
@@ -22,9 +27,10 @@
   report's Coverage. The second opinion traces too before it picks new findings (#17).
 - The `patterns` fixture, with one planted case each for #17 to #20 and checks that show
   each defect is real.
-- `docs/acceptance.md` records two full multi-agent audit runs on it, before and after
-  these rules. Both found every planted case in pass one. With the rules, the run-once
-  finding carries a live check, and its label follows the live check rule.
+- `docs/acceptance.md` records three full multi-agent audit runs on it: before the
+  rules of #18 to #20, after them, and with the outward trace. All three found every
+  planted case in pass one. With the rules, the run-once finding carries a live check,
+  and its label follows the live check rule.
 
 ### Fixed
 
